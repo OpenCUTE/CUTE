@@ -1,0 +1,3 @@
+[submodule "cutetest"]
+	path = cutetest
+	url = ssh://git@10.208.130.232:2247/yjp/cute_test.git
