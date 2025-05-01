@@ -4,10 +4,10 @@ package cute
 
 import chisel3._
 import chisel3.util._
-import boom.exu.ygjk._
+// import boom.exu.ygjk._
 import org.chipsalliance.cde.config._
-import boom.common._ 
-import boom.util._
+import boom.v3.common._ 
+import boom.v3.util._
 
 trait LocalTLBParameters{
 	val entry = 32

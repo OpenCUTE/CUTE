@@ -4,7 +4,7 @@ package cute
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
-import boom.exu.ygjk._
+// import boom.exu.ygjk._
 
 //BScratchpad，用于暂存B矩阵的数据，供给TE模块使用
 //B矩阵在DataController看来是一个只读的矩阵

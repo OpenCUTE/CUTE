@@ -15,7 +15,7 @@ case object BuildMMacc extends Field[Parameters => Module]
 
 class WithCUTE(EnableCUTEList: Seq[Int]) extends Config((site, here, up) => {
     case BuildRoCC => up(BuildRoCC, site) ++ EnableCUTEList.collect {
-        case tileId if tileId == site(TileKey).hartId =>
+        case tileId if tileId == site(TileKey).tileId =>
             (p: Parameters) => {
                 println("[CUTE2YGJK] TileID: " + tileId)
                 val regWidth = 64 // 寄存器位宽
@@ -70,6 +70,10 @@ class CUTE2TLImp(outer: Cute2TL) extends LazyModuleImp(outer) with HWParameters{
   }
   io.mmu.ConherentRequsetSourceID.bits := id
   io.mmu.ConherentRequsetSourceID.valid := !is_full
+  io.mmu.nonConherentRequsetSourceID.bits := 0.U
+    io.mmu.nonConherentRequsetSourceID.valid := false.B
+    io.mmu.Response.bits.ReseponseData := 0.U
+    io.mmu.Response.bits.ReseponseConherent := false.B
     //输出是否sourceid已满的信息
     // printf("[CUTE2YGJK.node]is_full: %x\n", is_full)
   when(io.mmu.Request.fire){
@@ -240,7 +244,7 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer)
         }
     }
     io.interrupt := false.B
-    io.badvaddr_ygjk := Mux(jk_state=/=jk_resp, missAddr, missAddr+1.U)
+    // io.badvaddr_ygjk := Mux(jk_state=/=jk_resp, missAddr, missAddr+1.U)
     switch(jk_state){
       is(jk_idle){
         when(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct(5,0) === 0.U){
@@ -273,7 +277,7 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer)
     }
     //opcode对应的是路由到某个加速器用的，CUSTOM0、CUSTOM1、CUSTOM2、CUSTOM3这四组opcode
     //我们这里默认使用opcode为0x0B的指令，将funct的最高位为1的指令作为配置指令。
-    acc.io.ctrl2top.config.valid := io.cmd.fire() && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct(6) === 1.U
+    acc.io.ctrl2top.config.valid := io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct(6) === 1.U
     //输出指令信息,io.cmd.bits.inst.funct
     // printf("funct: %x\n", io.cmd.bits.inst.funct)
     when(io.cmd.fire){

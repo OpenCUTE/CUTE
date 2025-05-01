@@ -4,7 +4,7 @@ package cute
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
-import boom.exu.ygjk._
+// import boom.exu.ygjk._
 import freechips.rocketchip.subsystem._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.prci._
@@ -26,9 +26,9 @@ case object BuildDMAygjk extends Field[Seq[Parameters => LazyRoCC]](Nil)
 //     }
 // )
 
-class CUTECrossingParams(
-  override val MemDirectMaster: TilePortParamsLike = TileMasterPortParams(where = MBUS)
-) extends RocketCrossingParams
+// class CUTECrossingParams(
+//   override val MemDirectMaster: TilePortParamsLike = TileMasterPortParams(where = MBUS)
+// ) extends RocketCrossingParams
 
 class DebugInfoIO() extends Bundle with HWParameters{
     val DebugTimeStampe = UInt(64.W)
@@ -193,7 +193,7 @@ trait HWParameters{
 //                icb -- 矩阵乘计算中的中间长度
 //                paddingH, paddingW, strideH, strideW -- 卷积层属性
 
-class TaskCtrlInfo() extends Bundle with HWParameters with YGJKParameters{
+class TaskCtrlInfo() extends Bundle with HWParameters{
     val ADC = (new Bundle {
         // val TaskWorking = Valid(Bool())
         val TaskEnd = DecoupledIO(Bool())
@@ -240,7 +240,7 @@ class TaskCtrlInfo() extends Bundle with HWParameters with YGJKParameters{
 }
 
 //CUTE能接收的宏指令形式
-class MacroInst() extends Bundle with HWParameters with YGJKParameters{
+class MacroInst() extends Bundle with HWParameters{
     // Application_M,Application_N,Application_K代表这条宏指令要执行的MNK的长度
     // conv_stride是卷积的stride步长
     // kernel_size是卷积核的大小
@@ -285,7 +285,7 @@ class MacroInst() extends Bundle with HWParameters with YGJKParameters{
 }
 
 //CUTE能接受的，Load模块能处理的微指令形式
-class LoadMicroInst() extends Bundle with HWParameters with YGJKParameters{
+class LoadMicroInst() extends Bundle with HWParameters{
     // Application_M,Application_N,Application_K代表这条宏指令要执行的MNK的长度
     // conv_stride是卷积的stride步长
     // kernel_size是卷积核的大小
@@ -331,7 +331,7 @@ class LoadMicroInst() extends Bundle with HWParameters with YGJKParameters{
 }
 
 //用于描述微指令间依赖关系和资源依赖关系的信息，用于下一阶段的微指令(Compute)能否发射的信息
-class LoadMicroInst_Resource_Info() extends Bundle with HWParameters with YGJKParameters{
+class LoadMicroInst_Resource_Info() extends Bundle with HWParameters{
     // Application_M,Application_N,Application_K代表这条宏指令要执行的MNK的长度
     val A_SCPID = UInt(4.W)//代表Load的结果存在哪个SCP上
     val B_SCPID = UInt(4.W)//代表Load的结果存在哪个SCP上
@@ -340,7 +340,7 @@ class LoadMicroInst_Resource_Info() extends Bundle with HWParameters with YGJKPa
 }
 
 //CUTE能接受的，Compute模块能处理的微指令形式
-class ComputeMicroInst() extends Bundle with HWParameters with YGJKParameters{
+class ComputeMicroInst() extends Bundle with HWParameters{
     val DataType_A                          = UInt(ElementDataType.DataTypeBitWidth.W) //矩阵A的数据类型
     val DataType_B                          = UInt(ElementDataType.DataTypeBitWidth.W) //矩阵B的数据类型
     val DataType_C                          = UInt(ElementDataType.DataTypeBitWidth.W) //矩阵C的数据类型
@@ -360,14 +360,14 @@ class ComputeMicroInst() extends Bundle with HWParameters with YGJKParameters{
 }
 
 //用于描述微指令间依赖关系和资源依赖关系的信息，用于下一阶段的微指令(Store)能否发射的信息
-class ComputeMicroInst_Resource_Info() extends Bundle with HWParameters with YGJKParameters{
+class ComputeMicroInst_Resource_Info() extends Bundle with HWParameters{
     val A_SCPID = UInt(4.W)//代表Load的结果存在哪个SCP上
     val B_SCPID = UInt(4.W)//代表Load的结果存在哪个SCP上
     val C_SCPID = UInt(4.W)//代表Load的结果存在哪个SCP上
     val Load_Micro_Inst_FIFO_Index = UInt(4.W)//代表Load的指令在队列中的位置
 }
 //CUTE能接受的，Store模块能处理的微指令形式
-class StoreMicroInst() extends Bundle with HWParameters with YGJKParameters{
+class StoreMicroInst() extends Bundle with HWParameters{
     val ApplicationTensor_D = new ApplicationTensor_D_Info
     val Conherent                           = (Bool())      //是否需要coherent
     val Is_Transpose                        = (Bool())      //是否需要转置
@@ -377,13 +377,13 @@ class StoreMicroInst() extends Bundle with HWParameters with YGJKParameters{
 }
 
 //用于描述微指令间依赖关系和资源依赖关系的信息，用于下一阶段的微指令(Vec或者唤醒CPU)能否发射的信息
-class StoreMicroInst_Resource_Info() extends Bundle with HWParameters with YGJKParameters{
+class StoreMicroInst_Resource_Info() extends Bundle with HWParameters{
     val C_SCPID = UInt(4.W)//代表Load的结果存在哪个SCP上
     val Compute_Micro_Inst_FIFO_Index = UInt(4.W)//代表Compute的指令在队列中的位置
     val Marco_Inst_FIFO_Index = UInt(4.W)//代表Marco的指令在队列中的位置
 }
 
-class AfterOpsInterface() extends Bundle with HWParameters with YGJKParameters{
+class AfterOpsInterface() extends Bundle with HWParameters{
 
     //每拍可接受一个来自CDC的与SCP和TE等宽的数据，并在自己模块内完成数据的拆分、重排、缩放、转置以及其他复杂向量任务
     val CDCDataToInterface     = DecoupledIO(UInt((ResultWidth*Matrix_M*Matrix_N).W))
@@ -393,7 +393,7 @@ class AfterOpsInterface() extends Bundle with HWParameters with YGJKParameters{
     val VecInstQueueID = UInt(1.W)
 }
 
-class VPUInterface_Input() extends Bundle with HWParameters with YGJKParameters{
+class VPUInterface_Input() extends Bundle with HWParameters{
     val inst_uop = Output(UInt(32.W))
     val inst_src0 = Output(UInt(VectorWidth.W))
     val inst_src1 = Output(UInt(VectorWidth.W))
@@ -403,18 +403,18 @@ class VPUInterface_Input() extends Bundle with HWParameters with YGJKParameters{
     val stream_id = Output(UInt(log2Ceil(Matrix_M*Matrix_N+10).W))//stream data的id
 }
 
-class VPUInterface_Output() extends Bundle with HWParameters with YGJKParameters{
+class VPUInterface_Output() extends Bundle with HWParameters{
     val stream_id = Output(UInt(log2Ceil(Matrix_M*Matrix_N+10).W))//stream data的id
     val stream_data = Output(UInt(VectorWidth.W))//stream data还能存一些额外的信息，这些信息也会返回，后续可以用于配置VPU的部分隐式寄存器，或者留存在VPU的的隐式寄存器中，这些寄存器是uop可见的，如下一次的scale，下一次的bias等。
 }
 
-class VPUInterfaceIO() extends Bundle with HWParameters with YGJKParameters{
+class VPUInterfaceIO() extends Bundle with HWParameters{
     val VPU_Input = (DecoupledIO(new VPUInterface_Input))
     val VPU_Output = Flipped(DecoupledIO(new VPUInterface_Output))
 }
 
 
-class VectorInterfaceIO() extends Bundle with HWParameters with YGJKParameters{
+class VectorInterfaceIO() extends Bundle with HWParameters{
 
     //每拍可接受一个来自AfterOpsInterface的与VectorWidth等宽的数据
     val VecTask = DecoupledIO(UInt(log2Ceil(VecTaskInstBufferSize).W))
@@ -438,7 +438,7 @@ case object CaculateStreamStateType extends Field[UInt]{
     val N_M = 1.U(CaculateStreamStateTypeBitWidth.W)
 }
 
-class CUTE_uop() extends Bundle with HWParameters with YGJKParameters{
+class CUTE_uop() extends Bundle with HWParameters{
     val Stream_state = UInt((StreamStateType.StreamStateTypeBitWidth).W)
     val Stream_uop = UInt(32.W)
     val Element_uop = UInt(32.W)
@@ -447,7 +447,7 @@ class CUTE_uop() extends Bundle with HWParameters with YGJKParameters{
 
 }
 
-class AfterOpsMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameters{
+class AfterOpsMicroTaskConfigIO() extends Bundle with HWParameters{
     val ApplicationTensor_C = (new Bundle{
         val dataType                        = (UInt(ElementDataType.DataTypeBitWidth.W))
     })
@@ -474,7 +474,7 @@ class AfterOpsMicroTaskConfigIO() extends Bundle with HWParameters with YGJKPara
     val CUTEuop                         = (new CUTE_uop)
 }
 
-class ADCMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameters{
+class ADCMicroTaskConfigIO() extends Bundle with HWParameters{
     val ApplicationTensor_A = (new Bundle{
         // val ApplicationTensor_A_BaseVaddr   = (UInt(MMUAddrWidth.W))
         // val BlockTensor_A_BaseVaddr         = (UInt(MMUAddrWidth.W))
@@ -493,7 +493,7 @@ class ADCMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameter
     val MicroTaskEndReady                   = (Bool())       //已知晓当前任务完成
 }
 
-class BDCMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameters{
+class BDCMicroTaskConfigIO() extends Bundle with HWParameters{
     val ApplicationTensor_B = (new Bundle{
         // val ApplicationTensor_B_BaseVaddr   = (UInt(MMUAddrWidth.W))
         // val BlockTensor_B_BaseVaddr         = (UInt(MMUAddrWidth.W))
@@ -512,7 +512,7 @@ class BDCMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameter
     val MicroTaskEndReady                   = (Bool())       //已知晓当前任务完成
 }
 
-class CDCMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameters{
+class CDCMicroTaskConfigIO() extends Bundle with HWParameters{
     val ApplicationTensor_C = (new Bundle{
         // val ApplicationTensor_C_BaseVaddr   = (UInt(MMUAddrWidth.W))
         // val BlockTensor_C_BaseVaddr         = (UInt(MMUAddrWidth.W))
@@ -546,7 +546,7 @@ class CDCMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameter
     val MicroTask_TEComputeEndReady         = (Bool())       //已知晓当前的TE的计算任务完成
 }
 
-class ApplicationTensor_A_Info() extends Bundle with HWParameters with YGJKParameters{
+class ApplicationTensor_A_Info() extends Bundle with HWParameters{
     val ApplicationTensor_A_BaseVaddr   = (UInt(MMUAddrWidth.W))
     // val BlockTensor_A_BaseVaddr         = (UInt(MMUAddrWidth.W))//可能没有了
     val ApplicationTensor_A_Stride_M    = (UInt(MMUAddrWidth.W))//下一个M需要增加多少的地址偏移量
@@ -559,7 +559,7 @@ class ApplicationTensor_A_Info() extends Bundle with HWParameters with YGJKParam
     val dataType                        = (UInt(ElementDataType.DataTypeBitWidth.W))
 }
 
-class AMLMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameters{
+class AMLMicroTaskConfigIO() extends Bundle with HWParameters{
 
     val ApplicationTensor_A = new ApplicationTensor_A_Info
 
@@ -580,7 +580,7 @@ class AMLMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameter
     val MicroTaskEndReady                   = (Bool())       //已知晓当前任务完成
 }
 
-class ApplicationTensor_B_Info() extends Bundle with HWParameters with YGJKParameters{
+class ApplicationTensor_B_Info() extends Bundle with HWParameters{
         val ApplicationTensor_B_BaseVaddr   = (UInt(MMUAddrWidth.W))
         val BlockTensor_B_BaseVaddr         = (UInt(MMUAddrWidth.W))
         val ApplicationTensor_B_Stride_N    = (UInt(MMUAddrWidth.W))//下一个N需要增加多少的地址偏移量
@@ -590,7 +590,7 @@ class ApplicationTensor_B_Info() extends Bundle with HWParameters with YGJKParam
         val dataType                        = (UInt(ElementDataType.DataTypeBitWidth.W))
 }
 
-class BMLMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameters{
+class BMLMicroTaskConfigIO() extends Bundle with HWParameters{
 
     val ApplicationTensor_B = (new ApplicationTensor_B_Info)
 
@@ -609,26 +609,26 @@ class BMLMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameter
     val MicroTaskEndReady                   = (Bool())       //已知晓当前任务完成
 }
 
-class ApplicationTensor_C_Info() extends Bundle with HWParameters with YGJKParameters{
+class ApplicationTensor_C_Info() extends Bundle with HWParameters{
     val ApplicationTensor_C_BaseVaddr   = (UInt(MMUAddrWidth.W))
     val BlockTensor_C_BaseVaddr         = (UInt(MMUAddrWidth.W))
     val ApplicationTensor_C_Stride_M    = (UInt(MMUAddrWidth.W))//下一个M需要增加多少的地址偏移量
     val dataType                        = (UInt(ElementDataType.DataTypeBitWidth.W))
 }
 
-class ApplicationTensor_D_Info() extends Bundle with HWParameters with YGJKParameters{
+class ApplicationTensor_D_Info() extends Bundle with HWParameters{
     val ApplicationTensor_D_BaseVaddr   = (UInt(MMUAddrWidth.W))
     val BlockTensor_D_BaseVaddr         = (UInt(MMUAddrWidth.W))
     val ApplicationTensor_D_Stride_M    = (UInt(MMUAddrWidth.W))//下一个M需要增加多少的地址偏移量
     val dataType                        = (UInt(ElementDataType.DataTypeBitWidth.W))
 }
 
-class LoadTask_Info() extends Bundle with HWParameters with YGJKParameters{
+class LoadTask_Info() extends Bundle with HWParameters{
     val Is_ZeroLoad = (Bool())
     val Is_RepeatRowLoad = (Bool())
     val Is_FullLoad = (Bool())
 }
-class CMLMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameters{
+class CMLMicroTaskConfigIO() extends Bundle with HWParameters{
     //就是一个TensorC，是累加寄存器视角的不动的部分
 
     val ApplicationTensor_C = (new ApplicationTensor_C_Info)
@@ -655,13 +655,13 @@ class CMLMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameter
     val MicroTaskEndReady                   = (Bool())       //已知晓当前任务完成
 }
 
-class MTEMicroTaskConfigIO() extends Bundle with HWParameters with YGJKParameters{
+class MTEMicroTaskConfigIO() extends Bundle with HWParameters{
     val dataType                            = Output(UInt(ElementDataType.DataTypeBitWidth.W))
     val valid = Output(Bool())
     val ready = Input(Bool())
 }
 
-class SCPControlInfo() extends Bundle with HWParameters with YGJKParameters{
+class SCPControlInfo() extends Bundle with HWParameters{
     val ADC_SCP_ID = UInt(1.W)
     val BDC_SCP_ID = UInt(1.W)
     val CDC_SCP_ID = UInt(1.W)
@@ -673,7 +673,7 @@ class SCPControlInfo() extends Bundle with HWParameters with YGJKParameters{
 
 
 
-class ConfigInfoIO() extends Bundle with HWParameters with YGJKParameters{
+class ConfigInfoIO() extends Bundle with HWParameters{
 
     val MMUConfig = Flipped(new MMUConfigIO)
     val ApplicationTensor_A = (new Bundle{

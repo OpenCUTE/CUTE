@@ -3,8 +3,8 @@ package cute
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
-import boom.exu.ygjk._
-import boom.util._
+// import boom.exu.ygjk._
+import boom.v3.util._
 
 class FakeVPU(implicit p: Parameters) extends Module with HWParameters{
     val io = IO(new Bundle{
