@@ -67,7 +67,7 @@ class AScratchpad(scp_id:Int) extends Module with HWParameters{
         val s0_bank_read_addr = DataControllerBankAddr(i)
         val s0_bank_read_valid = read_go
         //第1周期的数据
-        val s1_bank_read_data = bank.read(s0_bank_read_addr,s0_bank_read_valid).asUInt
+        val s1_bank_read_data = WireInit(0.U((AScratchpadEntryByteSize*8).W))
         when(RegNext(read_go))
         {
             //输出读的信息
@@ -86,19 +86,31 @@ class AScratchpad(scp_id:Int) extends Module with HWParameters{
         val s0_bank_write_data = MemoryLoaderData(i).bits
         val s0_bank_write_valid = MemoryLoaderBankAddr(i).valid && MemoryLoaderData(i).valid
         val s0_bank_zerofill_valid = MemoryLoaderZeroFill(i).valid
+        val s0_final_write_valid = (write_go && s0_bank_write_valid) || s0_bank_zerofill_valid
+        val s0_final_write_addr = Mux((!(write_go && s0_bank_write_valid)) && s0_bank_zerofill_valid, MemoryLoaderZeroFill(i).bits, MemoryLoaderBankAddr(i).bits)
+        val s0_final_write_data = Mux((!(write_go && s0_bank_write_valid)) && s0_bank_zerofill_valid, 0.U, MemoryLoaderData(i).bits)
+
         when(write_go && s0_bank_write_valid){
-            bank.write(s0_bank_write_addr, s0_bank_write_data)
+            // bank.write(s0_bank_write_addr, s0_bank_write_data)
             if (YJPDebugEnable)
             {
                 printf("[ASPD_Write(%d)]Bank(%d): s0_bank_write_addr = %d ,s0_bank_write_data = %x\n",scp_id.U, i.U, s0_bank_write_addr, s0_bank_write_data)
             }
         }.elsewhen(s0_bank_zerofill_valid){
-            bank.write(MemoryLoaderZeroFill(i).bits, 0.U)
+            // bank.write(MemoryLoaderZeroFill(i).bits, 0.U)
             if (YJPDebugEnable)
             {
                 printf("[ASPD_ZeroFill(%d)]Bank(%d): s0_bank_write_addr = %d ,s0_bank_write_data = %x\n",scp_id.U, i.U, MemoryLoaderZeroFill(i).bits, 0.U)
             }
         }
+
+
+        val Bank_Is_write = s0_final_write_valid
+        val Bank_Enable = s0_final_write_valid || read_go
+        val Bank_addr = Mux(read_go, DataControllerBankAddr(i), s0_final_write_addr)
+        val Bank_wdata = s0_final_write_data
+        s1_bank_read_data := bank.readWrite(Bank_addr, Bank_wdata, Bank_Enable, Bank_Is_write)
+
 
         bank
     }

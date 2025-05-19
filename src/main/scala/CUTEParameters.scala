@@ -73,7 +73,7 @@ trait HWParameters{
 
     val ConvolutionApplicationConfigDataWidth = 32 //卷积相关的配置信息的宽度
     val ConvolutionDIM_Max = 65536 //卷积相关的配置信息的宽度
-    val Convolution_Input_Height_Weight_Dim_Max = 1024
+    val Convolution_Input_Height_Weight_Dim_Max = 16384
     val KernelSizeMax = 16 //卷积核的最大尺寸
     val StrideSizeMax = 4  //步长的最大尺寸
 //LLC的数据线宽度

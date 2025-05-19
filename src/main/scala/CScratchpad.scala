@@ -151,7 +151,7 @@ class CScratchpad extends Module with HWParameters{
         val s0_bank_read_valid = SramIsRead_0 && HasRequest && SramAddr_0(i).valid
         //第1周期的数据
         s1_bank_read_valid := s0_bank_read_valid
-        val s1_bank_read_data = bank.read(s0_bank_read_addr,s0_bank_read_valid).asUInt
+        val s1_bank_read_data = WireInit(0.U((8*CScratchpadEntryByteSize).W))
         val debug_s1_bank_addr = RegNext(s0_bank_read_addr)
         // val s1_bank_read_addr = RegEnable(s0_bank_read_addr, s0_bank_read_valid)
         // val s1_bank_read_valid = RegNext(s0_bank_read_valid)
@@ -180,13 +180,19 @@ class CScratchpad extends Module with HWParameters{
         val s0_bank_write_data = Mux(SramIsWrite_0 && SramWriteData_0(i).valid, SramWriteData_0(i).bits, 0.U)
         val s0_bank_write_valid = SramIsWrite_0 && HasRequest && SramWriteData_0(i).valid && SramAddr_0(i).valid
         when(s0_bank_write_valid){
-            bank.write(s0_bank_write_addr, s0_bank_write_data)
+            // bank.write(s0_bank_write_addr, s0_bank_write_data)
             //输出写的信息
             if (YJPDebugEnable)
             {
                 printf("[CSPD_Write]Bank(%d): s0_bank_write_addr = %d ,s0_bank_write_data = %x\n", i.U, s0_bank_write_addr, s0_bank_write_data)
             }
         }
+
+        val Bank_Is_write = SramIsWrite_0
+        val Bank_Enable = HasRequest
+        val Bank_addr = SramAddr_0(i).bits
+        val Bank_wdata = s0_bank_write_data
+        s1_bank_read_data := bank.readWrite(Bank_addr, Bank_wdata, Bank_Enable, Bank_Is_write)
 
         bank
     }

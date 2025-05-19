@@ -114,7 +114,12 @@ class CUTE2TLImp(outer: Cute2TL) extends LazyModuleImp(outer) with HWParameters{
     busy(tl_out.d.bits.source) := false.B
     if (YJPDebugEnable)
     {
-        printf("[CUTE2YGJK.node]tl_out.d.fire: %x,tl_out.d.data: %x\n", tl_out.d.bits.source, tl_out.d.bits.data)
+        when(tl_out.d.bits.opcode === TLMessages.AccessAckData){
+            printf("[CUTE2YGJK.node]tl_out.d.fire: %x, tl_out.d.bits.data: %x\n", tl_out.d.bits.opcode, tl_out.d.bits.data)
+        }
+        when(tl_out.d.bits.opcode === TLMessages.AccessAck){
+            printf("[CUTE2YGJK.node]tl_out.d.fire: %x.AccessAck\n", tl_out.d.bits.opcode)
+        }
     }
   }
 

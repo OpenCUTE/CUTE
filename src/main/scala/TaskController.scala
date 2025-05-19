@@ -274,6 +274,9 @@ class TaskController(implicit p: Parameters) extends Module with HWParameters{
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
         }.elsewhen(funct === 5.U)
         {
+            assert(MacroInst_Reg_Wire.Application_M.getWidth <= 20)
+            assert(MacroInst_Reg_Wire.Application_N.getWidth <= 20)
+            assert(MacroInst_Reg_Wire.Application_K.getWidth <= 20)
             MacroInst_Reg_Wire.Application_M := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_M.getWidth-1,0)
             MacroInst_Reg_Wire.Application_N := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_N.getWidth+19,20)
             MacroInst_Reg_Wire.Application_K := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_K.getWidth+39,40)
@@ -281,6 +284,21 @@ class TaskController(implicit p: Parameters) extends Module with HWParameters{
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
         }.elsewhen(funct === 6.U)
         {
+            assert(MacroInst_Reg_Wire.element_type.getWidth <= 8)
+            assert(MacroInst_Reg_Wire.bias_type.getWidth <= 8)
+            assert(MacroInst_Reg_Wire.transpose_result.getWidth <= 8)
+            assert(MacroInst_Reg_Wire.conv_stride.getWidth <= 8)
+            assert(MacroInst_Reg_Wire.conv_oh_max.getWidth <= 16)
+            assert(MacroInst_Reg_Wire.conv_ow_max.getWidth <= 16)
+
+            assert(MacroInst_Reg_Wire.kernel_size.getWidth <= 4)
+            assert(MacroInst_Reg_Wire.conv_oh_per_add.getWidth <= 15)
+            assert(MacroInst_Reg_Wire.conv_ow_per_add.getWidth <= 15)
+            assert(MacroInst_Reg_Wire.conv_oh_index.getWidth <= 15)
+            assert(MacroInst_Reg_Wire.conv_ow_index.getWidth <= 15)
+
+
+
             MacroInst_Reg_Wire.element_type := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.element_type.getWidth-1,0)
             MacroInst_Reg_Wire.bias_type := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.bias_type.getWidth-1+8,8)
             MacroInst_Reg_Wire.transpose_result := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.transpose_result.getWidth-1+16,16)
@@ -288,10 +306,10 @@ class TaskController(implicit p: Parameters) extends Module with HWParameters{
             MacroInst_Reg_Wire.conv_oh_max := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_oh_max.getWidth-1+32,32)
             MacroInst_Reg_Wire.conv_ow_max := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_ow_max.getWidth-1+48,48)
             MacroInst_Reg_Wire.kernel_size := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.kernel_size.getWidth-1,0)
-            MacroInst_Reg_Wire.conv_oh_per_add := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_oh_per_add.getWidth-1+16,16)
-            MacroInst_Reg_Wire.conv_ow_per_add := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_ow_per_add.getWidth-1+26,26)
-            MacroInst_Reg_Wire.conv_oh_index := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_oh_index.getWidth-1+36,36)
-            MacroInst_Reg_Wire.conv_ow_index := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_ow_index.getWidth-1+46,46)
+            MacroInst_Reg_Wire.conv_oh_per_add := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_oh_per_add.getWidth-1+4,4)
+            MacroInst_Reg_Wire.conv_ow_per_add := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_ow_per_add.getWidth-1+19,19)
+            MacroInst_Reg_Wire.conv_oh_index := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_oh_index.getWidth-1+34,34)
+            MacroInst_Reg_Wire.conv_ow_index := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_ow_index.getWidth-1+49,49)
             MacroInst_Reg_Wire.bias_data_type := ElementDataType.DataTypeWidth32
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
         }.elsewhen(funct === 16.U)

@@ -61,7 +61,7 @@ class BScratchpad extends Module with HWParameters{
         val s0_bank_read_addr = DataControllerBankAddr(i)
         val s0_bank_read_valid = read_go
         //第1周期的数据        
-        val s1_bank_read_data = bank.read(s0_bank_read_addr,s0_bank_read_valid).asUInt
+        val s1_bank_read_data = WireInit(0.U((BScratchpadEntryByteSize*8).W))
         // val s1_bank_read_addr = RegEnable(s0_bank_read_addr, s0_bank_read_valid)
         // val s1_bank_read_valid = RegNext(s0_bank_read_valid)
         DataControllerData(i) := s1_bank_read_data
@@ -79,8 +79,16 @@ class BScratchpad extends Module with HWParameters{
         val s0_bank_write_data = MemoryLoaderData(i).bits
         val s0_bank_write_valid = MemoryLoaderBankAddr(i).valid && MemoryLoaderData(i).valid
         when(write_go(i) && s0_bank_write_valid){
-            bank.write(s0_bank_write_addr, s0_bank_write_data)
+            // bank.write(s0_bank_write_addr, s0_bank_write_data)
         }
+
+
+        val Bank_Is_write = write_go(i) && s0_bank_write_valid
+        val Bank_Enable = (write_go(i) && s0_bank_write_valid) || read_go
+        val Bank_addr = Mux(read_go, DataControllerBankAddr(i), MemoryLoaderBankAddr(i).bits)
+        val Bank_wdata = MemoryLoaderData(i).bits
+        s1_bank_read_data := bank.readWrite(Bank_addr, Bank_wdata, Bank_Enable, Bank_Is_write)
+
 
         bank
     }
