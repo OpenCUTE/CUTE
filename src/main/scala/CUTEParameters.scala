@@ -844,6 +844,33 @@ class MMU2TLIO extends Bundle with HWParameters{
     })
 }
 
+class CTRLCounter extends Bundle with HWParameters{
+    val ALoad = Bool()
+    val BLoad = Bool() //是否是B的Load任务 
+    val CLoad = Bool() //是否是C的Load任务
+    val DStore = Bool() //是否是D的Store任务
+    val InstQueueEmpty = Bool() //指令队列是否为空
+    val getConfigured = Bool() //是否已经开始配置
+    val AOPBusy = Bool() //是否有后操作任务在执行
+    val computeInstQueueEmpty = Bool() //计算指令队列是否为空
+    val computeInstCanIssue = Bool() //计算指令是否可以发出
+    val InstCanDecode = Bool() //指令是否可以解码
+}
+
+class CUTECounter extends Bundle with HWParameters{
+    val computeBusy = Bool() //计算是否忙
+    val ALoad = Bool() //是否是A的Load任务
+    val BLoad = Bool() //是否是B的Load任务
+    val CLoad = Bool() //是否是C的Load任务
+    val DStore = Bool() //是否是D的Store任务
+    val InstQueueEmpty = Bool() //指令队列是否为空
+    val getConfigured = Bool() //是否已经开始配置
+    val AOPBusy = Bool() //是否有后操作任务在执行
+    val computeInstQueueEmpty = Bool() //计算指令队列是否为空
+    val computeInstCanIssue = Bool() //计算指令是否可以发出
+    val InstCanDecode = Bool() //指令是否可以解码
+}
+
 
 //数据类型的样板类
 case object  ElementDataType extends Field[UInt]{
