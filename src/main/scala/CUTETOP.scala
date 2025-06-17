@@ -19,8 +19,9 @@ class CUTEV2Top(implicit p: Parameters) extends Module with HWParameters{
     val time_stamp = RegInit(0.U(40.W))
     time_stamp := time_stamp + 1.U
 
-    printf("[CUTE perf %d] %x %x %x %x %x %x %x %x %x %x %x \n", time_stamp, cutecounter.ALoad, cutecounter.BLoad, cutecounter.CLoad, cutecounter.DStore, 
-        cutecounter.InstQueueEmpty, cutecounter.getConfigured, cutecounter.AOPBusy, cutecounter.computeBusy, cutecounter.computeInstQueueEmpty, cutecounter.computeInstCanIssue, cutecounter.InstCanDecode)
+    // printf("[CUTE perf %d] %x %x %x %x %x %x %x %x %x %x %x %x %x \n", time_stamp, cutecounter.ALoad, cutecounter.BLoad, cutecounter.CLoad, cutecounter.DStore, 
+    //     cutecounter.InstQueueEmpty, cutecounter.getConfigured, cutecounter.AOPBusy, cutecounter.computeBusy, cutecounter.computeInstQueueEmpty, cutecounter.computeInstCanIssue, cutecounter.InstCanDecode,
+    //     cutecounter.mmu_req_valid, cutecounter.mmu_req_ready)
     
     val ASpad = Seq.tabulate(2)(i => Module(new AScratchpad(i))).toVector//双缓冲
     val ADC = Module(new ADataController)
@@ -53,7 +54,8 @@ class CUTEV2Top(implicit p: Parameters) extends Module with HWParameters{
     cutecounter.computeInstQueueEmpty := TaskCtrl.io.ctrlCounter.computeInstQueueEmpty
     cutecounter.computeInstCanIssue := TaskCtrl.io.ctrlCounter.computeInstCanIssue
     cutecounter.InstCanDecode := TaskCtrl.io.ctrlCounter.InstCanDecode
-
+    cutecounter.mmu_req_valid := io.mmu2llc.Request.valid
+    cutecounter.mmu_req_ready := io.mmu2llc.Request.ready
 
     //debug reg
     val DebugTimeStampe = RegInit(0.U(32.W))

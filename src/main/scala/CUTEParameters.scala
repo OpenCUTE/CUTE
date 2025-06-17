@@ -869,6 +869,8 @@ class CUTECounter extends Bundle with HWParameters{
     val computeInstQueueEmpty = Bool() //计算指令队列是否为空
     val computeInstCanIssue = Bool() //计算指令是否可以发出
     val InstCanDecode = Bool() //指令是否可以解码
+    val mmu_req_valid = Bool()
+    val mmu_req_ready = Bool()
 }
 
 
