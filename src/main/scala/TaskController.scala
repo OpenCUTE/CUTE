@@ -760,7 +760,9 @@ class TaskController(implicit p: Parameters) extends Module with HWParameters{
             val Store_MicroInst = Wire(new StoreMicroInst)
             Store_MicroInst.ApplicationTensor_D.ApplicationTensor_D_BaseVaddr := Decoding_MacroInst.ApplicationTensor_D_BaseVaddr
             Store_MicroInst.ApplicationTensor_D.ApplicationTensor_D_Stride_M := Decoding_MacroInst.ApplicationTensor_D_Stride
-            Store_MicroInst.ApplicationTensor_D.BlockTensor_D_BaseVaddr := Decoding_MacroInst.ApplicationTensor_D_BaseVaddr + Current_Tile_M_Iter * Decoding_MacroInst.ApplicationTensor_D_Stride + Current_Tile_N_Iter * ResultWidthByte.U//TODO:转置？result_data_width?
+            Store_MicroInst.ApplicationTensor_D.BlockTensor_D_BaseVaddr := Mux(Decoding_MacroInst.transpose_result,
+                        Decoding_MacroInst.ApplicationTensor_D_BaseVaddr + Current_Tile_N_Iter * Decoding_MacroInst.ApplicationTensor_D_Stride + Current_Tile_M_Iter * ResultWidthByte.U,
+                        Decoding_MacroInst.ApplicationTensor_D_BaseVaddr + Current_Tile_M_Iter * Decoding_MacroInst.ApplicationTensor_D_Stride + Current_Tile_N_Iter * ResultWidthByte.U)//TODO:转置？result_data_width?
             Store_MicroInst.ApplicationTensor_D.dataType := ElementDataType.DataTypeWidth32
             Store_MicroInst.Conherent := true.B
             Store_MicroInst.Is_Transpose := Decoding_MacroInst.transpose_result
@@ -1023,14 +1025,14 @@ class TaskController(implicit p: Parameters) extends Module with HWParameters{
             io.CDC_MicroTask_Config.Is_EasyScale_Only_Ops := false.B        //TODO:需要修改
             io.CDC_MicroTask_Config.Is_VecFIFO_Ops := false.B               //TODO:需要修改
 
-            io.AOP_MicroTask_Config.ScaratchpadTensor_M := Compute_MicroInst.ScaratchpadTensor_M
-            io.AOP_MicroTask_Config.ScaratchpadTensor_N := Compute_MicroInst.ScaratchpadTensor_N
-            io.AOP_MicroTask_Config.ScaratchpadTensor_K := Compute_MicroInst.ScaratchpadTensor_K
-            io.AOP_MicroTask_Config.ApplicationTensor_D.dataType := ElementDataType.DataTypeWidth32 //TODO:需要修改
-            io.AOP_MicroTask_Config.Is_EasyScale_Only_Ops := Compute_MicroInst.Is_EasyScale_Only_Ops
-            io.AOP_MicroTask_Config.Is_VecFIFO_Ops := Compute_MicroInst.Is_VecFIFO_Ops
-            io.AOP_MicroTask_Config.Is_Transpose := Compute_MicroInst.Is_Transpose
-            io.AOP_MicroTask_Config.Is_Reorder_Only_Ops := Compute_MicroInst.Is_Reorder_Only_Ops
+            // io.AOP_MicroTask_Config.ScaratchpadTensor_M := Compute_MicroInst.ScaratchpadTensor_M
+            // io.AOP_MicroTask_Config.ScaratchpadTensor_N := Compute_MicroInst.ScaratchpadTensor_N
+            // io.AOP_MicroTask_Config.ScaratchpadTensor_K := Compute_MicroInst.ScaratchpadTensor_K
+            // io.AOP_MicroTask_Config.ApplicationTensor_D.dataType := ElementDataType.DataTypeWidth32 //TODO:需要修改
+            // io.AOP_MicroTask_Config.Is_EasyScale_Only_Ops := Compute_MicroInst.Is_EasyScale_Only_Ops
+            // io.AOP_MicroTask_Config.Is_VecFIFO_Ops := Compute_MicroInst.Is_VecFIFO_Ops
+            // io.AOP_MicroTask_Config.Is_Transpose := Compute_MicroInst.Is_Transpose
+            // io.AOP_MicroTask_Config.Is_Reorder_Only_Ops := Compute_MicroInst.Is_Reorder_Only_Ops
             // io.AOP_MicroTask_Config.CUTEuop := Compute_MicroInst.CUTEuop
 
             io.MTE_MicroTask_Config.dataType := ElementDataType.DataTypeSInt8
@@ -1039,7 +1041,7 @@ class TaskController(implicit p: Parameters) extends Module with HWParameters{
             io.BDC_MicroTask_Config.MicroTaskValid := true.B
             io.CDC_MicroTask_Config.MicroTaskValid := true.B
             io.MTE_MicroTask_Config.valid := true.B
-            io.AOP_MicroTask_Config.MicroTaskValid := Compute_MicroInst.Have_Aops
+            // io.AOP_MicroTask_Config.MicroTaskValid := Compute_MicroInst.Have_Aops
 
             Current_ADC_SCP_ID := Compute_MicroInst_Resource_Info.A_SCPID
             Current_BDC_SCP_ID := Compute_MicroInst_Resource_Info.B_SCPID
@@ -1099,7 +1101,7 @@ class TaskController(implicit p: Parameters) extends Module with HWParameters{
                     printf("[TaskController<%d>]:Compute MicroInst Aop Finish! \n",io.DebugTimeStampe)
                 }
             }
-            when(!Compute_Micro_Inst_Wait_A_Finish && !Compute_Micro_Inst_Wait_B_Finish && !Compute_Micro_Inst_Wait_C_Finish && !Compute_Micro_Inst_Wait_Aop_Finish)
+            when(!Compute_Micro_Inst_Wait_A_Finish && !Compute_Micro_Inst_Wait_B_Finish && !Compute_Micro_Inst_Wait_C_Finish)
             {
                 Compute_MicroInst_FINISH_HEAD := WrapInc(Compute_MicroInst_FINISH_HEAD, 4)
                 Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FINISH_HEAD) := true.B

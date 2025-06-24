@@ -270,7 +270,7 @@ class MacroInst() extends Bundle with HWParameters{
     val bias_type = UInt(CMemoryLoaderTaskType.TypeBitWidth.W) //矩阵乘的bias的存储类型
 
     val transpose_result = Bool() //结果是否需要转置，用于attention加速
-    val conv_oh_index = UInt(log2Ceil(Convolution_Input_Height_Weight_Dim_Max).W)
+    val conv_oh_index = UInt(log2Ceil(Convolution_Input_Height_Weight_Dim_Max).W) // TODO:位宽不够
     val conv_ow_index = UInt(log2Ceil(Convolution_Input_Height_Weight_Dim_Max).W)
     val conv_stride = UInt(log2Ceil(StrideSizeMax).W) //卷积的stride步长
     val conv_oh_max = UInt(log2Ceil(Convolution_Input_Height_Weight_Dim_Max).W) //卷积的oh长度，用于和stride配合完成padding等操作
