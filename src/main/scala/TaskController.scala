@@ -11,6 +11,9 @@ import boom.v3.util._
 class TaskController(implicit p: Parameters) extends CuteModule{
     val io = IO(new Bundle{
         val ygjkctrl = Flipped(new YGJKControl)
+        val instfifo_head_id = Output(UInt(MarcoInstFIFODepthBitSize.W))
+        val instfifo_tail_id = Output(UInt(MarcoInstFIFODepthBitSize.W))
+        val instfifo_release = Output(Bool())
         // val ConfigInfo = DecoupledIO(new ConfigInfoIO)
         // val TaskCtrlInfo = (new TaskCtrlInfo)
         val ADC_MicroTask_Config = (new ADCMicroTaskConfigIO)
@@ -131,6 +134,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.ygjkctrl.InstFIFO_Finish := 0.U
     io.ygjkctrl.InstFIFO_Full := 0.U
     io.ygjkctrl.InstFIFO_Info := 0.U
+    io.instfifo_release := 0.U
 
     //TODO:构思微指令Test的流程
     
@@ -161,21 +165,41 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
     //宏指令MarcroInst_FIFO,深度为4
     //宏指令描述的是矩阵乘任务或者卷积任务的描述
-    val MacroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new MacroInst().getWidth.W))))
-    val MacroInst_FIFO_Head = RegInit(0.U(2.W))
-    val MacroInst_FIFO_Tail = RegInit(0.U(2.W))
+    val MacroInst_FIFO = RegInit(VecInit(Seq.fill(MarcoInstFIFODepth)(0.U(new MacroInst().getWidth.W))))
+    val MacroInst_FIFO_Head = RegInit(0.U(MarcoInstFIFODepthBitSize.W))
+    val MacroInst_FIFO_Tail = RegInit(0.U(MarcoInstFIFODepthBitSize.W))
     // performance-counter 宏指令不空是代表cute memory bound, 空的时候代表cute idle
     // performance-counter cute idle可分为start up idle,具体表现为cpu发出第一条rocc指令发起配置直到cute的计算部件开始进入working
     // performance-counter cutememory bound可分为A B C D load/store bound,具体在伪指令阶段分析
     val MacroInst_FIFO_Empty = MacroInst_FIFO_Head === MacroInst_FIFO_Tail
-    val MacroInst_FIFO_Full = WrapInc(MacroInst_FIFO_Head, 4) === MacroInst_FIFO_Tail
+    val MacroInst_FIFO_Full = WrapInc(MacroInst_FIFO_Head, MarcoInstFIFODepth) === MacroInst_FIFO_Tail
 
-    val MacroInst_FIFO_Valid = RegInit(VecInit(Seq.fill(4)(false.B)))
-    val MacroInst_FIFO_Decode_Finish = RegInit(VecInit(Seq.fill(4)(false.B)))
-    val MacroInst_FIFO_Total_Finish = RegInit(VecInit(Seq.fill(4)(false.B)))
+    val MacroInst_FIFO_Valid = RegInit(VecInit(Seq.fill(MarcoInstFIFODepth)(false.B)))
+    val MacroInst_FIFO_Decode_Finish = RegInit(VecInit(Seq.fill(MarcoInstFIFODepth)(false.B)))
+    val MacroInst_FIFO_Total_Finish = RegInit(VecInit(Seq.fill(MarcoInstFIFODepth)(false.B)))
 
-    val MarcoInst_FIFO_Decode_Head = RegInit(0.U(2.W))
-    val MarcoInst_FIFO_Finish_Head = RegInit(0.U(2.W))
+    val MarcoInst_FIFO_Decode_Head = RegInit(0.U(MarcoInstFIFODepthBitSize.W))
+    val MarcoInst_FIFO_Finish_Head = RegInit(0.U(MarcoInstFIFODepthBitSize.W))
+
+    io.instfifo_head_id := MacroInst_FIFO_Head
+    io.instfifo_tail_id := MacroInst_FIFO_Tail
+
+    //autoclear
+    if(TaskCtrl_AutoClear)
+    {
+        when(MacroInst_FIFO_Total_Finish(MacroInst_FIFO_Tail) === true.B)
+        {
+            MacroInst_FIFO_Valid(MacroInst_FIFO_Tail) := false.B
+            MacroInst_FIFO_Decode_Finish(MacroInst_FIFO_Tail) := false.B
+            MacroInst_FIFO_Total_Finish(MacroInst_FIFO_Tail) := false.B
+            MacroInst_FIFO_Tail := WrapInc(MacroInst_FIFO_Tail, MarcoInstFIFODepth)
+            io.instfifo_release := true.B
+            if (YJPDebugEnable)
+            {
+                printf("[TaskController<%d>]:Inst auto Clear!  MacroInst_FIFO_Head = %d, MacroInst_FIFO_Tail = %d\n", io.DebugTimeStampe,MacroInst_FIFO_Head, MacroInst_FIFO_Tail)
+            }
+        }
+    }
 
     io.ygjkctrl.InstFIFO_Info := MacroInst_FIFO_Valid.asUInt
     io.ygjkctrl.InstFIFO_Full := MacroInst_FIFO_Full
@@ -231,7 +255,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                 MacroInst_FIFO_Valid(MacroInst_FIFO_Head) := true.B
                 MacroInst_FIFO_Decode_Finish(MacroInst_FIFO_Head) := false.B
                 MacroInst_FIFO_Total_Finish(MacroInst_FIFO_Head) := false.B
-                MacroInst_FIFO_Head := WrapInc(MacroInst_FIFO_Head, 4)
+                MacroInst_FIFO_Head := WrapInc(MacroInst_FIFO_Head, MarcoInstFIFODepth)
                 io.ygjkctrl.cute_return_val := MacroInst_FIFO_Head
                 // io.ygjkctrl.cute_return_val.valid := true.B
                 if (YJPDebugEnable)
@@ -338,27 +362,35 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             get_configred := true.B
         }.elsewhen(funct === 16.U)
         {
-            //clear指令，将队尾的宏指令清除
-            when(!MacroInst_FIFO_Empty)
-            {
-                MacroInst_FIFO_Valid(MacroInst_FIFO_Tail) := false.B
-                MacroInst_FIFO_Decode_Finish(MacroInst_FIFO_Tail) := false.B
-                MacroInst_FIFO_Total_Finish(MacroInst_FIFO_Tail) := false.B
-                MacroInst_FIFO_Tail := WrapInc(MacroInst_FIFO_Tail, 4)
-                io.ygjkctrl.cute_return_val := MacroInst_FIFO_Tail
-                // io.ygjkctrl.cute_return_val.valid := true.B
-                if (YJPDebugEnable)
-                {
-                    printf("[TaskController<%d>]:Inst Clear!  MacroInst_FIFO_Head = %d, MacroInst_FIFO_Tail = %d\n", io.DebugTimeStampe,MacroInst_FIFO_Head, MacroInst_FIFO_Tail)
-                }
-            }.otherwise
+            if(TaskCtrl_AutoClear)
             {
                 io.ygjkctrl.cute_return_val := 0xdeadbeefL.U
-                // io.ygjkctrl.cute_return_val.valid := true.B
-                if (YJPDebugEnable)
+                printf("[TaskController<%d>]:Inst auto Clear!  MacroInst_FIFO is Empty!\n", io.DebugTimeStampe)
+            }
+            else
+            {
+                //clear指令，将队尾的宏指令清除
+                when(!MacroInst_FIFO_Empty&&MacroInst_FIFO_Total_Finish(MacroInst_FIFO_Tail))
                 {
-                    printf("[TaskController<%d>]:Inst Clear!  MacroInst_FIFO is Empty!\n", io.DebugTimeStampe)
-                }
+                    MacroInst_FIFO_Valid(MacroInst_FIFO_Tail) := false.B
+                    MacroInst_FIFO_Decode_Finish(MacroInst_FIFO_Tail) := false.B
+                    MacroInst_FIFO_Total_Finish(MacroInst_FIFO_Tail) := false.B
+                    MacroInst_FIFO_Tail := WrapInc(MacroInst_FIFO_Tail, MarcoInstFIFODepth)
+                    io.ygjkctrl.cute_return_val := MacroInst_FIFO_Tail
+                    // io.ygjkctrl.cute_return_val.valid := true.B
+                    if (YJPDebugEnable)
+                    {
+                        printf("[TaskController<%d>]:Inst Clear!  MacroInst_FIFO_Head = %d, MacroInst_FIFO_Tail = %d\n", io.DebugTimeStampe,MacroInst_FIFO_Head, MacroInst_FIFO_Tail)
+                    }
+                }.otherwise
+                {
+                    io.ygjkctrl.cute_return_val := 0xdeadbeefL.U
+                    // io.ygjkctrl.cute_return_val.valid := true.B
+                    if (YJPDebugEnable)
+                    {
+                        printf("[TaskController<%d>]:Inst Clear!  MacroInst_FIFO is Empty or Not Finish!\n", io.DebugTimeStampe)
+                    }
+                }   
             }
         }.elsewhen(funct === 17.U)
         {

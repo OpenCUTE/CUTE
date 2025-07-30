@@ -55,6 +55,38 @@ object CuteParams {
 
 }
 
+object Cutev3Params {
+
+    // baseParams:
+    def baseParams = CuteParams().copy(v3config = Cutev3extParams.baseparams)
+
+    // 256 bit outside memory bus,128 memory bus
+    def TL256Params = baseParams.copy(
+        outsideDataWidth = 256,
+        MemoryDataWidth = 128
+    )
+
+    //default simple debug
+    def simpleDebugParams = baseParams.copy(
+        Debug = CuteDebugParams.AMLDebugEnable
+    )
+
+    //dram&L2 performance test
+    def dram_L2_8Tops_PerformanceTestParams = baseParams.copy(
+        outsideDataWidth = 512,
+        LLCSourceMaxNum = 64,
+        MemorysourceMaxNum = 64,
+        Tensor_M = 512,
+        Tensor_N = 512,
+        Tensor_K = 64,
+        Matrix_M = 8,
+        Matrix_N = 8,
+        ReduceWidthByte = 32,
+        Debug = CuteDebugParams.AMLDebugEnable
+    )
+
+}
+
 object CuteDebugParams {
 
   // NoDebugParams:
@@ -109,6 +141,21 @@ case class CuteMMUParams(
 )
 
 
+object Cutev3extParams {
+    // NoV3ExtParams:
+    def NoextParams = Cutev3extParams(
+    TaskCtrl_AutoClear = false, //任务控制器是否自动清除已完成指令  
+    )
+
+    // V3 Base Ext
+    def baseparams = Cutev3extParams()
+
+}
+
+case class Cutev3extParams(
+    val TaskCtrl_AutoClear :Boolean = true, //任务控制器是否自动清除已完成指令
+)
+
 
 case class CuteParams(
     val outsideDataWidth :Int = 512, //cute对外访存的带宽
@@ -153,7 +200,9 @@ case class CuteParams(
     val VecTaskDataBufferDepth :Int = 4, //VecTask的指令缓冲深度掩盖从VecInterface到VPU的数据传输延迟即可
 
     val Debug : CuteDebugParams = CuteDebugParams.NoDebug, //调试参数
-    val MMUParams: CuteMMUParams = CuteMMUParams.baseParams //MMU的参数
+    val MMUParams: CuteMMUParams = CuteMMUParams.baseParams, //MMU的参数
+    
+    val v3config: Cutev3extParams = Cutev3extParams.NoextParams //v3的扩展参数
 ) {
 
     //所有参数都必须是2的n次方
@@ -241,6 +290,10 @@ trait CUTEImplParameters{
     def cuteParams: CuteParams = p(CuteParamsKey)
     def MMUParams: CuteMMUParams = cuteParams.MMUParams
     def DebugParams: CuteDebugParams = cuteParams.Debug
+    def v3config: Cutev3extParams = cuteParams.v3config
+
+    val MarcoInstFIFODepth = 4  //宏指令FIFO的深度
+    val MarcoInstFIFODepthBitSize = log2Ceil(MarcoInstFIFODepth) //宏指令FIFO的深度
 
     val vpnBits = MMUParams.vpnBits
     val ppnBits = MMUParams.ppnBits
@@ -249,7 +302,7 @@ trait CUTEImplParameters{
     val paddrBits = MMUParams.paddrBits
     val corePAddrBits = MMUParams.corePAddrBits
 
-
+    val TaskCtrl_AutoClear = v3config.TaskCtrl_AutoClear
 
     val YJPDebugEnable      = DebugParams.YJPDebugEnable
     val YJPADCDebugEnable   = DebugParams.YJPADCDebugEnable

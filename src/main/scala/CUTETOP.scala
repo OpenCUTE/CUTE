@@ -7,9 +7,12 @@ import org.chipsalliance.cde.config._
 // import boom.exu.ygjk._
 // import scala.collection.parallel.Task
 
-class CUTETopIO()(implicit val p: Parameters) extends Bundle{
+class CUTETopIO()(implicit p: Parameters) extends CuteBundle{
     val mmu2llc = Flipped(new MMU2TLIO)
     val ctrl2top = Flipped(new YGJKControl)
+    val instfifo_head_id = Output(UInt(MarcoInstFIFODepthBitSize.W))
+    val instfifo_tail_id = Output(UInt(MarcoInstFIFODepthBitSize.W))
+    val instfifo_release = Output(Bool())
 }
 class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     val io = IO(new CUTETopIO)
@@ -145,6 +148,9 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     MMU.io.LastLevelCacheTLIO <> io.mmu2llc
 
     io.ctrl2top <> TaskCtrl.io.ygjkctrl
+    io.instfifo_head_id := TaskCtrl.io.instfifo_tail_id//原先代码里head/tail写反了
+    io.instfifo_tail_id := TaskCtrl.io.instfifo_head_id//原先代码里head/tail写反了
+    io.instfifo_release := TaskCtrl.io.instfifo_release
 
     //给每个SCP的输入进行defuat的赋值
     for (i <- 0 until 2){
