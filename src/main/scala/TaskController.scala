@@ -112,7 +112,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.SCP_CtrlInfo.CML_SCP_ID := 1.U
 
     io.MTE_MicroTask_Config.dataType := ElementDataType.DataTypeUndef
-    io.MTE_MicroTask_Config.valid := false.B
+    // io.MTE_MicroTask_Config.valid := false.B
 
     //AOP_MicroTask_Config 的 默认配置
     io.AOP_MicroTask_Config.ApplicationTensor_C.dataType := ElementDataType.DataTypeUndef
@@ -1072,7 +1072,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             io.ADC_MicroTask_Config.MicroTaskValid := true.B
             io.BDC_MicroTask_Config.MicroTaskValid := true.B
             io.CDC_MicroTask_Config.MicroTaskValid := true.B
-            io.MTE_MicroTask_Config.valid := true.B
+            // io.MTE_MicroTask_Config.valid := true.B
             // io.AOP_MicroTask_Config.MicroTaskValid := Compute_MicroInst.Have_Aops
 
             Current_ADC_SCP_ID := Compute_MicroInst_Resource_Info.A_SCPID

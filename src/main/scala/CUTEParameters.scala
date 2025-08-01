@@ -161,6 +161,17 @@ case class Cutev3extParams(
 )
 
 
+object CuteFPEParams {
+
+    def baseparams = CuteFPEParams()
+
+}
+
+case class CuteFPEParams(
+    val cmptreelayers :Int = 4,
+    val P3AddNum :Int = 4,
+)
+
 case class CuteParams(
     val outsideDataWidth :Int = 512, //cute对外访存的带宽
     val MemoryDataWidth :Int = 64,   //TODO:DRAM的访存通道的数据位宽
@@ -206,7 +217,9 @@ case class CuteParams(
     val Debug : CuteDebugParams = CuteDebugParams.NoDebug, //调试参数
     val MMUParams: CuteMMUParams = CuteMMUParams.baseParams, //MMU的参数
     
-    val v3config: Cutev3extParams = Cutev3extParams.NoextParams //v3的扩展参数
+    val v3config: Cutev3extParams = Cutev3extParams.NoextParams, //v3的扩展参数
+
+    val FPEparams: CuteFPEParams = CuteFPEParams.baseparams //FPE的参数
 ) {
 
     //所有参数都必须是2的n次方
@@ -295,6 +308,7 @@ trait CUTEImplParameters{
     def MMUParams: CuteMMUParams = cuteParams.MMUParams
     def DebugParams: CuteDebugParams = cuteParams.Debug
     def v3config: Cutev3extParams = cuteParams.v3config
+    def FPEparams: CuteFPEParams = cuteParams.FPEparams
 
     val MarcoInstFIFODepth = 4  //宏指令FIFO的深度
     val MarcoInstFIFODepthBitSize = log2Ceil(MarcoInstFIFODepth) //宏指令FIFO的深度
@@ -386,6 +400,10 @@ trait CUTEImplParameters{
     val VecTaskInstBufferSize = cuteParams.VecTaskInstBufferSize
     val VecTaskDataBufferDepth = cuteParams.VecTaskDataBufferDepth
     val ReduceGroupSize = cuteParams.ReduceGroupSize
+
+    val cmptreelayers = FPEparams.cmptreelayers //FPE的计算树层数
+    val P3AddNum :Int = FPEparams.P3AddNum //FPE的P3加法器的数量
+    val P2AddNum :Int = ReduceWidth / (P3AddNum * 16)
 }
 
 class CuteModule(implicit val p: Parameters) extends Module with CUTEImplParameters
@@ -860,8 +878,6 @@ class CMLMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
 
 class MTEMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
     val dataType                            = Output(UInt(ElementDataType.DataTypeBitWidth.W))
-    val valid = Output(Bool())
-    val ready = Input(Bool())
 }
 
 class SCPControlInfo()(implicit p: Parameters) extends CuteBundle{

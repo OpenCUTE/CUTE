@@ -21,21 +21,20 @@ class MatrixTE(implicit p: Parameters) extends CuteModule{
     })
 
     //实例化ReducePE
-    val Matrix = VecInit.tabulate(Matrix_M, Matrix_N){(x,y) => Module(new ReducePE(x*4+y)).io}
+    val Matrix = VecInit.tabulate(Matrix_M, Matrix_N){(x,y) => Module(new FReducePE()).io}
 
     //直接驱动ReducePE的输入
     //接下来给每个ReducePE的输入进行赋值
     //broadcaster的逻辑
     for (i <- 0 until Matrix_M){
         for (j <- 0 until Matrix_N){
-            Matrix(i)(j).ReduceA.bits       := io.VectorA.bits((i+1)*ReduceWidth-1,(i)*ReduceWidth)
-            Matrix(i)(j).ReduceA.valid      := io.VectorA.valid
-            Matrix(i)(j).ReduceB.bits       := io.VectorB.bits((j+1)*ReduceWidth-1,(j)*ReduceWidth)
-            Matrix(i)(j).ReduceB.valid      := io.VectorB.valid
-            Matrix(i)(j).AddC.bits          := io.MatirxC.bits((i*Matrix_N+j+1)*ResultWidth-1,(i*Matrix_N+j)*ResultWidth)
-            Matrix(i)(j).AddC.valid         := io.MatirxC.valid
-            Matrix(i)(j).ConfigInfo.dataType:= io.ConfigInfo.dataType
-            Matrix(i)(j).ConfigInfo.valid   := io.ConfigInfo.valid
+            Matrix(i)(j).AVector.bits       := io.VectorA.bits((i+1)*ReduceWidth-1,(i)*ReduceWidth)
+            Matrix(i)(j).AVector.valid      := io.VectorA.valid
+            Matrix(i)(j).BVector.bits       := io.VectorB.bits((j+1)*ReduceWidth-1,(j)*ReduceWidth)
+            Matrix(i)(j).BVector.valid      := io.VectorB.valid
+            Matrix(i)(j).CAdd.bits          := io.MatirxC.bits((i*Matrix_N+j+1)*ResultWidth-1,(i*Matrix_N+j)*ResultWidth)
+            Matrix(i)(j).CAdd.valid         := io.MatirxC.valid
+            Matrix(i)(j).opcode             := io.ConfigInfo.dataType
             when(io.VectorA.valid && io.VectorB.valid && io.MatirxC.valid){
                 // printf("[MatrixTE]: Matrix(%d)(%d) ReduceA:%x ReduceB:%x AddC:%x\n",i.U,j.U,Matrix(i)(j).ReduceA.bits,Matrix(i)(j).ReduceB.bits,Matrix(i)(j).AddC.bits)
             }
@@ -46,12 +45,12 @@ class MatrixTE(implicit p: Parameters) extends CuteModule{
     val CurrentMatrixD = Wire(Vec(Matrix_M*Matrix_N, UInt(ResultWidth.W)))
     for (i <- 0 until Matrix_M){
         for (j <- 0 until Matrix_N){
-            CurrentMatrixD(i*Matrix_N+j) := Matrix(i)(j).ResultD.bits
+            CurrentMatrixD(i*Matrix_N+j) := Matrix(i)(j).DResult.bits
         }
     }
     //这里asUInt可以将Vec(UInt)转换成UInt
     io.MatrixD.bits := CurrentMatrixD.asUInt
-    io.MatrixD.valid := Matrix(0)(0).ResultD.valid
+    io.MatrixD.valid := Matrix(0)(0).DResult.valid
     //如果Matrix(i)(j)的每个vali都为true，那么MatrixD的valid才为true
     // val YJP_valid_count = RegInit(0.U(2.W))
     // val YJP_Count_number = RegInit(0.U(32.W))
@@ -71,7 +70,7 @@ class MatrixTE(implicit p: Parameters) extends CuteModule{
     //确定所有的ready信号
     //当所有的ReducePE的输入都ready的时候，VectorA和VectorB的ready才为true
     //注意这里如果是时序不足的点，很简单只用考察一个PE即可，因为所有PE是同步执行的，这里这样写是保证逻辑完整完备，代码可读性高
-    val ReducePEInputAllReady = Matrix(0)(0).ReduceA.ready && Matrix(0)(0).ReduceB.ready && Matrix(0)(0).AddC.ready
+    val ReducePEInputAllReady = Matrix(0)(0).AVector.ready && Matrix(0)(0).BVector.ready && Matrix(0)(0).CAdd.ready
     io.VectorA.ready := ReducePEInputAllReady
     io.VectorB.ready := ReducePEInputAllReady
     io.MatirxC.ready := ReducePEInputAllReady
@@ -100,15 +99,12 @@ class MatrixTE(implicit p: Parameters) extends CuteModule{
     //全体PE对DC进行的完全同步的控制信号，保证每个PE的迭代器同步更新，保证每个Internal Reduce Dim的第一个次计算将C的数据送入PE，最后一次计算将PE的数据送回D
     io.ComputeGo := ReducePEInputAllReady
 
-    val ReducePEConfigAllReady = Matrix(0)(0).ConfigInfo.ready
-    io.ConfigInfo.ready := ReducePEConfigAllReady
-
     //越浅的fifo，越少的能量消耗～
     //直接送到CscratchPad的数据，是最香的
     //只要MatrixD的是ready的，就可以送数据
     for (i <- 0 until Matrix_M){
         for (j <- 0 until Matrix_N){
-            Matrix(i)(j).ResultD.ready := io.MatrixD.ready
+            Matrix(i)(j).DResult.ready := io.MatrixD.ready
         }
     }
 
