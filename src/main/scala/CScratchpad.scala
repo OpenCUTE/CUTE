@@ -55,8 +55,8 @@ class CScratchpad(implicit p: Parameters) extends CuteModule{
     val decode_request = new ScaratchpadTaskDecode(request)
     val decode_pre_request = new ScaratchpadTaskDecode(PreRequest)
     
-    assert(decode_request.IsReadFromDataController && decode_request.IsReadFromMemoryLoader, "CScarchpad: ReadFromDataController and ReadFromMemoryLoader should not be both true at the same time")
-    assert(decode_request.IsWriteFromDataController && decode_request.IsWriteFromMemoryLoader, "CScarchpad: WriteFromDataController and WriteFromMemoryLoader should not be both true at the same time")
+    assert(!(decode_request.IsReadFromDataController && decode_request.IsReadFromMemoryLoader), "CScarchpad: ReadFromDataController and ReadFromMemoryLoader should not be both true at the same time")
+    assert(!(decode_request.IsWriteFromDataController && decode_request.IsWriteFromMemoryLoader), "CScarchpad: WriteFromDataController and WriteFromMemoryLoader should not be both true at the same time")
     
     val read_request_per_bank_addr = WireInit(VecInit(Seq.fill(CScratchpadNBanks)(0.U(CScratchpadBankNEntrys.W))))
     val read_request_per_bank_valid = WireInit(VecInit(Seq.fill(CScratchpadNBanks)(false.B)))
