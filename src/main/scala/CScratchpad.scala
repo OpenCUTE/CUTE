@@ -69,7 +69,7 @@ class CScratchpad(implicit p: Parameters) extends CuteModule{
     for( i <- 0 until CScratchpadNBanks) {
         read_request_per_bank_addr(i) := Mux(decode_request.IsReadFromDataController, io.ScarchPadIO.FromDataController.ReadBankAddr(i).bits, io.ScarchPadIO.FromMemoryLoader.ReadRequestToScarchPad.BankAddr(i).bits)
         read_request_per_bank_valid(i) := Mux(decode_request.IsReadFromDataController, io.ScarchPadIO.FromDataController.ReadBankAddr(i).valid, io.ScarchPadIO.FromMemoryLoader.ReadRequestToScarchPad.BankAddr(i).valid)
-        read_request_response_valid(i) := Mux(decode_pre_request.IsReadFromDataController, io.ScarchPadIO.FromDataController.ReadBankAddr(i).bits, io.ScarchPadIO.FromMemoryLoader.ReadRequestToScarchPad.BankAddr(i).bits)
+        read_request_response_valid(i) := Mux(decode_request.IsReadFromDataController, io.ScarchPadIO.FromDataController.ReadBankAddr(i).valid, io.ScarchPadIO.FromMemoryLoader.ReadRequestToScarchPad.BankAddr(i).valid)
 
         write_request_per_bank_addr(i) := Mux(decode_request.IsWriteFromDataController, io.ScarchPadIO.FromDataController.WriteBankAddr(i).bits, io.ScarchPadIO.FromMemoryLoader.WriteRequestToScarchPad.BankAddr(i).bits)
         write_request_per_bank_data(i) := Mux(decode_request.IsWriteFromDataController, io.ScarchPadIO.FromDataController.WriteRequestData(i).bits, io.ScarchPadIO.FromMemoryLoader.WriteRequestToScarchPad.Data(i).bits)

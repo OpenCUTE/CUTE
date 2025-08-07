@@ -138,6 +138,12 @@ object CuteDebugParams {
     YJPCMLDebugEnable = true,
   )
 
+  def ComputeDebugeNable = NoDebug.copy(
+    // YJPMACDebugEnable = true,
+    YJPCMLDebugEnable = true,
+    // YJPDebugEnable = true,
+  )
+
   def AllDebugOn = NoDebug.copy(
     YJPDebugEnable = true,
     YJPADCDebugEnable = true,
@@ -337,6 +343,7 @@ case class CuteParams(
     def CScratchpadBankNEntrys = CScratchpadBankSize / CScratchpadEntryByteSize
 
     require(ReduceGroupSize == 2, "ReduceGroupSize must be 2, Wait for update")
+    require(outsideDataWidthByte <= Tensor_K, "outsideDataWidthByte must be less than or equal to Tensor_K, or a load will exceed the subtensor in micro load")
 
 }
 
