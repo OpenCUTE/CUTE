@@ -1,6 +1,6 @@
 [submodule "cute-fpe"]
 	path = cute-fpe
-	url = git@github.com:OpenXiangShan/CUTEFPE.git
+	url = git@github.com:OpenCUTE/cute.git
 [submodule "cutetest"]
 	path = cutetest
-	url = git@github.com:OpenXiangShan/CUTETest.git
+	url = git@github.com:OpenCUTE/cutetest.git
