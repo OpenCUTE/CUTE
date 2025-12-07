@@ -4,3 +4,15 @@
 [submodule "cutetest"]
 	path = cutetest
 	url = git@github.com:OpenXiangShan/CUTETest.git
+[submodule "chipyard"]
+	path = chipyard
+	url = git@github.com:OpenCUTE/chipyard.git
+[submodule "CPU/shuttle"]
+	path = CPU/shuttle
+	url = git@github.com:OpenCUTE/shuttle.git
+[submodule "CPU/boom"]
+	path = CPU/boom
+	url = git@github.com:OpenCUTE/riscv-boom.git
+[submodule "CPU/rocket"]
+	path = CPU/rocket
+	url = git@github.com:OpenCUTE/rocket-chip.git
