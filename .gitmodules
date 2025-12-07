@@ -1,9 +1,6 @@
-[submodule "cute-fpe"]
-	path = cute-fpe
-	url = git@github.com:OpenXiangShan/CUTEFPE.git
 [submodule "cutetest"]
 	path = cutetest
-	url = git@github.com:OpenXiangShan/CUTETest.git
+	url = git@github.com:OpenCUTE/cutetest.git
 [submodule "chipyard"]
 	path = chipyard
 	url = git@github.com:OpenCUTE/chipyard.git
@@ -16,3 +13,6 @@
 [submodule "CPU/rocket"]
 	path = CPU/rocket
 	url = git@github.com:OpenCUTE/rocket-chip.git
+[submodule "cute-fpe"]
+	path = cute-fpe
+	url = git@github.com:OpenCUTE/cute-fpe.git
