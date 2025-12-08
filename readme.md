@@ -13,7 +13,8 @@ Paper PDF | IEEE Xplore | BibTeX | Presentation Slides | Presentation Video
 
 ## Architecture
 ![CUTE-arch](images/thiswork.png)
-![CUTE-arch](images/microarch.png)
+## Micro-Architecture
+![CUTE-micro-arch](images/microarch.png)
 ## Sub-directories Overview
 Some of the key directories are shown below.
 
@@ -40,7 +41,43 @@ Some of the key directories are shown below.
 
 ## Prepare environment
 
+"Before executing all subsequent steps, please complete the environment initialization first!"
+```bash 
+$ ./scripts/setup-env.sh
+[CUTE-Setup-step-1] Script absolute path: .....
+
+[CUTE-Setup-step-2] Updating CUTE git submodules.....
+.....
+[CUTE-Setup-step-2] CUTE git submodules updated.
+.....
+
+[CUTE-Setup-step-3] Setting up chipyard environment...
+.....
+[CUTE-Setup-step-3] Chipyard environment setup complete.
+
+[CUTE-Setup-step-4] WIP : Additional setup steps will be added soon.
+```
+
+
 ## Generate Verilog
+
+## Generate CUTE-Test
+```bash 
+$ ./scripts/build_cute_test.sh
+[CUTE-Setup-step-1] Script absolute path: .....
+
+[CUTE-Setup-step-2] Updating CUTE git submodules.....
+.....
+[CUTE-Setup-step-2] CUTE git submodules updated.
+.....
+
+[CUTE-Setup-step-3] Setting up chipyard environment...
+.....
+[CUTE-Setup-step-3] Chipyard environment setup complete.
+
+[CUTE-Setup-step-4] WIP : Additional setup steps will be added soon.
+```
+
 
 ## Run Programs by Simulation
 
