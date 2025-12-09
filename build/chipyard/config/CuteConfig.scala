@@ -1,0 +1,1 @@
+../../../chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
