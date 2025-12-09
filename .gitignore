@@ -11,3 +11,4 @@ target/
 *.#*
 *.*
 tool/*
+build/chipyard/simulator-*
