@@ -78,6 +78,22 @@ all verilog files are located at: .....
 ```
 
 ## Generate CUTE-Test
+
+Use `scripts/setup-get-rvv-toolchain.sh` to install the RISC-V toolchain. 
+
+```bash 
+[Setup-Rvv-toolchain-step-1] Script absolute path: .....
+[Setup-Rvv-toolchain-step-1] CUTE root absolute path: .....
+
+[Setup-Rvv-toolchain-step-2] Download the precompiled RISC-V Vector (RVV) toolchain...
+.....
+[Setup-Rvv-toolchain-step-2] RVV toolchain download and extraction complete.
+
+RVV toolchain is set up at: .....
+```
+
+Then, with `scripts/build_cute_test.sh`, you can compile various bare-metal binaries that can be executed on the Verilator simulator. 
+
 ```bash 
 $ ./scripts/build_cute_test.sh
 [CUTE-Test-Generate-step-1] Script absolute path: .....
@@ -120,13 +136,17 @@ All test programs are located at: .....
 
 ```
 
+For the detailed compilation process and the corresponding execution flow, please refer to the C files and Makefiles in the specific folders.
+
 
 ## Run Programs by Simulation
 
+
 ### Prepare environment
+Please make sure you have completed the [“Generate CUTE-Test”](#generate-cute-test) and [“Generate Verilog”](#generate-verilog) processes first! Then proceed with the following steps.
+### Build simulator
 
 ### Run with simulator
-
 <!-- ### Run with fpga
 
 ### Run with EDA -->
