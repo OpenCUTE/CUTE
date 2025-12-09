@@ -1,4 +1,3 @@
-*~
 target/
 /.bsp/
 /.idea/
@@ -9,6 +8,8 @@ target/
 *#
 *.o
 *.#*
-*.*
+# *.*
 tool/*
 build/chipyard/simulator-*
+.metals
+.vscode
