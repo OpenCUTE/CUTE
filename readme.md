@@ -62,7 +62,7 @@ $ ./scripts/setup-env.sh
 
 ## Generate Verilog
 
-Refer to the build/chipyard/config/CuteConfig.scala file, where the available CUTE SoC configuration codes generated from Chipyard are listed. Based on your needs, you can generate the corresponding SoC. The command below illustrates a full Verilog generation workflow.
+Refer to the `build/chipyard/config/CuteConfig.scala` file, where the available CUTE SoC configuration codes generated from Chipyard are listed. Based on your needs, you can generate the corresponding SoC. The command below illustrates a full Verilog generation workflow.
 
 ```bash 
 $ ./scripts/build-verilog.sh CUTE2TopsSCP64Config
