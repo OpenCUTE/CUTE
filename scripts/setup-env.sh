@@ -16,8 +16,9 @@ echo ""
 echo ""
 echo "[CUTE-Setup-step-3] Setting up chipyard environment..."
 # 假设 chipyard 初始化脚本是 scripts/init-submodules.sh
-
-bash "$SCRIPT_DIR/../chipyard/build-setup.sh --skip-firesim --skip-marshal --skip-clean"
+cd $SCRIPT_DIR/../chipyard
+./build-setup.sh --skip-firesim --skip-marshal --skip-clean
+cd -
 
 echo "[CUTE-Setup-step-3] Chipyard environment setup complete."
 echo ""
