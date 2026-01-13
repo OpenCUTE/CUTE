@@ -34,6 +34,14 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     val BDC = Module(new BDataController)
     val BML = Module(new BMemoryLoader)
 
+    val ASSpad = Seq.tabulate(2)(i => Module(new AScaleScratchpad)).toVector//双缓冲
+    val ASC = Module(new AScaleController)
+    val ASL = Module(new AScaleLoader)
+
+    val BSSpad = Seq.tabulate(2)(i => Module(new BScaleScratchpad)).toVector//双缓冲
+    val BSC = Module(new BScaleController)
+    val BSL = Module(new BScaleLoader)
+
     val CSpad = Seq.tabulate(2)(i => Module(new CScratchpad)).toVector//双缓冲
     val CDC = Module(new CDataController)
     val CML = Module(new CMemoryLoader)
@@ -72,10 +80,22 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     ADC.io.ConfigInfo <> TaskCtrl.io.ADC_MicroTask_Config
     ADC.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
 
+    //ASC的默认输入
+    ASC.io.FromScarchPadIO.Data.valid := false.B
+    ASC.io.FromScarchPadIO.Data.bits := 0.U.asTypeOf(ASC.io.FromScarchPadIO.Data.bits)
+    ASC.io.FromScarchPadIO.BankAddr.ready := false.B
+    ASC.io.ConfigInfo <> TaskCtrl.io.ASC_MicroTask_Config
+    ASC.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
+
     //AML的默认输入
     AML.io.ConfigInfo <> TaskCtrl.io.AML_MicroTask_Config
     AML.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
     AML.io.LocalMMUIO <> MMU.io.ALocalMMUIO
+
+    //ASL的默认输入
+    ASL.io.ConfigInfo <> TaskCtrl.io.ASL_MicroTask_Config
+    ASL.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
+    ASL.io.LocalMMUIO <> MMU.io.ASLocalMMUIO
 
     //BDC的默认输入
     BDC.io.FromScarchPadIO.Data.valid := false.B
@@ -84,10 +104,22 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     BDC.io.ConfigInfo <> TaskCtrl.io.BDC_MicroTask_Config
     BDC.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
 
+    //BSC的默认输入
+    BSC.io.FromScarchPadIO.Data.valid := false.B
+    BSC.io.FromScarchPadIO.Data.bits := 0.U.asTypeOf(BSC.io.FromScarchPadIO.Data.bits)
+    BSC.io.FromScarchPadIO.BankAddr.ready := false.B
+    BSC.io.ConfigInfo <> TaskCtrl.io.BSC_MicroTask_Config
+    BSC.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
+
     //BML的默认输入
     BML.io.ConfigInfo <> TaskCtrl.io.BML_MicroTask_Config
     BML.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
     BML.io.LocalMMUIO <> MMU.io.BLocalMMUIO
+
+    //BSL的默认输入
+    BSL.io.ConfigInfo <> TaskCtrl.io.BSL_MicroTask_Config
+    BSL.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
+    BSL.io.LocalMMUIO <> MMU.io.BSLocalMMUIO
 
     //CDC的默认输入
     CDC.io.FromScarchPadIO.ReadResponseData := 0.U.asTypeOf(CDC.io.FromScarchPadIO.ReadResponseData)
@@ -116,15 +148,18 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     VPUIO.VPUInterface <> VecSIf.io.VPUInterface
 
 
-    //MTE的默认输入
     MTE.io.VectorA <> ADC.io.VectorA
     MTE.io.VectorB <> BDC.io.VectorB
+    MTE.io.ScaleA  <> ASC.io.ScaleA
+    MTE.io.ScaleB  <> BSC.io.ScaleB
     MTE.io.MatirxC <> CDC.io.Matrix_C
     MTE.io.MatrixD <> CDC.io.ResultMatrix_D
     MTE.io.ConfigInfo <> TaskCtrl.io.MTE_MicroTask_Config
     MTE.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
     ADC.io.ComputeGo := MTE.io.ComputeGo
     BDC.io.ComputeGo := MTE.io.ComputeGo
+    ASC.io.ComputeGo := MTE.io.ComputeGo
+    BSC.io.ComputeGo := MTE.io.ComputeGo
     CDC.io.ComputeGo := MTE.io.ComputeGo
 
     cutecounter.computeBusy := MTE.io.VectorA.valid
@@ -179,6 +214,22 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
         BSpad(i).io.ScarchPadIO.FromMemoryLoader.BankId.bits := 0.U.asTypeOf(BSpad(i).io.ScarchPadIO.FromMemoryLoader.BankId.bits)
         BSpad(i).io.ScarchPadIO.FromMemoryLoader.Data := 0.U.asTypeOf(BSpad(i).io.ScarchPadIO.FromMemoryLoader.Data)
 
+        // ASSpad
+        //ASC的请求
+        ASSpad(i).io.ScaleScratchpadIO.FromScaleController.BankAddr.valid := false.B
+        ASSpad(i).io.ScaleScratchpadIO.FromScaleController.BankAddr.bits := 0.U.asTypeOf(ASSpad(i).io.ScaleScratchpadIO.FromScaleController.BankAddr.bits)
+        //ASL的请求
+        ASSpad(i).io.ScaleScratchpadIO.FromScaleLoader.BankAddr := 0.U.asTypeOf(ASSpad(i).io.ScaleScratchpadIO.FromScaleLoader.BankAddr)
+        ASSpad(i).io.ScaleScratchpadIO.FromScaleLoader.Data := 0.U.asTypeOf(ASSpad(i).io.ScaleScratchpadIO.FromScaleLoader.Data)
+
+        // BSSpad
+        //BSC的请求
+        BSSpad(i).io.ScaleScratchpadIO.FromScaleController.BankAddr.valid := false.B
+        BSSpad(i).io.ScaleScratchpadIO.FromScaleController.BankAddr.bits := 0.U.asTypeOf(BSSpad(i).io.ScaleScratchpadIO.FromScaleController.BankAddr.bits)
+        //BSL的请求
+        BSSpad(i).io.ScaleScratchpadIO.FromScaleLoader.BankAddr := 0.U.asTypeOf(BSSpad(i).io.ScaleScratchpadIO.FromScaleLoader.BankAddr)
+        BSSpad(i).io.ScaleScratchpadIO.FromScaleLoader.Data := 0.U.asTypeOf(BSSpad(i).io.ScaleScratchpadIO.FromScaleLoader.Data)
+
         //CSpad
         //CDC的请求
         CSpad(i).io.ScarchPadIO.FromDataController.ReadBankAddr := 0.U.asTypeOf(CSpad(i).io.ScarchPadIO.FromDataController.ReadBankAddr)
@@ -196,14 +247,18 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     //根据SCP_CtrlInfo的值，选择对应的SCP
 
     when (TaskCtrl.io.SCP_CtrlInfo.ADC_SCP_ID === 0.U){
+        ASC.io.FromScarchPadIO <> ASSpad(0).io.ScaleScratchpadIO.FromScaleController
         ADC.io.FromScarchPadIO <> ASpad(0).io.ScarchPadIO.FromDataController
     }.otherwise{
+        ASC.io.FromScarchPadIO <> ASSpad(1).io.ScaleScratchpadIO.FromScaleController
         ADC.io.FromScarchPadIO <> ASpad(1).io.ScarchPadIO.FromDataController
     }
 
     when (TaskCtrl.io.SCP_CtrlInfo.BDC_SCP_ID === 0.U){
+        BSC.io.FromScarchPadIO <> BSSpad(0).io.ScaleScratchpadIO.FromScaleController
         BDC.io.FromScarchPadIO <> BSpad(0).io.ScarchPadIO.FromDataController
     }.otherwise{
+        BSC.io.FromScarchPadIO <> BSSpad(1).io.ScaleScratchpadIO.FromScaleController
         BDC.io.FromScarchPadIO <> BSpad(1).io.ScarchPadIO.FromDataController
     }
 
@@ -214,14 +269,18 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     }
 
     when (TaskCtrl.io.SCP_CtrlInfo.AML_SCP_ID === 0.U){
+        ASL.io.ToScarchPadIO <> ASSpad(0).io.ScaleScratchpadIO.FromScaleLoader
         AML.io.ToScarchPadIO <> ASpad(0).io.ScarchPadIO.FromMemoryLoader
     }.otherwise{
+        ASL.io.ToScarchPadIO <> ASSpad(1).io.ScaleScratchpadIO.FromScaleLoader
         AML.io.ToScarchPadIO <> ASpad(1).io.ScarchPadIO.FromMemoryLoader
     }
 
     when (TaskCtrl.io.SCP_CtrlInfo.BML_SCP_ID === 0.U){
+        BSL.io.ToScarchPadIO <> BSSpad(0).io.ScaleScratchpadIO.FromScaleLoader
         BML.io.ToScarchPadIO <> BSpad(0).io.ScarchPadIO.FromMemoryLoader
     }.otherwise{
+        BSL.io.ToScarchPadIO <> BSSpad(1).io.ScaleScratchpadIO.FromScaleLoader
         BML.io.ToScarchPadIO <> BSpad(1).io.ScarchPadIO.FromMemoryLoader
     }
 

@@ -64,8 +64,6 @@ object CuteParams {
         ReduceWidthByte = 32,
         // Debug = CuteDebugParams.AMLDebugEnable
     )
-
-
     def CUTE_32Tops = baseParams.copy(
         outsideDataWidth = 512,
         LLCSourceMaxNum = 64,
@@ -156,7 +154,6 @@ object CuteParams {
         ReduceWidthByte = 32,
         // Debug = CuteDebugParams.AMLDebugEnable
     )
-
 
     def CUTE_512SCP(params: CuteParams) = params.copy(
         Tensor_M = 512,
@@ -351,8 +348,18 @@ object CuteFPEParams {
 }
 
 case class CuteFPEParams(
+    // 目前是固定的
+    val MinGroupSize :Int = 16,
+    val MinDataTypeWidth : Int = 4,
+    val ScaleWidth : Int = 8,
+    //
+
     val cmptreelayers :Int = 4,
-    val P3AddNum :Int = 4,
+    val fp8cmptreelayers :Int = 4,
+    // 目前固定，与FP4刚好公用，不要动
+    val P3AddNum :Int = 8,
+    val P2AddNum :Int = 4,
+    val FP4P0AddNum :Int = 2,
 )
 
 case class CuteParams(
@@ -406,6 +413,7 @@ case class CuteParams(
 ) {
 
     //所有参数都必须是2的n次方
+    // require(ReduceWidthByte == 64, "FP8/4 now only support 512 bit reduce width")
     require((outsideDataWidth & (outsideDataWidth - 1)) == 0, "outsideDataWidth must be power of 2")
     require((MemoryDataWidth & (MemoryDataWidth - 1)) == 0, "MemoryDataWidth must be power of 2")
     require((VectorWidth & (VectorWidth - 1)) == 0, "VectorWidth must be power of 2")
@@ -433,6 +441,9 @@ case class CuteParams(
     require((VecTaskInstBufferDepth & (VecTaskInstBufferDepth - 1)) == 0, "VecTaskInstBufferDepth must be power of 2")
     require((VecTaskInstBufferSize & (VecTaskInstBufferSize - 1)) == 0, "VecTaskInstBufferSize must be power of 2")
     require((VecTaskDataBufferDepth & (VecTaskDataBufferDepth - 1)) == 0, "VecTaskDataBufferDepth must be power of 2")
+    require((FPEparams.MinGroupSize == 16), "FPEparams.MinGroupSize must be 16")
+    require((FPEparams.MinDataTypeWidth == 4), "FPEparams.MinDataTypeWidth must be 4")
+    require((FPEparams.ScaleWidth == 8), "FPEparams.ScaleWidth must be 8")
 
     def outsideDataWidthByte = outsideDataWidth / 8
     def ReduceWidth = ReduceWidthByte * 8
@@ -450,6 +461,9 @@ case class CuteParams(
     def ReduceGroupSize  = Tensor_K/ReduceWidthByte    //这里指要存的张量的K的ReduceVector的数量！不是张量的K的大小
     def ScaratchpadMaxTensorDim = Math.max(Tensor_M, Math.max(Tensor_N, ReduceGroupSize))
     def ScaratchpadMaxTensorDimBitSize = log2Ceil(ScaratchpadMaxTensorDim) + 1
+
+
+    def ScaleWidth = ReduceWidthByte * 8 * FPEparams.ScaleWidth / FPEparams.MinDataTypeWidth / FPEparams.MinGroupSize
     //AScaratchpad中保存的张量形状为M*K
     //AScaratchpad的大小为Tenser_M * ReduceGroupSize * ReduceWidthByte
     //128*(4*256/8)，单次读的张量为128*128的张量
@@ -457,6 +471,8 @@ case class CuteParams(
     //需要考虑Scaratchpad的顺序读，需要考虑为Scaratchpad分bank
     def AScratchpadSize = Tensor_M * ReduceGroupSize * ReduceWidthByte //reduce
     def BScratchpadSize = Tensor_N * ReduceGroupSize * ReduceWidthByte //reduce
+    def AScaleSize = Tensor_M * ScaleWidth
+    def BScaleSize = Tensor_N * ScaleWidth
     def CScratchpadSize = Tensor_M * Tensor_N * ResultWidthByte //result
 
     //目前的Scratchpad设计，分Tensor_T个bank，每次取Tensor_T个数据，根据取数逻辑，在不同的bank里取不同的数据，然后拼接
@@ -468,6 +484,8 @@ case class CuteParams(
     def CScratchpadEntryBitSize = Matrix_M*ResultWidthByte * 8//这个取数和存数的带宽
     def AScratchpadNBanks = Matrix_M //注意这里与Matrix_M有强相关性，一般是Matrix_M的整数倍
     def BScratchpadNBanks = Matrix_N //这里与Matrix_N强相关
+    def AScaleNBanks = outsideDataWidth / ScaleWidth
+    def BScaleNBanks = outsideDataWidth / ScaleWidth
     def CScratchpadNBanks = Matrix_N //方便进行reorder
     def AScratchpad_Total_Bandwidth = AScratchpadNBanks * AScratchpadEntryByteSize  //ACSP的总带宽
     def BScratchpad_Total_Bandwidth = BScratchpadNBanks * BScratchpadEntryByteSize  //BCSP的总带宽
@@ -480,6 +498,8 @@ case class CuteParams(
     def CScratchpadBankSize = CScratchpadSize / CScratchpadNBanks
     def AScratchpadBankNEntrys = AScratchpadBankSize / AScratchpadEntryByteSize
     def BScratchpadBankNEntrys = BScratchpadBankSize / BScratchpadEntryByteSize
+    def AScaleBankNEntrys = AScaleSize / AScaleNBanks / ScaleWidth
+    def BScaleBankNEntrys = BScaleSize / BScaleNBanks / ScaleWidth  
     def CScratchpadBankNEntrys = CScratchpadBankSize / CScratchpadEntryByteSize
 
     // require(ReduceGroupSize == 2, "ReduceGroupSize must be 2, Wait for update")
@@ -530,6 +550,9 @@ trait CUTEImplParameters{
     val MemoryDataWidth = cuteParams.MemoryDataWidth
     val ReduceWidthByte = cuteParams.ReduceWidthByte
     val ReduceWidth = cuteParams.ReduceWidth
+    val mxfp8ScaleWidth = ReduceWidth * 8 / 8 / 32 //一个PE每周期接受的总scale的宽度，[单个scale宽度(8bit)，单个element的宽度(4bit)，groupsize(32)]
+    val nvfp4ScaleWidth = ReduceWidth * 8 / 4 / 16 //一个PE每周期接受的总scale的宽度，[单个scale宽度(8bit)，单个element的宽度(4bit)，groupsize(16)]
+    val mxfp4ScaleWidth = ReduceWidth * 8 / 4 / 32 //一个PE每周期接受的总scale的宽度，[单个scale宽度(8bit)，单个element的宽度(4bit)，groupsize(32)]
     val ABMLNeedSCPFillTable = cuteParams.ABMLNeedSCPFillTable
     val ResultWidthByte = cuteParams.ResultWidthByte
     val ResultWidth = cuteParams.ResultWidth
@@ -571,11 +594,16 @@ trait CUTEImplParameters{
     val AScratchpad_Total_Bandwidth_Bit = cuteParams.AScratchpad_Total_Bandwidth_Bit
     val BScratchpad_Total_Bandwidth_Bit = cuteParams.BScratchpad_Total_Bandwidth_Bit
     val CScratchpad_Total_Bandwidth_Bit = cuteParams.CScratchpad_Total_Bandwidth_Bit
+    val ScaleWidth = cuteParams.ScaleWidth
     val AScratchpadBankSize = cuteParams.AScratchpadBankSize
     val BScratchpadBankSize = cuteParams.BScratchpadBankSize
     val CScratchpadBankSize = cuteParams.CScratchpadBankSize
     val AScratchpadBankNEntrys = cuteParams.AScratchpadBankNEntrys
     val BScratchpadBankNEntrys = cuteParams.BScratchpadBankNEntrys
+    val AScaleBankNEntrys = cuteParams.AScaleBankNEntrys
+    val BScaleBankNEntrys = cuteParams.BScaleBankNEntrys
+    val AScaleNBanks = cuteParams.AScaleNBanks
+    val BScaleNBanks = cuteParams.BScaleNBanks
     val CScratchpadBankNEntrys = cuteParams.CScratchpadBankNEntrys
     val ResultFIFODepth = cuteParams.ResultFIFODepth
     val AMemoryLoaderReadFromMemoryFIFODepth = cuteParams.AMemoryLoaderReadFromMemoryFIFODepth
@@ -587,9 +615,31 @@ trait CUTEImplParameters{
     val VecTaskDataBufferDepth = cuteParams.VecTaskDataBufferDepth
     val ReduceGroupSize = cuteParams.ReduceGroupSize
 
+    val MinGroupSize = FPEparams.MinGroupSize //FPE的最小计算组大小
     val cmptreelayers = FPEparams.cmptreelayers //FPE的计算树层数
+    val fp8cmptreelayers = FPEparams.fp8cmptreelayers 
+
     val P3AddNum :Int = FPEparams.P3AddNum //FPE的P3加法器的数量
-    val P2AddNum :Int = ReduceWidth / (P3AddNum * 16)
+    val P2AddNum :Int = FPEparams.P2AddNum
+    val P4AddNum :Int = ReduceWidth / (P3AddNum * P2AddNum * 16)
+
+    val FP4P0AddNum :Int = FPEparams.FP4P0AddNum
+    val FP4P1AddNum :Int = 16 / FP4P0AddNum
+
+    def ScaleVecWidth(dataType : UInt) : UInt = {
+        val scaleVecWidth = Wire(UInt(4.W))
+        scaleVecWidth := 0.U
+        switch(dataType){
+        is (ElementDataType.DataTypeMxfp8e4m3F32) { scaleVecWidth := (ReduceWidthByte * 8 / 8 / 32).U }
+        is (ElementDataType.DataTypeMxfp8e5m2F32) { scaleVecWidth := (ReduceWidthByte * 8 / 8 / 32).U }
+        is (ElementDataType.DataTypenvfp4F32) { scaleVecWidth := (ReduceWidthByte * 8 / 4 / 16).U }
+        is (ElementDataType.DataTypemxfp4F32) { scaleVecWidth := (ReduceWidthByte * 8 / 4 / 32).U }
+        }
+        scaleVecWidth
+    }
+
+    val DEBUG_FP8 = false
+    val DEBUG_FP4 = false
 }
 
 class CuteModule(implicit val p: Parameters) extends Module with CUTEImplParameters
@@ -663,6 +713,9 @@ class MacroInst()(implicit p: Parameters) extends CuteBundle{
     val ApplicationTensor_C_BaseVaddr = UInt(64.W) //矩阵C的起始地址
     val ApplicationTensor_D_BaseVaddr = UInt(64.W) //矩阵D的起始地址
 
+    val ApplicationScale_A_BaseVaddr = UInt(64.W) //矩阵A的scale的起始地址
+    val ApplicationScale_B_BaseVaddr = UInt(64.W) //矩阵B的scale的起始地址
+
     val ApplicationTensor_A_Stride = UInt(64.W) //矩阵A的stride,代表下一组Reduce_DIM需要增加多少地址偏移量，对于矩阵A[M][N]来说就是M+1需要增加多少地址偏移量，对于卷积[hw][c]来说，就是hw+1需要增加多少地址偏移量
     val ApplicationTensor_B_Stride = UInt(64.W) //矩阵B的stride,代表下一组Reduce_DIM需要增加多少地址偏移量
     val ApplicationTensor_C_Stride = UInt(64.W) //矩阵C的stride,代表下一组Reduce_DIM需要增加多少地址偏移量
@@ -676,6 +729,7 @@ class MacroInst()(implicit p: Parameters) extends CuteBundle{
     val bias_data_type = UInt(ElementDataType.DataTypeBitWidth.W) //矩阵乘的bias的数据类型
     val bias_type = UInt(CMemoryLoaderTaskType.TypeBitWidth.W) //矩阵乘的bias的存储类型
 
+    val is_matmul = Bool() //是否是矩阵乘任务，否则为卷积任务
     val transpose_result = Bool() //结果是否需要转置，用于attention加速
     val conv_oh_index = UInt(log2Ceil(Convolution_Input_Height_Weight_Dim_Max).W) // TODO:位宽不够
     val conv_ow_index = UInt(log2Ceil(Convolution_Input_Height_Weight_Dim_Max).W)
@@ -705,6 +759,8 @@ class LoadMicroInst()(implicit p: Parameters) extends CuteBundle{
     // ABCD分别为矩阵A、矩阵B和结果矩阵C，偏置矩阵D的起始地址。要求所有矩阵都是Reduce_DIM_FIRST的
     val ApplicationTensor_A = new ApplicationTensor_A_Info
     val ApplicationTensor_B = new ApplicationTensor_B_Info
+    val ApplicationScale_A  = new ApplicationTensor_A_Info
+    val ApplicationScale_B  = new ApplicationTensor_B_Info
     val ApplicationTensor_C = new ApplicationTensor_C_Info//大多时候是0，所以存在一个大寄存器里可能会亏？
     val CLoadTaskInfo = new LoadTask_Info
 
@@ -724,6 +780,8 @@ class LoadMicroInst()(implicit p: Parameters) extends CuteBundle{
 
     val Is_A_Work                          = (Bool())      //是否需要工作
     val Is_B_Work                          = (Bool())      //是否需要工作
+    val Is_A_Scale_Work                    = (Bool())      //是否需要工作
+    val Is_B_Scale_Work                    = (Bool())      //是否需要工作
     val Is_C_Work                          = (Bool())      //是否需要工作
 
     val A_SCPID                            = UInt(2.W)//代表Load的结果存在哪个SCP上，这个值保存在Resoure_Info里
@@ -956,7 +1014,7 @@ class CDCMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
 
 class ApplicationTensor_A_Info()(implicit p: Parameters) extends CuteBundle{
     val ApplicationTensor_A_BaseVaddr   = (UInt(MMUAddrWidth.W))
-    // val BlockTensor_A_BaseVaddr         = (UInt(MMUAddrWidth.W))//可能没有了
+    val BlockTensor_A_BaseVaddr         = (UInt(MMUAddrWidth.W))//可能没有了
     val ApplicationTensor_A_Stride_M    = (UInt(MMUAddrWidth.W))//下一个M需要增加多少的地址偏移量
     val Convolution_OH_DIM_Length       = (UInt(log2Ceil(ConvolutionDIM_Max).W))
     val Convolution_OW_DIM_Length       = (UInt(log2Ceil(ConvolutionDIM_Max).W))
@@ -1146,6 +1204,15 @@ class ADataControlScaratchpadIO(implicit p: Parameters) extends CuteBundle{
     // val Chosen = Input(Bool())
 }
 
+class AScaleControlScaratchpadIO(implicit p: Parameters) extends CuteBundle{
+    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
+    val BankAddr = Flipped(DecoupledIO(Vec(AScaleNBanks, (UInt(log2Ceil(AScaleBankNEntrys).W)))))
+    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
+    val Data = Valid(Vec(AScaleNBanks, UInt(ScaleWidth.W)))
+    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
+    // val Chosen = Input(Bool())
+}
+
 class AMemoryLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
     //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val BankId = Flipped(Valid(UInt(log2Ceil(AScratchpadNBanks).W)))
@@ -1158,11 +1225,29 @@ class AMemoryLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
     // val Chosen = Input(Bool())
 }
 
+class AScaleLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
+    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
+    val BankAddr = Flipped(Vec(AScaleNBanks, Valid(UInt(log2Ceil(AScaleBankNEntrys).W))))
+    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
+    val Data = Flipped(Vec(AScaleNBanks, Valid(UInt(ScaleWidth.W))))
+    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
+    // val Chosen = Input(Bool())
+}
+
 class BDataControlScaratchpadIO(implicit p: Parameters) extends CuteBundle{
     //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val BankAddr = Flipped(DecoupledIO(Vec(BScratchpadNBanks, (UInt(log2Ceil(BScratchpadBankNEntrys).W)))))
     //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
     val Data = Valid(Vec(BScratchpadNBanks, UInt(BScratchpadEntryBitSize.W)))
+    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
+    // val Chosen = Input(Bool())
+}
+
+class BScaleControlScaratchpadIO(implicit p: Parameters) extends CuteBundle{
+    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
+    val BankAddr = Flipped(DecoupledIO(Vec(BScaleNBanks, (UInt(log2Ceil(BScaleBankNEntrys).W)))))
+    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
+    val Data = Valid(Vec(BScaleNBanks, UInt(ScaleWidth.W)))
     //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
     // val Chosen = Input(Bool())
 }
@@ -1177,6 +1262,14 @@ class BMemoryLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
     // val Chosen = Input(Bool())
 }
 
+class BScaleLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
+    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
+    val BankAddr = Flipped(Vec(BScaleNBanks, Valid(UInt(log2Ceil(BScaleBankNEntrys).W))))
+    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
+    val Data = Flipped(Vec(BScaleNBanks, Valid(UInt(ScaleWidth.W))))
+    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
+    // val Chosen = Input(Bool())
+}
 
 class CDataControlScaratchpadIO(implicit p: Parameters) extends CuteBundle{
     //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
@@ -1282,7 +1375,7 @@ class CUTECounter(implicit p: Parameters) extends CuteBundle{
 }
 
 
-class FReducePEDataType(){
+class FReducePEDataType {
 //0:Int8, 1:FP16, 2:BF16, 3:TF32, 4:I8 * UI8, 5:UI8 * I8, 6:UI8 * UI8
     def AdataByteWidth(dataType : UInt) : UInt = { 
         val dataByteWidth = Wire(UInt(3.W))
@@ -1295,25 +1388,73 @@ class FReducePEDataType(){
         is (ElementDataType.DataTypeI8U8I32) { dataByteWidth := 1.U }
         is (ElementDataType.DataTypeU8I8I32) { dataByteWidth := 1.U }
         is (ElementDataType.DataTypeU8U8I32) { dataByteWidth := 1.U }
-        is (ElementDataType.DataTypee4m3F32) { dataByteWidth := 1.U }
+        is (ElementDataType.DataTypeMxfp8e4m3F32) { dataByteWidth := 1.U }
+        is (ElementDataType.DataTypeMxfp8e5m2F32) { dataByteWidth := 1.U }
+        is (ElementDataType.DataTypefp8e4m3F32) { dataByteWidth := 1.U }
+        is (ElementDataType.DataTypefp8e5m2F32) { dataByteWidth := 1.U }
         }
         dataByteWidth
     }
 
-    def BdataByteWidth(dataType : UInt) : UInt = {
+    def BdataByteWidth(dataType : UInt) : UInt = { 
         val dataByteWidth = Wire(UInt(3.W))
         dataByteWidth := 0.U
         switch(dataType){
         is (ElementDataType.DataTypeI8I8I32) { dataByteWidth := 1.U }
-        is (ElementDataType.DataTypeF16F16F32) { dataByteWidth := 2.U }
+        is (ElementDataType.DataTypeF16F16F32)  { dataByteWidth := 2.U }
         is (ElementDataType.DataTypeBF16BF16F32) { dataByteWidth := 2.U }
         is (ElementDataType.DataTypeTF32TF32F32) { dataByteWidth := 4.U }
         is (ElementDataType.DataTypeI8U8I32) { dataByteWidth := 1.U }
         is (ElementDataType.DataTypeU8I8I32) { dataByteWidth := 1.U }
         is (ElementDataType.DataTypeU8U8I32) { dataByteWidth := 1.U }
-        is (ElementDataType.DataTypee4m3F32) { dataByteWidth := 1.U }
+        is (ElementDataType.DataTypeMxfp8e4m3F32) { dataByteWidth := 1.U }
+        is (ElementDataType.DataTypeMxfp8e5m2F32) { dataByteWidth := 1.U }
+        is (ElementDataType.DataTypefp8e4m3F32) { dataByteWidth := 1.U }
+        is (ElementDataType.DataTypefp8e5m2F32) { dataByteWidth := 1.U }
         }
         dataByteWidth
+    }
+
+    def AdataBitWidth(dataType : UInt) : UInt = { 
+        val dataBitWidth = Wire(UInt(6.W))
+        dataBitWidth := 0.U
+        switch(dataType){
+        is (ElementDataType.DataTypeI8I8I32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypeF16F16F32)  { dataBitWidth := 16.U }
+        is (ElementDataType.DataTypeBF16BF16F32) { dataBitWidth := 16.U }
+        is (ElementDataType.DataTypeTF32TF32F32) { dataBitWidth := 32.U }
+        is (ElementDataType.DataTypeI8U8I32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypeU8I8I32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypeU8U8I32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypeMxfp8e4m3F32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypeMxfp8e5m2F32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypenvfp4F32) { dataBitWidth := 4.U }
+        is (ElementDataType.DataTypemxfp4F32) { dataBitWidth := 4.U }
+        is (ElementDataType.DataTypefp8e4m3F32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypefp8e5m2F32) { dataBitWidth := 8.U }
+        }
+        dataBitWidth
+    }
+
+    def BdataBitWidth(dataType : UInt) : UInt = {
+        val dataBitWidth = Wire(UInt(6.W))
+        dataBitWidth := 0.U
+        switch(dataType){
+        is (ElementDataType.DataTypeI8I8I32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypeF16F16F32) { dataBitWidth := 16.U }
+        is (ElementDataType.DataTypeBF16BF16F32) { dataBitWidth := 16.U }
+        is (ElementDataType.DataTypeTF32TF32F32) { dataBitWidth := 32.U }
+        is (ElementDataType.DataTypeI8U8I32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypeU8I8I32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypeU8U8I32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypeMxfp8e4m3F32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypeMxfp8e5m2F32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypenvfp4F32) { dataBitWidth := 4.U }
+        is (ElementDataType.DataTypemxfp4F32) { dataBitWidth := 4.U }
+        is (ElementDataType.DataTypefp8e4m3F32) { dataBitWidth := 8.U }
+        is (ElementDataType.DataTypefp8e5m2F32) { dataBitWidth := 8.U }
+        }
+        dataBitWidth
     }
 
     def CdataByteWidth(dataType : UInt) : UInt = {
@@ -1327,7 +1468,12 @@ class FReducePEDataType(){
         is (ElementDataType.DataTypeI8U8I32) { dataByteWidth := 4.U }
         is (ElementDataType.DataTypeU8I8I32) { dataByteWidth := 4.U }
         is (ElementDataType.DataTypeU8U8I32) { dataByteWidth := 4.U }
-        is (ElementDataType.DataTypee4m3F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypeMxfp8e4m3F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypeMxfp8e5m2F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypenvfp4F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypemxfp4F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypefp8e4m3F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypefp8e5m2F32) { dataByteWidth := 4.U }
         }
         dataByteWidth
     }
@@ -1343,15 +1489,29 @@ class FReducePEDataType(){
         is (ElementDataType.DataTypeI8U8I32) { dataByteWidth := 4.U }
         is (ElementDataType.DataTypeU8I8I32) { dataByteWidth := 4.U }
         is (ElementDataType.DataTypeU8U8I32) { dataByteWidth := 4.U }
-        is (ElementDataType.DataTypee4m3F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypeMxfp8e4m3F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypeMxfp8e5m2F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypenvfp4F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypemxfp4F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypefp8e4m3F32) { dataByteWidth := 4.U }
+        is (ElementDataType.DataTypefp8e5m2F32) { dataByteWidth := 4.U }
         }
         dataByteWidth
     }
+
+    // def ScaleVecWidth(dataType : UInt) : UInt = {
+    //     val scaleVecWidth = Wire(UInt(4.W))
+    //     scaleVecWidth := 0.U
+    //     switch(dataType){
+    //     is (ElementDataType.DataTypeMxfp8e4m3F32) { scaleVecWidth := (ReduceWidthByte / 8 / 32 * 8).U }
+    //     }
+    //     scaleVecWidth
+    // }
 }
 
 //数据类型的样板类
 case object  ElementDataType extends Field[UInt]{
-    val DataTypeBitWidth = 3
+    val DataTypeBitWidth = 4
     val DataTypeUndef   = 0.U(DataTypeBitWidth.W)
     val DataTypeWidth32 = 4.U(DataTypeBitWidth.W)
     val DataTypeWidth16 = 2.U(DataTypeBitWidth.W)
@@ -1364,7 +1524,12 @@ case object  ElementDataType extends Field[UInt]{
     val DataTypeI8U8I32     = 4.U(DataTypeBitWidth.W)     //I8 * UI8 * I32
     val DataTypeU8I8I32     = 5.U(DataTypeBitWidth.W)     //U8 * I8 * I32
     val DataTypeU8U8I32     = 6.U(DataTypeBitWidth.W)     //U8 * U8 * I32
-    val DataTypee4m3F32     = 7.U(DataTypeBitWidth.W)     //E4M3 * E4M3 * FP32
+    val DataTypeMxfp8e4m3F32     = 7.U(DataTypeBitWidth.W)     //Mxfp8e4m3 * Mxfp8e4m3 * FP32
+    val DataTypeMxfp8e5m2F32     = 8.U(DataTypeBitWidth.W)     //Mxfp8e5m2 * Mxfp8e5m2 * FP32
+    val DataTypenvfp4F32    = 9.U(DataTypeBitWidth.W)     //NVFP4 * NVFP4 * FP32
+    val DataTypemxfp4F32    = 10.U(DataTypeBitWidth.W)    //MXFP4 * MXFP4 * FP32
+    val DataTypefp8e4m3F32  = 11.U(DataTypeBitWidth.W)   //FP8E4M3 * FP8E4M3 * FP32
+    val DataTypefp8e5m2F32  = 12.U(DataTypeBitWidth.W)   //FP8E5M2 * FP8E5M2 * FP32
 }
 
 //工作任务的样板类
@@ -1429,10 +1594,12 @@ class ScaratchpadTask(implicit p: Parameters) extends CuteBundle{
 }
 
 case object LocalMMUTaskType extends Field[UInt]{
-    val TaskTypeBitWidth = 2
-    val TaskTypeMax = 3
+    val TaskTypeBitWidth = 3
+    val TaskTypeMax = 5
     val AFirst = 0.U(TaskTypeBitWidth.W)
     val BFirst = 1.U(TaskTypeBitWidth.W)
     val CFirst = 2.U(TaskTypeBitWidth.W)
+    val BScaleFirst = 3.U(TaskTypeBitWidth.W)
+    val AScaleFirst = 4.U(TaskTypeBitWidth.W)
     // val DFirst = 3.U(TaskTypeBitWidth.W)
 }
