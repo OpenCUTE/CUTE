@@ -138,7 +138,7 @@ All test programs are located at: .....
 
 For the detailed compilation process and the corresponding execution flow, please refer to the C files and Makefiles in the specific folders.
 
-⚠️if you want run the `rvv+tcm+CUTE` workload,like `resnet50`, `bert`, `llama`,you need build the spacific simulator, which have tcm and rvv!(like this config `CUTE4TopsShuttle512D512V512M512Sysbus512Membus1CoreConfig`)
+⚠️ If you want to run the `rvv+tcm+CUTE` workload, like `resnet50`, `bert`, `llama`, you need to build the specific simulator, which has TCM and RVV (like this config `CUTE4TopsShuttle512D512V512M512Sysbus512Membus1CoreConfig`).
 
 
 ## Run Programs by Simulation
