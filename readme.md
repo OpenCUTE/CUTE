@@ -138,6 +138,8 @@ All test programs are located at: .....
 
 For the detailed compilation process and the corresponding execution flow, please refer to the C files and Makefiles in the specific folders.
 
+⚠️if you want run the `rvv+tcm+CUTE` workload,like `resnet50`, `bert`, `llama`,you need build the spacific simulator, which have tcm and rvv!(like this config `CUTE4TopsShuttle512D512V512M512Sysbus512Membus1CoreConfig`)
+
 
 ## Run Programs by Simulation
 
@@ -176,4 +178,79 @@ Execute the following command to test a specific binary. For more details on the
 
 Debug Info at .....
 UART log at .....
+```
+Debug Info can be enabled by modify the `build/chipyard/config/CuteConfig.scala`.
+you can enable all debug info by
+```scala
+new cute.WithCuteCoustomParams(CoustomCuteParam = CuteParams.CUTE_4Tops_64SCP.copy(
+        Debug = CuteDebugParams.AllDebugOn
+    )) ++
+```
+Debug Config can be enabled free,more information can be find at `src/main/scala/CUTEParameters.scala`
+```scala
+object CuteDebugParams {
+
+  // NoDebugParams:
+  def NoDebug = CuteDebugParams()
+
+  def AMLDebugEnable = NoDebug.copy(
+    YJPAMLDebugEnable = true,
+  )
+
+  def CMLDebugEnable = NoDebug.copy(
+    YJPCMLDebugEnable = true,
+  )
+
+  def ComputeDebugeNable = NoDebug.copy(
+    // YJPMACDebugEnable = true,
+    YJPCMLDebugEnable = true,
+    YJPDebugEnable = true,
+  )
+
+  def AllDebugOn = NoDebug.copy(
+    YJPDebugEnable = true,
+    YJPADCDebugEnable = true,
+    YJPBDCDebugEnable = true,
+    YJPCDCDebugEnable = true,
+    YJPAMLDebugEnable = true,
+    YJPBMLDebugEnable = true,
+    YJPCMLDebugEnable = true,
+    YJPTASKDebugEnable = true,
+    YJPVECDebugEnable = true,
+    YJPMACDebugEnable = true,
+    YJPPEDebugEnable = true,
+    YJPAfterOpsDebugEnable = true)
+}
+
+case class CuteDebugParams(
+    val YJPDebugEnable :Boolean     = false,
+    val YJPADCDebugEnable :Boolean  = false,
+    val YJPBDCDebugEnable :Boolean  = false,
+    val YJPCDCDebugEnable :Boolean  = false,
+    val YJPAMLDebugEnable :Boolean  = false,
+    val YJPBMLDebugEnable :Boolean  = false,
+    val YJPCMLDebugEnable :Boolean  = false,
+    val YJPTASKDebugEnable :Boolean = false,
+    val YJPVECDebugEnable :Boolean  = false,
+    val YJPMACDebugEnable :Boolean  = false,
+    val YJPPEDebugEnable :Boolean   = false,
+    val YJPAfterOpsDebugEnable :Boolean   = false,
+)
+```
+
+
+### Run simulator with cutetest and get fst file
+Execute the following command to test a specific binary. For more details on the execution process, see the provided script.
+```bash
+./scripts/run-simulator-test-with-fst.sh CUTE2TopsSCP64Config /root/opencute/CUTE/cutetest/base_test/cute_Matmul_mnk_128_128_128_zeroinit.riscv
+[Simulator-Test-step-1] Script absolute path: .....
+[Simulator-Test-step-1] CUTE root absolute path: .....
+
+[Simulator-Test-step-2] Using Chipyard Generating Simulator with .....
+.....
+[Simulator-Test-step-2] Simulator Test complete.
+
+Debug Info at .....
+UART log at .....
+FST trace at .....
 ```
