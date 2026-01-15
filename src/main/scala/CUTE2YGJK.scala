@@ -231,11 +231,55 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 5.U){ //查询加速器计算时间
       rd_data := compute
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 6.U){ //查询CUTE宏指令的完成情况
-      rd_data := acc.io.ctrl2top.InstFIFO_Finish
+      rd_data := acc.io.ctrl2top.status.InstFIFO_Finish
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 7.U){ //查询CUTE宏指令队列是否已满
-      rd_data := acc.io.ctrl2top.InstFIFO_Full
-    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 8.U){ //查询CUTE宏指令队列目前有多少指令
-      rd_data := acc.io.ctrl2top.InstFIFO_Info 
+      rd_data := acc.io.ctrl2top.status.InstFIFO_Full
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 8.U){ //查询CUTE宏指令队列指令状态
+      rd_data := acc.io.ctrl2top.status.InstFIFO_Info 
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 9.U){ //查询CUTE宏指令队列目前有多少指令
+      rd_data := acc.io.ctrl2top.status.InstFIFO_INST_NUM 
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 33.U){ //查询CUTE_READ_ATENSOR_CONFIG_FUNCTOPS_0
+      rd_data := acc.io.ctrl2top.status.config_reg.ApplicationTensor_A_BaseVaddr
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 34.U){ //查询CUTE_READ_ATENSOR_CONFIG_FUNCTOPS_1
+      rd_data := acc.io.ctrl2top.status.config_reg.ApplicationTensor_A_Stride
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 35.U){ //查询CUTE_READ_BTENSOR_CONFIG_FUNCTOPS_0
+      rd_data := acc.io.ctrl2top.status.config_reg.ApplicationTensor_B_BaseVaddr
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 36.U){ //查询CUTE_READ_BTENSOR_CONFIG_FUNCTOPS_1
+      rd_data := acc.io.ctrl2top.status.config_reg.ApplicationTensor_B_Stride
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 37.U){ //查询CUTE_READ_CTENSOR_CONFIG_FUNCTOPS_0
+      rd_data := acc.io.ctrl2top.status.config_reg.ApplicationTensor_C_BaseVaddr
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 38.U){ //查询CUTE_READ_CTENSOR_CONFIG_FUNCTOPS_1
+      rd_data := acc.io.ctrl2top.status.config_reg.ApplicationTensor_C_Stride
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 39.U){ //查询CUTE_READ_DTENSOR_CONFIG_FUNCTOPS_0
+      rd_data := acc.io.ctrl2top.status.config_reg.ApplicationTensor_D_BaseVaddr
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 40.U){ //查询CUTE_READ_DTENSOR_CONFIG_FUNCTOPS_1
+      rd_data := acc.io.ctrl2top.status.config_reg.ApplicationTensor_D_Stride
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 41.U){ //查询CUTE_READ_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS_0
+      val rd_data_w = Wire(new MacroInstArgRegPartitionMNK)
+      rd_data_w.unused := 0.U
+      rd_data_w.Application_M := acc.io.ctrl2top.status.config_reg.Application_M
+      rd_data_w.Application_N := acc.io.ctrl2top.status.config_reg.Application_N
+      rd_data_w.Application_K := acc.io.ctrl2top.status.config_reg.Application_K
+      rd_data := rd_data_w.asUInt
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 42.U){ //查询CUTE_READ_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS_1
+      rd_data := acc.io.ctrl2top.status.config_reg.kernel_stride
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 43.U){ //查询CUTE_READ_CONV_CONFIG_FUNCTOPS_0
+      val rd_data_w = Wire(new MacroInstArgRegPartitionConv1)
+      rd_data_w.conv_ow_max := acc.io.ctrl2top.status.config_reg.conv_ow_max
+      rd_data_w.conv_oh_max := acc.io.ctrl2top.status.config_reg.conv_oh_max
+      rd_data_w.conv_stride := acc.io.ctrl2top.status.config_reg.conv_stride
+      rd_data_w.transpose_result := acc.io.ctrl2top.status.config_reg.transpose_result
+      rd_data_w.bias_type := acc.io.ctrl2top.status.config_reg.bias_type
+      rd_data_w.element_type := acc.io.ctrl2top.status.config_reg.element_type
+      rd_data := rd_data_w.asUInt
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 44.U){ //查询CUTE_READ_CONV_CONFIG_FUNCTOPS_1
+      val rd_data_w = Wire(new MacroInstArgRegPartitionConv2)
+      rd_data_w.conv_ow_index := acc.io.ctrl2top.status.config_reg.conv_ow_index
+      rd_data_w.conv_oh_index := acc.io.ctrl2top.status.config_reg.conv_oh_index
+      rd_data_w.conv_ow_per_add := acc.io.ctrl2top.status.config_reg.conv_ow_per_add
+      rd_data_w.conv_oh_per_add := acc.io.ctrl2top.status.config_reg.conv_oh_per_add
+      rd_data_w.kernel_size := acc.io.ctrl2top.status.config_reg.kernel_size
+      rd_data := rd_data_w.asUInt
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct >= 64.U){
       rd_data := acc.io.ctrl2top.cute_return_val
     }
@@ -265,7 +309,7 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
         {
             printf(p"[CUTE2YGJK.top]ac_busy = $ac_busy\n")
         }
-        when(acc.io.ctrl2top.acc_running === false.B && mem.io.idle){
+        when(acc.io.ctrl2top.status.acc_running === false.B && mem.io.idle){
           jk_state := jk_resp
         }
       }

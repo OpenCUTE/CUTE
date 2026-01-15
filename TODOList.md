@@ -1,0 +1,3 @@
+1. 确定软硬件边界，例如参数配置拼接时的位宽等问题，CUTEParameters.scala中MacroInstArgRegPartitionMNK中的20位宽度和软件中MacroInst的左移拼接位数对应，ApplicationMaxTensorSizeBitSize.W和软件中参数最大值（位数）对应。
+2. CUTE中由于开启了TaskCtrl_AutoClear，完成的MacroInst会自动退出,原来用于标记指令是否完成的MacroInst_FIFO_Total_Finish一直为false，没有意义，所以finish指令失效，使用这条指令判断任务完成状态的程序需要进行修改。
+- 对硬件进行了修改，增加一个寄存器存储完成但是没有dequeue的任务数量，然后dequeue的时候对这个寄存器进行-1，这样可以保持原有指令语义不变，之前的程序能正常运行。

@@ -24,7 +24,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         val CML_MicroTask_Config = (new CMLMicroTaskConfigIO)
         val MTE_MicroTask_Config = (new MTEMicroTaskConfigIO)
         val AOP_MicroTask_Config = (new AfterOpsMicroTaskConfigIO)
-        val SCP_CtrlInfo               = (new SCPControlInfo)
+        val SCP_CtrlInfo         = (new SCPControlInfo)
         val DebugTimeStampe = Input(UInt(32.W))
         val ctrlCounter = Output(new CTRLCounter)
         // val MMU_Config_Info = (new MMUConfigInfo)
@@ -131,12 +131,13 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.AOP_MicroTask_Config.MicroTaskEndReady := false.B
     io.AOP_MicroTask_Config.CUTEuop := 0.U.asTypeOf(io.AOP_MicroTask_Config.CUTEuop)
 
-    io.ygjkctrl.acc_running := false.B
+    io.ygjkctrl.status.acc_running := false.B
     io.ygjkctrl.cute_return_val := 0xdeadbeefL.U
     // io.ygjkctrl.cute_return_val.valid := false.B
-    io.ygjkctrl.InstFIFO_Finish := 0.U
-    io.ygjkctrl.InstFIFO_Full := 0.U
-    io.ygjkctrl.InstFIFO_Info := 0.U
+    io.ygjkctrl.status.InstFIFO_Finish := 0.U
+    io.ygjkctrl.status.InstFIFO_Full := 0.U
+    io.ygjkctrl.status.InstFIFO_Info := 0.U
+    io.ygjkctrl.status.InstFIFO_INST_NUM := 0.U
     io.instfifo_release := 0.U
 
     //TODO:构思微指令Test的流程
@@ -146,6 +147,9 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     
     //宏指令描述寄存器
     val MacroInst_Reg = RegInit(0.U(new MacroInst().getWidth.W))
+    val MacroInst_Reg_Wire = Wire(new MacroInst)
+    MacroInst_Reg_Wire := MacroInst_Reg.asTypeOf(MacroInst_Reg_Wire)
+    io.ygjkctrl.status.config_reg := MacroInst_Reg.asTypeOf(MacroInst_Reg_Wire)
     //宏指令描述的是矩阵乘任务或者卷积任务的描述
 // void CUTE_MATMUL_MarcoTask(void *A,void *B,void *C,void *D,int Application_M,int Application_N,int Application_K,int element_type,int bias_type,\
 // uint64_t stride_A,uint64_t stride_B,uint64_t stride_C,uint64_t stride_D,bool transpose_result,int conv_oh_index,int conv_ow_index,int conv_oh_max,int conv_ow_max,void * VectorOp,int VectorInst_Length)
@@ -180,6 +184,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     val MacroInst_FIFO_Valid = RegInit(VecInit(Seq.fill(MarcoInstFIFODepth)(false.B)))
     val MacroInst_FIFO_Decode_Finish = RegInit(VecInit(Seq.fill(MarcoInstFIFODepth)(false.B)))
     val MacroInst_FIFO_Total_Finish = RegInit(VecInit(Seq.fill(MarcoInstFIFODepth)(false.B)))
+    val Finish_uncheck = RegInit(VecInit(Seq.fill(MarcoInstFIFODepth)(false.B)))
 
     val MarcoInst_FIFO_Decode_Head = RegInit(0.U(MarcoInstFIFODepthBitSize.W))
     val MarcoInst_FIFO_Finish_Head = RegInit(0.U(MarcoInstFIFODepthBitSize.W))
@@ -204,9 +209,10 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         }
     }
 
-    io.ygjkctrl.InstFIFO_Info := MacroInst_FIFO_Valid.asUInt
-    io.ygjkctrl.InstFIFO_Full := MacroInst_FIFO_Full
-    io.ygjkctrl.InstFIFO_Finish := MacroInst_FIFO_Total_Finish.asUInt
+    io.ygjkctrl.status.InstFIFO_Info := MacroInst_FIFO_Valid.asUInt
+    io.ygjkctrl.status.InstFIFO_INST_NUM := PopCount(MacroInst_FIFO_Valid)
+    io.ygjkctrl.status.InstFIFO_Full := MacroInst_FIFO_Full
+    io.ygjkctrl.status.InstFIFO_Finish := Finish_uncheck.asUInt
 
     io.ctrlCounter.InstQueueEmpty := MacroInst_FIFO_Empty
 
@@ -216,10 +222,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         // if (YJPDebugEnable)
         // {
         //     printf("TaskController: func = %d, cfgData1 = %d, cfgData2 = %d\n",io.DebugTimeStampe, io.ygjkctrl.config.bits.func, io.ygjkctrl.config.bits.cfgData1, io.ygjkctrl.config.bits.cfgData2)
-        // }
-
-        val MacroInst_Reg_Wire = Wire(new MacroInst)
-        MacroInst_Reg_Wire := MacroInst_Reg.asTypeOf(MacroInst_Reg_Wire)
+        // }  
         
         //funct为func去除最高位的部分
         val funct = io.ygjkctrl.config.bits.func(5,0)
@@ -243,7 +246,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         {
             //这里最好是生成一条VLSW送到加速器的指令buff里，然后在TaskController继续分解成不同期间的指令
             //目前先实现成单条指令触发
-
             // assert(!MacroInst_FIFO_Full, "MacroInst FIFO is full")
             when(!MacroInst_FIFO_Full)
             {
@@ -259,6 +261,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                 MacroInst_FIFO_Valid(MacroInst_FIFO_Head) := true.B
                 MacroInst_FIFO_Decode_Finish(MacroInst_FIFO_Head) := false.B
                 MacroInst_FIFO_Total_Finish(MacroInst_FIFO_Head) := false.B
+                Finish_uncheck(MacroInst_FIFO_Head) := false.B
                 MacroInst_FIFO_Head := WrapInc(MacroInst_FIFO_Head, MarcoInstFIFODepth)
                 io.ygjkctrl.cute_return_val := MacroInst_FIFO_Head
                 // io.ygjkctrl.cute_return_val.valid := true.B
@@ -325,9 +328,10 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             assert(MacroInst_Reg_Wire.Application_M.getWidth <= 20)
             assert(MacroInst_Reg_Wire.Application_N.getWidth <= 20)
             assert(MacroInst_Reg_Wire.Application_K.getWidth <= 20)
-            MacroInst_Reg_Wire.Application_M := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_M.getWidth-1,0)
-            MacroInst_Reg_Wire.Application_N := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_N.getWidth+19,20)
-            MacroInst_Reg_Wire.Application_K := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_K.getWidth+39,40)
+            val cfgData1 = io.ygjkctrl.config.bits.cfgData1.asTypeOf(new MacroInstArgRegPartitionMNK)
+            MacroInst_Reg_Wire.Application_M := cfgData1.Application_M(MacroInst_Reg_Wire.Application_M.getWidth-1,0)
+            MacroInst_Reg_Wire.Application_N := cfgData1.Application_N(MacroInst_Reg_Wire.Application_N.getWidth-1,0)
+            MacroInst_Reg_Wire.Application_K := cfgData1.Application_K(MacroInst_Reg_Wire.Application_K.getWidth-1,0)
             MacroInst_Reg_Wire.kernel_stride := io.ygjkctrl.config.bits.cfgData2
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
@@ -348,27 +352,33 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             assert(MacroInst_Reg_Wire.conv_ow_index.getWidth <= 15)
 
 
-
-            MacroInst_Reg_Wire.element_type := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.element_type.getWidth-1,0)
-            MacroInst_Reg_Wire.bias_type := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.bias_type.getWidth-1+8,8)
-            MacroInst_Reg_Wire.transpose_result := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.transpose_result.getWidth-1+16,16)
-            MacroInst_Reg_Wire.conv_stride := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_stride.getWidth-1+24,24)
-            MacroInst_Reg_Wire.conv_oh_max := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_oh_max.getWidth-1+32,32)
-            MacroInst_Reg_Wire.conv_ow_max := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_ow_max.getWidth-1+48,48)
-            MacroInst_Reg_Wire.kernel_size := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.kernel_size.getWidth-1,0)
-            MacroInst_Reg_Wire.conv_oh_per_add := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_oh_per_add.getWidth-1+4,4)
-            MacroInst_Reg_Wire.conv_ow_per_add := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_ow_per_add.getWidth-1+19,19)
-            MacroInst_Reg_Wire.conv_oh_index := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_oh_index.getWidth-1+34,34)
-            MacroInst_Reg_Wire.conv_ow_index := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_ow_index.getWidth-1+49,49)
+            val cfgData1 = io.ygjkctrl.config.bits.cfgData1.asTypeOf(new MacroInstArgRegPartitionConv1)
+            val cfgData2 = io.ygjkctrl.config.bits.cfgData2.asTypeOf(new MacroInstArgRegPartitionConv2)
+            MacroInst_Reg_Wire.element_type := cfgData1.element_type(MacroInst_Reg_Wire.element_type.getWidth-1,0)
+            MacroInst_Reg_Wire.bias_type := cfgData1.bias_type(MacroInst_Reg_Wire.bias_type.getWidth-1,0)
+            MacroInst_Reg_Wire.transpose_result := cfgData1.transpose_result(MacroInst_Reg_Wire.transpose_result.getWidth-1,0)
+            MacroInst_Reg_Wire.conv_stride := cfgData1.conv_stride(MacroInst_Reg_Wire.conv_stride.getWidth-1,0)
+            MacroInst_Reg_Wire.conv_oh_max := cfgData1.conv_oh_max(MacroInst_Reg_Wire.conv_oh_max.getWidth-1,0)
+            MacroInst_Reg_Wire.conv_ow_max := cfgData1.conv_ow_max(MacroInst_Reg_Wire.conv_ow_max.getWidth-1,0)
+            MacroInst_Reg_Wire.kernel_size := cfgData2.kernel_size(MacroInst_Reg_Wire.kernel_size.getWidth-1,0)
+            MacroInst_Reg_Wire.conv_oh_per_add := cfgData2.conv_oh_per_add(MacroInst_Reg_Wire.conv_oh_per_add.getWidth-1,0)
+            MacroInst_Reg_Wire.conv_ow_per_add := cfgData2.conv_ow_per_add(MacroInst_Reg_Wire.conv_ow_per_add.getWidth-1,0)
+            MacroInst_Reg_Wire.conv_oh_index := cfgData2.conv_oh_index(MacroInst_Reg_Wire.conv_oh_index.getWidth-1,0)
+            MacroInst_Reg_Wire.conv_ow_index := cfgData2.conv_ow_index(MacroInst_Reg_Wire.conv_ow_index.getWidth-1,0)
             MacroInst_Reg_Wire.bias_data_type := PEDataType.CdataByteWidth(MacroInst_Reg_Wire.element_type)
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
             get_configred := true.B
+        }.elsewhen(funct === 7.U)
+        {
+            //查询当前正在译码的宏指令的头编号的位置
+            Finish_uncheck := io.ygjkctrl.config.bits.cfgData1(MarcoInstFIFODepth-1, 0).asBools
         }.elsewhen(funct === 16.U)
         {
             if(TaskCtrl_AutoClear)
             {
                 io.ygjkctrl.cute_return_val := 0xdeadbeefL.U
+                Finish_uncheck(MacroInst_FIFO_Tail) := false.B
                 printf("[TaskController<%d>]:Inst auto Clear!  MacroInst_FIFO is Empty!\n", io.DebugTimeStampe)
             }
             else
@@ -1244,6 +1254,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                 when(Store_Micro_Inst_Is_Last_Store)
                 {
                     MacroInst_FIFO_Total_Finish(Store_MicroInst_Resource_Info.Marco_Inst_FIFO_Index) := true.B
+                    Finish_uncheck(Store_MicroInst_Resource_Info.Marco_Inst_FIFO_Index) := true.B
                     if (YJPDebugEnable)
                     {
                         printf("[TaskController<%d>]:MacroInst Finish!  MarcoInst_FIFO_Index = %d\n",io.DebugTimeStampe, Store_MicroInst_Resource_Info.Marco_Inst_FIFO_Index)

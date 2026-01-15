@@ -35,12 +35,16 @@ class YGJKBuffer extends Bundle with YGJKParameters{
   val id = UInt(6.W)
 }
 
-class YGJKControl extends Bundle{
+class YGJKControl()(implicit p: Parameters) extends CuteBundle{
   val reset = Output(Bool())
-  val acc_running = Input(Bool())
-  val InstFIFO_Info = Input((UInt(5.W)))
-  val InstFIFO_Full = Input((Bool()))
-  val InstFIFO_Finish = Input((UInt(5.W)))
+  val status = new Bundle{
+    val acc_running = Input(Bool())
+    val InstFIFO_Info = Input((UInt(5.W)))
+    val InstFIFO_INST_NUM = Input((UInt(5.W)))
+    val InstFIFO_Full = Input((Bool()))
+    val InstFIFO_Finish = Input((UInt(5.W)))
+    val config_reg = Input(new MacroInst)
+  }
   val cute_return_val = (Input(UInt(32.W)))
   val config  = Valid(new Bundle{
     val cfgData1 = UInt(64.W)
@@ -49,7 +53,7 @@ class YGJKControl extends Bundle{
   })
 }
 
-class YGJKIO extends Bundle {
+class YGJKIO()(implicit p: Parameters) extends Bundle {
   val cmd     = new YGJKCommand   // 访存请求
   val buffer0  = Valid(new YGJKBuffer)    // 数据返回通道
   val buffer1 = Valid(new YGJKBuffer)
@@ -57,6 +61,6 @@ class YGJKIO extends Bundle {
 }
 
 case object BuildYGAC extends Field[Parameters => MyACCModule]
-abstract class MyACCModule extends Module with YGJKParameters{
+abstract class MyACCModule()(implicit p: Parameters) extends Module with YGJKParameters{
    val io = IO(Flipped(new YGJKIO))  
 }

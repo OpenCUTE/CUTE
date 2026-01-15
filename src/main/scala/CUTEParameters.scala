@@ -505,7 +505,8 @@ trait CUTEImplParameters{
     val paddrBits = MMUParams.paddrBits
     val corePAddrBits = MMUParams.corePAddrBits
 
-    val TaskCtrl_AutoClear = v3config.TaskCtrl_AutoClear
+//    val TaskCtrl_AutoClear = v3config.TaskCtrl_AutoClear
+    val TaskCtrl_AutoClear = true
 
     val YJPDebugEnable      = DebugParams.YJPDebugEnable
     val YJPADCDebugEnable   = DebugParams.YJPADCDebugEnable
@@ -644,6 +645,30 @@ class TaskCtrlInfo()(implicit p: Parameters) extends CuteBundle{
         val BMemoryLoaderChosenIndex = UInt(1.W)
         val CMemoryLoaderChosenIndex = UInt(1.W)
     })
+}
+
+class MacroInstArgRegPartitionMNK() extends Bundle {
+    val unused = UInt(4.W)
+    val Application_K = UInt(20.W) 
+    val Application_N = UInt(20.W) 
+    val Application_M = UInt(20.W) 
+}
+
+class MacroInstArgRegPartitionConv1() extends Bundle {
+    val conv_ow_max = UInt(16.W)
+    val conv_oh_max = UInt(16.W)
+    val conv_stride = UInt(8.W)
+    val transpose_result = UInt(8.W)
+    val bias_type = UInt(8.W)
+    val element_type = UInt(8.W)    
+}
+
+class MacroInstArgRegPartitionConv2() extends Bundle {
+    val conv_ow_index = UInt(15.W)
+    val conv_oh_index = UInt(15.W)
+    val conv_ow_per_add = UInt(15.W)
+    val conv_oh_per_add = UInt(15.W)
+    val kernel_size = UInt(4.W)
 }
 
 //CUTE能接收的宏指令形式
