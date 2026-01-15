@@ -128,7 +128,7 @@ object CuteParams {
         Matrix_M = 4,
         Matrix_N = 4,
         ReduceWidthByte = 32,
-        // Debug = CuteDebugParams.AMLDebugEnable
+        Debug = CuteDebugParams.AllDebugOn
     )
 
     def CUTE_1Tops = baseParams.copy(
