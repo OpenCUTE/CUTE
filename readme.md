@@ -186,7 +186,7 @@ new cute.WithCuteCoustomParams(CoustomCuteParam = CuteParams.CUTE_4Tops_64SCP.co
         Debug = CuteDebugParams.AllDebugOn
     )) ++
 ```
-Debug Config can be enabled free,more information can be find at `src/main/scala/CUTEParameters.scala`
+Debug Config can be enabled freely; more information can be found at `src/main/scala/CUTEParameters.scala`
 ```scala
 object CuteDebugParams {
 
