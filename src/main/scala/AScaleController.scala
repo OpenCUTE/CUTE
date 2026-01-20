@@ -41,7 +41,7 @@ class AScaleController(implicit p: Parameters) extends CuteModule{
     val ScaratchpadWorkingTensor_K = RegInit(0.U(ScaratchpadMaxTensorDimBitSize.W))
 
     val dataType = RegInit(0.U(ElementDataType.DataTypeBitWidth.W))
-    val bankId = RegInit(0.U(log2Ceil(AScaleNBanks).W))
+    val sliceid = RegInit(0.U(log2Ceil(AScaleNSlices).W))
 
     assert(io.ComputeGo === io.ScaleA.ready)
 
@@ -78,22 +78,6 @@ class AScaleController(implicit p: Parameters) extends CuteModule{
         }
     }
 
-    //数据在Scarachpad中的编排
-    //数据会先排K，再排M，也就是Reduce_DIM_First
-    //AVector内一定是不同M的数据，K不断送入，直到K迭代完成
-    //注意，这里的'0','1','2','3'是指一个ReduceWidth的数据，也就是连续的256bit数据，如果是int8，那就是连续的32个元素的数据
-    //      DATA IN MEMORY          DATA IN AVECTOR     DATA IN SCRATCHPAD
-    //   K 0 1 2 3 4 5 6 7     time     AVector     ScaratchpadData也这么排布
-    // M                        0       0 8 g o             {bank[0] [1] [2] [3]}
-    // 0   0 1 2 3 4 5 6 7      1       1 9 h p   |addr    0 |    0   8   g   o
-    // 1   8 9 a b c d e f      2       2 a i q   |        1 |    1   9   h   p
-    // 2   g h i j k l m n      3       3 b j r   |        2 |    2   a   i   q
-    // 3   o p g r s t u v      4       4 c k s   |        3 |    3   b   j   r
-    // 4   w x y z .......      5       5 d l t   |        4 |    4   c   k   s
-    // 5   !..............      6       6 e m u   |        5 |    5   d   l   t
-    // 6   @..............      7       7 f n v   |        6 |    6   e   m   u
-    // 7   #..............      8       w ! @ #   |        7 |    7   f   n   v
-    // 8   $..............      9       .......   | ...........................
 
     //矩阵乘的状态机，遍历所有数据就完事了
     //首先Scaratchpad的数据有Tensor_M*Tensor_K个，每个数据是ReduceWidth位
@@ -120,9 +104,14 @@ class AScaleController(implicit p: Parameters) extends CuteModule{
     ScarchPadRequestBankAddr.valid := false.B                                           //默认无效
     val ScarchPadData = io.FromScarchPadIO.Data //从ScarchPad读数，会有1周期的延迟
 
-    val ScarchPadDataHoldReg = RegInit(VecInit(Seq.fill(AScaleNBanks)(0.U(ScaleWidth.W)))) //保存ScarchPad的数据，当发生MTE的NACK时，可以不需要重新从ScarchPad读数
+    val ScarchPadDataHoldReg = RegInit(VecInit(Seq.fill(AScaleNSlices)(0.U((ScaleWidth * ReduceGroupSize).W)))) //保存ScarchPad的数据，当发生MTE的NACK时，可以不需要重新从ScarchPad读数
     // val ScarchPadDataHoldReg = RegInit(0.U.asTypeOf(ScarchPadData.bits)) //保存ScarchPad的数据，当发生MTE的NACK时，可以不需要重新从ScarchPad读数
     val ScarchPadDataHoldValid = RegInit(false.B) //保存ScarchPad的数据，当发生MTE的NACK时，可以不需要重新从ScarchPad读数
+
+    val bit_index = RegInit(VecInit(Seq.fill(Matrix_M)(0.U(log2Ceil(ScaratchpadMaxTensorDimBitSize * ScaleWidth).W))))
+    for (i <- 0 until Matrix_M){
+        bit_index(i) := ((i * ReduceGroupSize).U + K_Iterator) * (ScaleVecWidth(dataType) * 8.U)
+    }
 
     //如果是mm_task,且计算状态机是init，那么就开始初始化
     when(state === s_mm_task){
@@ -135,7 +124,7 @@ class AScaleController(implicit p: Parameters) extends CuteModule{
             ARequestVectorCount := 0.U
             ScarchPadDataHoldReg := 0.U.asTypeOf(ScarchPadDataHoldReg)
             ScarchPadDataHoldValid := false.B
-            bankId := 0.U
+            sliceid := 0.U
             //阶段1，初始化完成，开始供数任务
             calculate_state := s_cal_working
         }.elsewhen(calculate_state === s_cal_working){
@@ -148,9 +137,9 @@ class AScaleController(implicit p: Parameters) extends CuteModule{
             // }
             //MTE循环的最外层是M，然后是N，最后是K,所以这里在同步信号的ComputeGo的协同下，执行Max_Caculate_Iter次取数
             val next_addr = Wire(UInt(AScratchpadBankNEntrys.W))
-            next_addr := (M_Iterator * Matrix_M.U * K_IteratorMax + K_Iterator) * ScaleVecWidth(dataType) * 8.U / outsideDataWidth.U 
-            bankId := (M_Iterator * Matrix_M.U * K_IteratorMax + K_Iterator) * ScaleVecWidth(dataType) * 8.U / ScaleWidth.U % AScaleNBanks.U
-            ScarchPadRequestBankAddr.bits.foreach(_ := next_addr)
+            next_addr := (M_Iterator * Matrix_M.U * K_IteratorMax) * ScaleVecWidth(dataType) * 8.U / outsideDataWidth.U 
+            sliceid := ((M_Iterator * Matrix_M.U * K_IteratorMax) * ScaleVecWidth(dataType) * 8.U / (ScaleWidth * ReduceGroupSize).U) % AScaleNSlices.U
+            ScarchPadRequestBankAddr.bits := next_addr
             
             //只要ComputeGo有效，就表示一定会有一个数据被消耗，我们可以继续取数
             //但我们有一个周期的读数延迟，所以如果当前拍不能再继续计算，则我们取得数会在NACK，我们将NACK的数据保存在holdreg中
@@ -179,7 +168,17 @@ class AScaleController(implicit p: Parameters) extends CuteModule{
                 val scalea_vec = Wire(Vec(Matrix_M, UInt(ScaleWidth.W)))
                 io.ScaleA.bits := scalea_vec.asUInt
                 for (i <- 0 until Matrix_M){
-                    scalea_vec(i) := Mux(dataType === ElementDataType.DataTypeMxfp8e4m3F32 || dataType === ElementDataType.DataTypeMxfp8e5m2F32, ResponseData(bankId)((i+1)*mxfp8ScaleWidth-1, i*mxfp8ScaleWidth), Mux(dataType === ElementDataType.DataTypemxfp4F32, ResponseData(bankId + ((i * mxfp4ScaleWidth) / ScaleWidth).U)(((i % (ScaleWidth / mxfp4ScaleWidth)) + 1)*mxfp4ScaleWidth -1, (i % (ScaleWidth / mxfp4ScaleWidth))*mxfp4ScaleWidth), ResponseData((bankId + i.U)))).asUInt.pad(ScaleWidth)
+                    val slice_offset = bit_index(i) / (ScaleWidth * ReduceGroupSize).U
+                    val mxfp8ScaleSlut = Wire(Vec(ScaleWidth * ReduceGroupSize / mxfp8ScaleWidth, UInt(mxfp8ScaleWidth.W)))//除法会变成右移
+                    val mxfp4ScaleSlut = Wire(Vec(ScaleWidth * ReduceGroupSize / mxfp4ScaleWidth, UInt(mxfp4ScaleWidth.W)))//除法会变成右移
+                    val nvfp4ScaleSlut = Wire(Vec(ScaleWidth * ReduceGroupSize / nvfp4ScaleWidth, UInt(nvfp4ScaleWidth.W)))//除法会变成右移
+                    mxfp8ScaleSlut := ResponseData(sliceid + slice_offset).asTypeOf(mxfp8ScaleSlut)
+                    mxfp4ScaleSlut := ResponseData(sliceid + slice_offset).asTypeOf(mxfp4ScaleSlut)
+                    nvfp4ScaleSlut := ResponseData(sliceid + slice_offset).asTypeOf(nvfp4ScaleSlut)
+                    val mxfp8SlutId = (bit_index(i) % (ScaleWidth * ReduceGroupSize).U) / mxfp8ScaleWidth.U//取余操作会变成取低位,除法会变成右移
+                    val mxfp4SlutId = (bit_index(i) % (ScaleWidth * ReduceGroupSize).U) / mxfp4ScaleWidth.U//取余操作会变成取低位,除法会变成右移
+                    val nvfp4SlutId = (bit_index(i) % (ScaleWidth * ReduceGroupSize).U) / nvfp4ScaleWidth.U//取余操作会变成取低位,除法会变成右移
+                    scalea_vec(i) := Mux(dataType === ElementDataType.DataTypeMxfp8e4m3F32 || dataType === ElementDataType.DataTypeMxfp8e5m2F32, mxfp8ScaleSlut(mxfp8SlutId), Mux(dataType === ElementDataType.DataTypemxfp4F32, mxfp4ScaleSlut(mxfp4SlutId), nvfp4ScaleSlut(nvfp4SlutId))).asUInt.pad(ScaleWidth)
                 }
             }
 

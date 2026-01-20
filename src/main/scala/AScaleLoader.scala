@@ -11,7 +11,6 @@ import freechips.rocketchip.util.SeqToAugmentedSeq
 //从不同的存储介质中加载数据，供给Scratchpad使用
 
 class AScaleSourceIdSearch(implicit p: Parameters) extends CuteBundle{
-    // val ScratchpadBankId = UInt(log2Ceil(BScaleNBanks).W)
     val ScratchpadAddr = UInt(log2Ceil(AScratchpadBankNEntrys).W)
 }
 
@@ -21,7 +20,7 @@ class AScaleLoader(implicit p: Parameters) extends CuteModule{
     val io = IO(new Bundle{
         //先整一个ScarchPad的接口的总体设计
         val ToScarchPadIO = Flipped(new AScaleLoaderScaratchpadIO)
-        val ConfigInfo = Flipped(new AMLMicroTaskConfigIO)
+        val ConfigInfo = Flipped(new ASLMicroTaskConfigIO)
         val LocalMMUIO = Flipped(new LocalMMUIO)
         val DebugInfo = Input(new DebugInfoIO)
     })
@@ -35,8 +34,8 @@ class AScaleLoader(implicit p: Parameters) extends CuteModule{
     io.ConfigInfo.MicroTaskReady := false.B
 
 
-    val ScaratchpadBankAddr = io.ToScarchPadIO.BankAddr
-    val ScaratchpadData = io.ToScarchPadIO.Data
+    // val ScaratchpadBankAddr = io.ToScarchPadIO.BankAddr
+    // val ScaratchpadData = io.ToScarchPadIO.Data
 
     val ConfigInfo = io.ConfigInfo
 
@@ -45,9 +44,8 @@ class AScaleLoader(implicit p: Parameters) extends CuteModule{
     val ScaratchpadTensor_M = RegInit(0.U(ScaratchpadMaxTensorDimBitSize.W))
     val ScaratchpadTensor_K = RegInit(0.U(ScaratchpadMaxTensorDimBitSize.W))
 
-    val Tensor_A_BaseVaddr = RegInit(0.U(MMUAddrWidth.W))
+    val Scale_A_BaseVaddr = RegInit(0.U(MMUAddrWidth.W))
 
-    val ApplicationTensor_A_Stride_M = RegInit(0.U(MMUAddrWidth.W))
 
     val MemoryRequestSize = RegInit(0.U((log2Ceil(Tensor_M*ReduceGroupSize*ReduceWidthByte)+1).W))
 
@@ -75,20 +73,19 @@ class AScaleLoader(implicit p: Parameters) extends CuteModule{
             state := s_mm_task
             memoryload_state := s_load_init
             // ApplicationTensor_M := io.ConfigInfo.bits.ApplicationTensor_M
-            dataType := io.ConfigInfo.ApplicationTensor_A.dataType
+            dataType := io.ConfigInfo.ApplicationScale_A.dataType
             ScaratchpadTensor_M := io.ConfigInfo.ScaratchpadTensor_M
             ScaratchpadTensor_K := io.ConfigInfo.ScaratchpadTensor_K
-            Tensor_A_BaseVaddr := io.ConfigInfo.ApplicationTensor_A.ApplicationTensor_A_BaseVaddr //这个不重要
-            Tensor_Block_BaseAddr := io.ConfigInfo.ApplicationTensor_A.BlockTensor_A_BaseVaddr //这个是关键
+            Scale_A_BaseVaddr := io.ConfigInfo.ApplicationScale_A.ApplicationScale_A_BaseVaddr //这个不重要
+            Tensor_Block_BaseAddr := io.ConfigInfo.ApplicationScale_A.BlockScale_A_BaseVaddr //这个是关键
             Conherent := io.ConfigInfo.Conherent
-            ApplicationTensor_A_Stride_M := io.ConfigInfo.ApplicationTensor_A.ApplicationTensor_A_Stride_M //下一个N，需要增加多少地址偏移量
 
-            if(YJPBMLDebugEnable)
+            if(YJPAMLDebugEnable)
             {
                 printf("[BSL<%d>]BScaleLoader Task Start\n",io.DebugInfo.DebugTimeStampe)
                 printf("[BSL<%d>]ScaratchpadTensor_N:%d,ScaratchpadTensor_K:%d\n",io.DebugInfo.DebugTimeStampe,io.ConfigInfo.ScaratchpadTensor_M,io.ConfigInfo.ScaratchpadTensor_K)
-                printf("[BSL<%d>]Tensor_B_BaseVaddr:%x,Tensor_Block_BaseAddr:%x\n",io.DebugInfo.DebugTimeStampe,io.ConfigInfo.ApplicationTensor_A.ApplicationTensor_A_BaseVaddr,io.ConfigInfo.ApplicationTensor_A.BlockTensor_A_BaseVaddr)
-                printf("[BSL<%d>]ApplicationTensor_B_Stride_N:%x\n",io.DebugInfo.DebugTimeStampe,io.ConfigInfo.ApplicationTensor_A.ApplicationTensor_A_Stride_M)
+                printf("[BSL<%d>]Scale_B_BaseVaddr:%x,Scale_Block_BaseAddr:%x\n",io.DebugInfo.DebugTimeStampe,io.ConfigInfo.ApplicationScale_A.ApplicationScale_A_BaseVaddr,io.ConfigInfo.ApplicationScale_A.BlockScale_A_BaseVaddr)
+                // printf("[BSL<%d>]ApplicationTensor_B_Stride_N:%x\n",io.DebugInfo.DebugTimeStampe,io.ConfigInfo.ApplicationScale_A.ApplicationTensor_A_Stride_M)
             }
         }
     }
@@ -157,23 +154,7 @@ class AScaleLoader(implicit p: Parameters) extends CuteModule{
             Request.valid := false.B
         }
 
-        //数据在Scarachpad中的编排
-        //数据会先排K，再排M
-        //AVector一定是不同M的数据，K不断送入，直到K迭代完成，再换新的M，
-        //   K 0 1 2 3 4 5 6 7     time     AVector     ScaratchpadData也这么排布
-        // M                        0       0 8 g o             {bank[0] [1] [2] [3]}
-        // 0   0 1 2 3 4 5 6 7      1       1 9 h p   |addr    0 |    0   8   g   o
-        // 1   8 9 a b c d e f      2       2 a i q   |        1 |    1   9   h   p
-        // 2   g h i j k l m n      3       3 b j r   |        2 |    2   a   i   q
-        // 3   o p g r s t u v      4       4 c k s   |        3 |    3   b   j   r
-        // 4   w x y z .......      5       5 d l t   |        4 |    4   c   k   s
-        // 5   !..............      6       6 e m u   |        5 |    5   d   l   t
-        // 6   @..............      7       7 f n v   |        6 |    6   e   m   u
-        // 7   #..............      8       w ! @ #   |        7 |    7   f   n   v
-        // 8   $..............      9       .......   | ...........................
-        //
-        //
-        // 在内存中的排布则是 0 1 2 3 4 5 6 7 8 9 a b c d e f g h i j k l m n o p q r s t u v w x y z .......
+        // 内存排布是每个子张量的因子都连续放，具体看文档
 
         
         when(Request.fire && sourceId.valid){//符合条件的话，这条访存请求一定会被发出
@@ -203,16 +184,16 @@ class AScaleLoader(implicit p: Parameters) extends CuteModule{
             //如果要做release设计，要么数据位宽翻倍，腾出周期来使得有空泡能给写任务进行，要么就是数据位宽不变，将读写端口变成独立的读和独立的写端口
             val sourceId = io.LocalMMUIO.Response.bits.ReseponseSourceID
             val ScratchpadAddr = SoureceIdSearchTable(sourceId).asTypeOf(new AScaleSourceIdSearch).ScratchpadAddr
-            val ResponseData = Wire(Vec(AScaleNBanks,UInt((ScaleWidth).W)))
+            val ResponseData = Wire(Vec(AScaleNSlices,UInt((ScaleWidth * ReduceGroupSize).W)))
             ResponseData := io.LocalMMUIO.Response.bits.ReseponseData.asTypeOf(ResponseData)
 
             TotalLoadSize := TotalLoadSize + 1.U
-            for (i <- 0 until BScaleNBanks)
+            io.ToScarchPadIO.BankAddr.valid := true.B
+            io.ToScarchPadIO.BankAddr.bits := ScratchpadAddr
+            io.ToScarchPadIO.Data.valid := true.B
+            for (i <- 0 until AScaleNSlices)
             {
-                io.ToScarchPadIO.BankAddr(i).bits := ScratchpadAddr
-                io.ToScarchPadIO.Data(i).bits := ResponseData(i)
-                io.ToScarchPadIO.BankAddr(i).valid := true.B
-                io.ToScarchPadIO.Data(i).valid := true.B
+                io.ToScarchPadIO.Data.bits(i) := ResponseData(i)
             }
 
 
