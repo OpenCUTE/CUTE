@@ -49,5 +49,13 @@ make clean
 make -j24
 echo "[CUTE-Test-Generate-step-7] CUTE Transformer LLaMA benchmark test programs generation complete."
 echo ""
-echo "[CUTE-Test-Generate-step-8] All CUTE test programs generation complete."
+
+echo "[CUTE-Test-Generate-step-8] Generating CUTE pk test programs..."
+cd "$CUTE_ROOT_DIR/cutetest/pk_test"
+make clean
+make -j24
+echo "[CUTE-Test-Generate-step-8] CUTE pk test programs generation complete."
+echo ""
+
+echo "[CUTE-Test-Generate-step-9] All CUTE test programs generation complete."
 echo "All test programs are located at: $CUTE_ROOT_DIR/cutetest/"

@@ -498,12 +498,12 @@ trait CUTEImplParameters{
     val MarcoInstFIFODepth = 4  //宏指令FIFO的深度
     val MarcoInstFIFODepthBitSize = log2Ceil(MarcoInstFIFODepth) //宏指令FIFO的深度
 
-    val vpnBits = MMUParams.vpnBits
-    val ppnBits = MMUParams.ppnBits
-    val pgIdxBits = MMUParams.pgIdxBits
-    val vaddrBits = MMUParams.vaddrBits
-    val paddrBits = MMUParams.paddrBits
-    val corePAddrBits = MMUParams.corePAddrBits
+    // val vpnBits = MMUParams.vpnBits
+    // val ppnBits = MMUParams.ppnBits
+    // val pgIdxBits = MMUParams.pgIdxBits
+    // val vaddrBits = MMUParams.vaddrBits
+    // val paddrBits = MMUParams.paddrBits
+    // val corePAddrBits = MMUParams.corePAddrBits
 
 //    val TaskCtrl_AutoClear = v3config.TaskCtrl_AutoClear
     val TaskCtrl_AutoClear = true
@@ -1093,6 +1093,11 @@ class MTEMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
     val dataType                            = Output(UInt(ElementDataType.DataTypeBitWidth.W))
 }
 
+class MMUMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
+    val flush = Input(Bool())
+    val usingVM = Input(Bool())
+}
+
 class SCPControlInfo()(implicit p: Parameters) extends CuteBundle{
     val ADC_SCP_ID = UInt(1.W)
     val BDC_SCP_ID = UInt(1.W)
@@ -1107,7 +1112,7 @@ class SCPControlInfo()(implicit p: Parameters) extends CuteBundle{
 
 class ConfigInfoIO()(implicit p: Parameters) extends CuteBundle{
 
-    val MMUConfig = Flipped(new MMUConfigIO)
+//    val MMUConfig = Flipped(new MMUConfigIO)
     val ApplicationTensor_A = (new Bundle{
         val ApplicationTensor_A_BaseVaddr = (UInt(MMUAddrWidth.W))
         val BlockTensor_A_BaseVaddr       = (UInt(MMUAddrWidth.W))

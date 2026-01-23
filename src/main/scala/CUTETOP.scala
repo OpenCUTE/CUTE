@@ -4,6 +4,12 @@ package cute
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
+import freechips.rocketchip.diplomacy._
+import freechips.rocketchip.tilelink.TLEdgeOut
+import freechips.rocketchip.tile._
+import freechips.rocketchip.rocket._
+import freechips.rocketchip.util.{BundleField, ClockGate}
+import freechips.rocketchip.tilelink._
 // import boom.exu.ygjk._
 // import scala.collection.parallel.Task
 
@@ -13,9 +19,10 @@ class CUTETopIO()(implicit p: Parameters) extends CuteBundle{
     val instfifo_head_id = Output(UInt(MarcoInstFIFODepthBitSize.W))
     val instfifo_tail_id = Output(UInt(MarcoInstFIFODepthBitSize.W))
     val instfifo_release = Output(Bool())
+    val ptw = Vec(1, new TLBPTWIO)
 }
-class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
-    val io = IO(new CUTETopIO)
+class CUTEV2Top()(implicit edge: TLEdgeOut, p: Parameters) extends CuteModule{
+    val io = IO(new CUTETopIO())
 
     val cutecounter = Wire(new CUTECounter)
 
@@ -46,6 +53,7 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     val MTE = Module(new MatrixTE)
 
     val MMU = Module(new LocalMMU)
+    io.ptw <> MMU.io.ptw
 
     cutecounter.ALoad := TaskCtrl.io.ctrlCounter.ALoad
     cutecounter.BLoad := TaskCtrl.io.ctrlCounter.BLoad
@@ -140,11 +148,12 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     // CDC.io.ComputeGo := true.B
     
     //后续需要连入CPU的MMU或者IOMMU
-    MMU.io.Config.refillPaddr := 0.U
-    MMU.io.Config.refillVaddr := 0.U
-    MMU.io.Config.refill_v := false.B
-    MMU.io.Config.useVM := false.B
-    MMU.io.Config.useVM_v := false.B
+    // MMU.io.Config.refillPaddr := 0.U
+    // MMU.io.Config.refillVaddr := 0.U
+    // MMU.io.Config.refill_v := false.B
+    // MMU.io.Config.useVM := false.B
+    // MMU.io.Config.useVM_v := false.B
+    MMU.io.config_Info <> TaskCtrl.io.MMU_Config_Info
     MMU.io.LastLevelCacheTLIO <> io.mmu2llc
 
     io.ctrl2top <> TaskCtrl.io.ygjkctrl

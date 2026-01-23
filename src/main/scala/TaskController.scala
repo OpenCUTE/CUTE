@@ -27,7 +27,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         val SCP_CtrlInfo         = (new SCPControlInfo)
         val DebugTimeStampe = Input(UInt(32.W))
         val ctrlCounter = Output(new CTRLCounter)
-        // val MMU_Config_Info = (new MMUConfigInfo)
+        val MMU_Config_Info = Valid(new MMUMicroTaskConfigIO)
         // val MatrixTE_MicroTask_Config = DecoupledIO(new MatrixTEMicroTaskConfigIO)
     })
 
@@ -139,6 +139,10 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.ygjkctrl.status.InstFIFO_Info := 0.U
     io.ygjkctrl.status.InstFIFO_INST_NUM := 0.U
     io.instfifo_release := 0.U
+
+    io.MMU_Config_Info.valid := false.B
+    io.MMU_Config_Info.bits.flush := false.B
+    io.MMU_Config_Info.bits.usingVM := false.B
 
     //TODO:构思微指令Test的流程
     
@@ -417,6 +421,10 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             }
         }.elsewhen(funct === 18.U)
         {
+            // 配置MMU flush和usingVM信息
+            io.MMU_Config_Info.valid := true.B
+            io.MMU_Config_Info.bits.flush := io.ygjkctrl.config.bits.cfgData1(0).asBool
+            io.MMU_Config_Info.bits.usingVM := io.ygjkctrl.config.bits.cfgData2(0).asBool
         }
     }
     

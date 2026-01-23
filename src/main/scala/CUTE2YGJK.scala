@@ -29,7 +29,7 @@ class WithCUTE(EnableCUTEList: Seq[Int]) extends Config((site, here, up) => {
     }
 })
 
-class RoCC2CUTE(opcodes: OpcodeSet)(implicit p: Parameters) extends LazyRoCC(opcodes) with CUTEImplParameters{
+class RoCC2CUTE(opcodes: OpcodeSet)(implicit p: Parameters) extends LazyRoCC(opcodes, nPTWPorts = 1) with CUTEImplParameters{
   override lazy val module = new CUTETile(this)
  lazy val LLCMemPort = LazyModule(new Cute2TL)
  atlNode := TLWidthWidget(outsideDataWidthByte) := LLCMemPort.node
@@ -165,6 +165,7 @@ class CUTE2TLImp(outer: Cute2TL) extends LazyModuleImp(outer) with CUTEImplParam
 
 
 class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplParameters {
+    implicit val edge = outer.LLCMemPort.node.edges.out(0)
     val acc = Module(new CUTEV2Top)
     val mem = (outer.LLCMemPort.module)
 
@@ -191,13 +192,14 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     val memNum_r = RegInit(0.U(64.W))
     val memNum_w = RegInit(0.U(64.W))
 
-    val missAddr = RegInit(0.U(vaddrBits.W))
+//    val missAddr = RegInit(0.U(vaddrBits.W))
 
     val jk_idle :: jk_compute :: jk_resp :: jk_lmmu_miss :: Nil = Enum(4)
     val jk_state = RegInit(jk_idle)
 
     mem.io.mmu <> acc.io.mmu2llc
 
+    io.ptw <> acc.io.ptw
 
     //一拍的时间接受指令，下一拍的时间返回结果
     //后面可以设置成一个指令fifo

@@ -6,6 +6,14 @@ import chisel3._
 import chisel3.util._
 // import boom.exu.ygjk._
 import org.chipsalliance.cde.config._
+import freechips.rocketchip.tile._
+import freechips.rocketchip.rocket._
+import freechips.rocketchip.tile.{CoreBundle, CoreModule}
+import freechips.rocketchip.tilelink.TLEdgeOut
+import freechips.rocketchip.tilelink._
+
+import org.chipsalliance.cde.config.Parameters
+
 // import boom.v3.common._ 
 // import boom.v3.util._
 
@@ -18,116 +26,118 @@ trait LocalTLBParameters{
     //加速器设计范式的探索～！～！～！～！
 }
 
-class MMUConfigIO()(implicit p: Parameters) extends CuteBundle {
-	val useVM_v = Input(Bool())
-	val useVM = Input(Bool())
-	val refill_v = Input(Bool())
-	val refillVaddr = Input(UInt(vpnBits.W))
-	val refillPaddr = Input(UInt(ppnBits.W))
-}
+// class MMUConfigIO()(implicit p: Parameters) extends CuteBundle {
+// 	val useVM_v = Input(Bool())
+// 	val useVM = Input(Bool())
+// 	val refill_v = Input(Bool())
+// 	val refillVaddr = Input(UInt(vpnBits.W))
+// 	val refillPaddr = Input(UInt(ppnBits.W))
+// }
 
-class LocalTLBReq()(implicit p: Parameters) extends CuteBundle{
-	val vaddr0 = Input(UInt(vaddrBits.W))
-	val vaddr0_v = Input(Bool())
-	val vaddr1 = Input(UInt(vaddrBits.W))
-	val vaddr1_v = Input(Bool())
-}
+// class LocalTLBReq()(implicit p: Parameters) extends CuteBundle{
+// 	val vaddr0 = Input(UInt(vaddrBits.W))
+// 	val vaddr0_v = Input(Bool())
+// 	val vaddr1 = Input(UInt(vaddrBits.W))
+// 	val vaddr1_v = Input(Bool())
+// }
 
-class LocalTLBResp()(implicit p: Parameters) extends CuteBundle{
-	val paddr0 = Output(UInt(paddrBits.W))
-	val paddr1 = Output(UInt(paddrBits.W))
-	val paddr0_v = Output(Bool())
-	val paddr1_v = Output(Bool())
-	val miss = Output(Bool())
-	val missAddr = Output(UInt(vaddrBits.W))
+// class LocalTLBResp()(implicit p: Parameters) extends CuteBundle{
+// 	val paddr0 = Output(UInt(paddrBits.W))
+// 	val paddr1 = Output(UInt(paddrBits.W))
+// 	val paddr0_v = Output(Bool())
+// 	val paddr1_v = Output(Bool())
+// 	val miss = Output(Bool())
+// 	val missAddr = Output(UInt(vaddrBits.W))
 
-}
+// }
 
-class LocalTLBIO()(implicit p: Parameters) extends CuteBundle{
-	val config = new MMUConfigIO
-	val req  = new LocalTLBReq
-	val resp = new LocalTLBResp
-    val paddr0 = Output(UInt(corePAddrBits.W))
-	val paddr1 = Output(UInt(corePAddrBits.W))
-}
+// class LocalTLBIO()(implicit p: Parameters) extends CuteBundle{
+// 	val config = new MMUConfigIO
+// 	val req  = new LocalTLBReq
+// 	val resp = new LocalTLBResp
+//     val paddr0 = Output(UInt(corePAddrBits.W))
+// 	val paddr1 = Output(UInt(corePAddrBits.W))
+// }
 
-class LocalTLB()(implicit val p: Parameters) extends Module with LocalTLBParameters with CUTEImplParameters{
-	val io = IO(new LocalTLBIO)
+// class LocalTLB()(implicit val p: Parameters) extends Module with LocalTLBParameters with CUTEImplParameters{
+// 	val io = IO(new LocalTLBIO)
 
-	val VTable = RegInit(VecInit(Seq.fill(entry)(0.U(vaddrBits.W))))
-	val PTable = RegInit(VecInit(Seq.fill(entry)(0.U(paddrBits.W))))
-	val VMusing = RegInit(false.B)
+// 	val VTable = RegInit(VecInit(Seq.fill(entry)(0.U(vaddrBits.W))))
+// 	val PTable = RegInit(VecInit(Seq.fill(entry)(0.U(paddrBits.W))))
+// 	val VMusing = RegInit(false.B)
 
-	io.paddr0 := PTable(0)
-	io.paddr1 := PTable(1)
-
-
-	//vaddr -> paddr
-    //默认通路
-    // println("[LocalTLB] paddrBits: " + paddrBits)
-	io.resp.paddr0 := io.req.vaddr0(paddrBits - 1 , 0)
-	io.resp.paddr1 := io.req.vaddr1(paddrBits - 1 , 0)
-
-	val hit0 = Wire(Vec(entry,Bool()))
-	val hit1 = Wire(Vec(entry,Bool()))
-	for(i <- 0 until entry){
-		hit0(i) := (io.req.vaddr0(vaddrBits-1, pgIdxBits) === VTable(i)) & io.req.vaddr0_v
-		when((io.req.vaddr0(vaddrBits-1, pgIdxBits) === VTable(i)) & io.req.vaddr0_v & VMusing){
-			io.resp.paddr0 := Cat(PTable(i)(19,0),io.req.vaddr0(pgIdxBits - 1 , 0))
-		}
-
-		hit1(i) := (io.req.vaddr1(vaddrBits-1, pgIdxBits) === VTable(i)) & io.req.vaddr1_v
-		when((io.req.vaddr1(vaddrBits-1, pgIdxBits) === VTable(i)) & io.req.vaddr1_v & VMusing){
-			io.resp.paddr1 := Cat(PTable(i)(19,0),io.req.vaddr1(pgIdxBits - 1 , 0))
-		}
-	}
-
-	io.resp.miss := ((!hit0.reduce(_|_) & io.req.vaddr0_v) | (!hit1.reduce(_|_) & io.req.vaddr1_v)) & VMusing
-	io.resp.paddr0_v := io.req.vaddr0_v & !io.resp.miss
-	io.resp.paddr1_v := io.req.vaddr1_v & !io.resp.miss
+// 	io.paddr0 := PTable(0)
+// 	io.paddr1 := PTable(1)
 
 
+// 	//vaddr -> paddr
+//     //默认通路
+//     // println("[LocalTLB] paddrBits: " + paddrBits)
+// 	io.resp.paddr0 := io.req.vaddr0(paddrBits - 1 , 0)
+// 	io.resp.paddr1 := io.req.vaddr1(paddrBits - 1 , 0)
 
-	when(!hit0.reduce(_|_) & io.req.vaddr0_v & VMusing){
-		io.resp.missAddr := io.req.vaddr0
-	}.otherwise{
-		io.resp.missAddr := io.req.vaddr1
-	}
+// 	val hit0 = Wire(Vec(entry,Bool()))
+// 	val hit1 = Wire(Vec(entry,Bool()))
+// 	for(i <- 0 until entry){
+// 		hit0(i) := (io.req.vaddr0(vaddrBits-1, pgIdxBits) === VTable(i)) & io.req.vaddr0_v
+// 		when((io.req.vaddr0(vaddrBits-1, pgIdxBits) === VTable(i)) & io.req.vaddr0_v & VMusing){
+// 			io.resp.paddr0 := Cat(PTable(i)(19,0),io.req.vaddr0(pgIdxBits - 1 , 0))
+// 		}
 
-	when(io.resp.miss){
-		//printf(p"io.resp.missAddr ${io.resp.missAddr}\n")
-	}
+// 		hit1(i) := (io.req.vaddr1(vaddrBits-1, pgIdxBits) === VTable(i)) & io.req.vaddr1_v
+// 		when((io.req.vaddr1(vaddrBits-1, pgIdxBits) === VTable(i)) & io.req.vaddr1_v & VMusing){
+// 			io.resp.paddr1 := Cat(PTable(i)(19,0),io.req.vaddr1(pgIdxBits - 1 , 0))
+// 		}
+// 	}
 
-	//CPU config Local MMU
-	val count = RegInit(0.U(log2Ceil(entry).W))
- 	when(io.config.useVM_v){
- 		VMusing := io.config.useVM
- 	}
-
-    when(io.config.refill_v){
- 		VTable(count) := io.config.refillVaddr
- 		PTable(count) := io.config.refillPaddr
- 		when(count === (entry -1).U){
- 			count := 0.U
- 		}.otherwise{
- 			count := count + 1.U
- 		}
- 		//printf(p"io.core.refillVaddr ${io.config.refillVaddr} io.core.refillPaddr ${io.config.refillPaddr}\n")
- 	}
-
-}
+// 	io.resp.miss := ((!hit0.reduce(_|_) & io.req.vaddr0_v) | (!hit1.reduce(_|_) & io.req.vaddr1_v)) & VMusing
+// 	io.resp.paddr0_v := io.req.vaddr0_v & !io.resp.miss
+// 	io.resp.paddr1_v := io.req.vaddr1_v & !io.resp.miss
 
 
-class LocalMMU()(implicit p: Parameters) extends CuteModule{
+
+// 	when(!hit0.reduce(_|_) & io.req.vaddr0_v & VMusing){
+// 		io.resp.missAddr := io.req.vaddr0
+// 	}.otherwise{
+// 		io.resp.missAddr := io.req.vaddr1
+// 	}
+
+// 	when(io.resp.miss){
+// 		//printf(p"io.resp.missAddr ${io.resp.missAddr}\n")
+// 	}
+
+// 	//CPU config Local MMU
+// 	val count = RegInit(0.U(log2Ceil(entry).W))
+//  	when(io.config.useVM_v){
+//  		VMusing := io.config.useVM
+//  	}
+
+//     when(io.config.refill_v){
+//  		VTable(count) := io.config.refillVaddr
+//  		PTable(count) := io.config.refillPaddr
+//  		when(count === (entry -1).U){
+//  			count := 0.U
+//  		}.otherwise{
+//  			count := count + 1.U
+//  		}
+//  		//printf(p"io.core.refillVaddr ${io.config.refillVaddr} io.core.refillPaddr ${io.config.refillPaddr}\n")
+//  	}
+
+// }
+
+
+class LocalMMU()(implicit edge: TLEdgeOut, p: Parameters) extends CuteModule with HasCoreParameters with LocalTLBParameters{
 	// val io = IO(new LocalTLBIO)
     val io = IO(new Bundle{
         val ALocalMMUIO = (new LocalMMUIO)
         val BLocalMMUIO = (new LocalMMUIO)
         val CLocalMMUIO = (new LocalMMUIO)
         // val DLocalMMUIO = new LocalMMUIO
-        val Config = (new MMUConfigIO)
+        //val Config = (new MMUConfigIO)
         val LastLevelCacheTLIO = Flipped(new MMU2TLIO)//改！TODO:
         // val DramReq = Input(UInt(64.W))//改！TODO:
+        val ptw = Vec(1, new TLBPTWIO)
+        val config_Info = Flipped(Valid(new MMUMicroTaskConfigIO))
     })
 
     //比较低的性能方式，轮询的方式，但是doublebuffer是可以的
@@ -186,12 +196,38 @@ class LocalMMU()(implicit p: Parameters) extends CuteModule{
     //输出一下sourceid2port的数据类型
     println("[LocalMMU] sourceid2port: " + sourceid2port)
 
-    val ltlb = Module(new LocalTLB)
-    ltlb.io.config := io.Config
-    ltlb.io.req.vaddr0 := 0.U
-    ltlb.io.req.vaddr1 := 0.U
-    ltlb.io.req.vaddr0_v := false.B
-    ltlb.io.req.vaddr1_v := false.B
+    // val ltlb = Module(new LocalTLB)
+    // ltlb.io.config := io.Config
+    // ltlb.io.req.vaddr0 := 0.U
+    // ltlb.io.req.vaddr1 := 0.U
+    // ltlb.io.req.vaddr0_v := false.B
+    // ltlb.io.req.vaddr1_v := false.B
+    
+    val useVM = RegInit(false.B)
+    when(io.config_Info.valid && io.config_Info.bits.usingVM === false.B){
+        useVM := false.B
+    }.elsewhen(io.config_Info.valid && io.config_Info.bits.usingVM === true.B){
+        useVM := true.B
+    }
+
+    val tlb = Module(new TLB(false, log2Ceil(coreDataBytes), TLBConfig(nSets=1, nWays=entry)))
+    io.ptw(0) <> tlb.io.ptw
+    tlb.io.sfence.valid := io.config_Info.valid && io.config_Info.bits.flush
+    tlb.io.sfence.bits.rs1 := false.B
+    tlb.io.sfence.bits.rs2 := false.B
+    tlb.io.sfence.bits.addr := DontCare
+    tlb.io.sfence.bits.asid := DontCare
+    tlb.io.sfence.bits.hv := false.B
+    tlb.io.sfence.bits.hg := false.B
+
+    tlb.io.req.valid := false.B
+    tlb.io.req.bits := DontCare
+    tlb.io.req.bits.passthrough := useVM
+    tlb.io.req.bits.size := 0.U
+
+    tlb.io.kill := false.B
+
+
 
     io.LastLevelCacheTLIO.Request.bits.RequestPhysicalAddr := 0.U
     io.LastLevelCacheTLIO.Request.bits.RequestType_isWrite := false.B
@@ -223,28 +259,44 @@ class LocalMMU()(implicit p: Parameters) extends CuteModule{
         // printf(p"last_sourceid ${last_sourceid} last_sourceid2port ${sourceid2port(last_sourceid)}\n")
         // last_sourceid := io.LastLevelCacheTLIO.ConherentRequsetSourceID.bits
         when(ChoseIndex_0 === LocalMMUTaskType.AFirst){
-            io.ALocalMMUIO.Request.ready := io.LastLevelCacheTLIO.Request.ready
+            io.ALocalMMUIO.Request.ready := io.LastLevelCacheTLIO.Request.ready && !tlb.io.resp.miss
             io.ALocalMMUIO.ConherentRequsetSourceID := io.LastLevelCacheTLIO.ConherentRequsetSourceID
             //输出sourceid的信息
             // printf(p"[localmmu]ALocalMMUIO.ConherentRequsetSourceID ${io.LastLevelCacheTLIO.ConherentRequsetSourceID.bits}\n")
-            ltlb.io.req.vaddr0 := io.ALocalMMUIO.Request.bits.RequestVirtualAddr
-            ltlb.io.req.vaddr0_v := true.B
+            //ltlb.io.req.vaddr0 := io.ALocalMMUIO.Request.bits.RequestVirtualAddr
+            //ltlb.io.req.vaddr0_v := true.B
+            tlb.io.req.valid := true.B
+            tlb.io.req.bits.cmd := M_XRD
+            tlb.io.req.bits.vaddr := io.ALocalMMUIO.Request.bits.RequestVirtualAddr
+            tlb.io.req.bits.size := 0.U
             sourceid2port(io.LastLevelCacheTLIO.ConherentRequsetSourceID.bits) := LocalMMUTaskType.AFirst
         }.elsewhen(ChoseIndex_0 === LocalMMUTaskType.BFirst){
-            io.BLocalMMUIO.Request.ready := io.LastLevelCacheTLIO.Request.ready
+            io.BLocalMMUIO.Request.ready := io.LastLevelCacheTLIO.Request.ready && !tlb.io.resp.miss
             io.BLocalMMUIO.ConherentRequsetSourceID := io.LastLevelCacheTLIO.ConherentRequsetSourceID
             // printf(p"[localmmu]BLocalMMUIO.ConherentRequsetSourceID ${io.LastLevelCacheTLIO.ConherentRequsetSourceID.bits}\n")
-            ltlb.io.req.vaddr0 := io.BLocalMMUIO.Request.bits.RequestVirtualAddr
-            ltlb.io.req.vaddr0_v := true.B
+            //ltlb.io.req.vaddr0 := io.BLocalMMUIO.Request.bits.RequestVirtualAddr
+            //ltlb.io.req.vaddr0_v := true.B
+            tlb.io.req.valid := true.B
+            tlb.io.req.bits.cmd := M_XRD
+            tlb.io.req.bits.vaddr := io.BLocalMMUIO.Request.bits.RequestVirtualAddr
+            tlb.io.req.bits.size := 0.U
             sourceid2port(io.LastLevelCacheTLIO.ConherentRequsetSourceID.bits) := LocalMMUTaskType.BFirst
             //输出LocalMMUTaskType.BFirst
             // printf(p"[localmmu]LocalMMUTaskType.BFirst ${LocalMMUTaskType.BFirst}\n")
         }.elsewhen(ChoseIndex_0 === LocalMMUTaskType.CFirst){
-            io.CLocalMMUIO.Request.ready := io.LastLevelCacheTLIO.Request.ready
+            io.CLocalMMUIO.Request.ready := io.LastLevelCacheTLIO.Request.ready && !tlb.io.resp.miss
             io.CLocalMMUIO.ConherentRequsetSourceID := io.LastLevelCacheTLIO.ConherentRequsetSourceID
             // printf(p"[localmmu]CLocalMMUIO.ConherentRequsetSourceID ${io.LastLevelCacheTLIO.ConherentRequsetSourceID.bits}\n")
-            ltlb.io.req.vaddr0 := io.CLocalMMUIO.Request.bits.RequestVirtualAddr
-            ltlb.io.req.vaddr0_v := true.B
+            // ltlb.io.req.vaddr0 := io.CLocalMMUIO.Request.bits.RequestVirtualAddr
+            // ltlb.io.req.vaddr0_v := true.B
+            tlb.io.req.valid := true.B
+            when (io.CLocalMMUIO.Request.bits.RequestType_isWrite){
+                tlb.io.req.bits.cmd := M_XWR
+            }.otherwise{
+                tlb.io.req.bits.cmd := M_XRD
+            }
+            tlb.io.req.bits.vaddr := io.CLocalMMUIO.Request.bits.RequestVirtualAddr
+            tlb.io.req.bits.size := 0.U
             io.LastLevelCacheTLIO.Request.bits.RequestData := io.CLocalMMUIO.Request.bits.RequestData
             io.LastLevelCacheTLIO.Request.bits.RequestType_isWrite := io.CLocalMMUIO.Request.bits.RequestType_isWrite
             sourceid2port(io.LastLevelCacheTLIO.ConherentRequsetSourceID.bits) := LocalMMUTaskType.CFirst
@@ -252,9 +304,10 @@ class LocalMMU()(implicit p: Parameters) extends CuteModule{
 
         }
         io.LastLevelCacheTLIO.Request.bits.RequestConherent := true.B
-        io.LastLevelCacheTLIO.Request.bits.RequestPhysicalAddr := ltlb.io.resp.paddr0
+        // io.LastLevelCacheTLIO.Request.bits.RequestPhysicalAddr := ltlb.io.resp.paddr0
+        io.LastLevelCacheTLIO.Request.bits.RequestPhysicalAddr := tlb.io.resp.paddr
         io.LastLevelCacheTLIO.Request.bits.RequestSourceID := io.LastLevelCacheTLIO.ConherentRequsetSourceID.bits
-        io.LastLevelCacheTLIO.Request.valid := true.B
+        io.LastLevelCacheTLIO.Request.valid := true.B && !tlb.io.resp.miss
     }
 
     io.ALocalMMUIO.Response.bits := io.LastLevelCacheTLIO.Response.bits
