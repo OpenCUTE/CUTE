@@ -212,6 +212,15 @@ class LocalMMU()(implicit edge: TLEdgeOut, p: Parameters) extends CuteModule wit
 
     val tlb = Module(new TLB(false, log2Ceil(coreDataBytes), TLBConfig(nSets=1, nWays=entry)))
     io.ptw(0) <> tlb.io.ptw
+  if(YJPDebugEnable) {
+    when(tlb.io.ptw.req.fire) {
+      printf(p"[PTW REQ] vaddr: 0x${Hexadecimal(tlb.io.ptw.req.bits.bits.addr)}\n")
+    }
+    when(tlb.io.ptw.resp.valid) {
+      printf(p"[PTW RESP] paddr: 0x${Hexadecimal(tlb.io.ptw.resp.bits.pte.ppn)}\n")
+    }
+  }
+
     tlb.io.sfence.valid := io.config_Info.valid && io.config_Info.bits.flush
     tlb.io.sfence.bits.rs1 := false.B
     tlb.io.sfence.bits.rs2 := false.B
@@ -222,7 +231,7 @@ class LocalMMU()(implicit edge: TLEdgeOut, p: Parameters) extends CuteModule wit
 
     tlb.io.req.valid := false.B
     tlb.io.req.bits := DontCare
-    tlb.io.req.bits.passthrough := useVM
+    tlb.io.req.bits.passthrough := !useVM
     tlb.io.req.bits.size := 0.U
 
     tlb.io.kill := false.B
@@ -308,6 +317,13 @@ class LocalMMU()(implicit edge: TLEdgeOut, p: Parameters) extends CuteModule wit
         io.LastLevelCacheTLIO.Request.bits.RequestPhysicalAddr := tlb.io.resp.paddr
         io.LastLevelCacheTLIO.Request.bits.RequestSourceID := io.LastLevelCacheTLIO.ConherentRequsetSourceID.bits
         io.LastLevelCacheTLIO.Request.valid := true.B && !tlb.io.resp.miss
+        if(YJPDebugEnable)
+        {
+            when(io.LastLevelCacheTLIO.Request.fire)
+            {
+                printf(p"[LocalMMU] RequestPhysicalAddr 0x${Hexadecimal(io.LastLevelCacheTLIO.Request.bits.RequestPhysicalAddr)} RequestSourceID ${io.LastLevelCacheTLIO.Request.bits.RequestSourceID} RequestType_isWrite ${io.LastLevelCacheTLIO.Request.bits.RequestType_isWrite}\n")
+            }
+        }
     }
 
     io.ALocalMMUIO.Response.bits := io.LastLevelCacheTLIO.Response.bits

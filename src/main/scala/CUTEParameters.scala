@@ -277,7 +277,7 @@ object CuteDebugParams {
     YJPCMLDebugEnable = true,
   )
 
-  def ComputeDebugeNable = NoDebug.copy(
+  def ComputeDebugEnable = NoDebug.copy(
     // YJPMACDebugEnable = true,
     YJPCMLDebugEnable = true,
     YJPDebugEnable = true,
