@@ -451,6 +451,12 @@ sealed abstract class CuteInstConfig {
   def description: String
 
   /**
+   * 是否为YGJK/RoCC接口指令（funct < 64）
+   * YGK指令直接使用原值，CUTE内部控制指令需要加64
+   */
+  def isYGJKInst: Boolean
+
+  /**
    * 是否使用cfgData1
    */
   def usesCfgData1: Boolean = cfgData1Fields.isDefined
@@ -498,6 +504,7 @@ object CuteInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "发送已配置的宏指令到指令FIFO"
+    def isYGJKInst = false
   }
 
   /**
@@ -513,6 +520,7 @@ object CuteInstConfigs {
       InstField("ApplicationTensor_A_Stride", 63, 0, "A张量的步长")
     ))
     def description = "配置A张量的基地址和步长"
+    def isYGJKInst = false
   }
 
   /**
@@ -528,6 +536,7 @@ object CuteInstConfigs {
       InstField("ApplicationTensor_B_Stride", 63, 0, "B张量的步长")
     ))
     def description = "配置B张量的基地址和步长"
+    def isYGJKInst = false
   }
 
   /**
@@ -543,6 +552,7 @@ object CuteInstConfigs {
       InstField("ApplicationTensor_C_Stride", 63, 0, "C张量的步长")
     ))
     def description = "配置C张量的基地址和步长"
+    def isYGJKInst = false
   }
 
   /**
@@ -558,6 +568,7 @@ object CuteInstConfigs {
       InstField("ApplicationTensor_D_Stride", 63, 0, "D张量的步长")
     ))
     def description = "配置D张量的基地址和步长"
+    def isYGJKInst = false
   }
 
   /**
@@ -576,6 +587,7 @@ object CuteInstConfigs {
       InstField("kernel_stride", 63, 0, "卷积核步长（矩阵乘时为0），64位地址无约束")
     ))
     def description = "配置张量维度(M,N,K)，对于卷积则是(ohow,oc,ic)"
+    def isYGJKInst = false
   }
 
   /**
@@ -601,6 +613,7 @@ object CuteInstConfigs {
 	  InstField("conv_ow_index", 55, 46, 1023, "卷积输出的宽起始值")
     ))
     def description = "配置卷积相关参数（element_type, bias_type, kernel_size等）"
+    def isYGJKInst = false
   }
 
   /**
@@ -614,6 +627,7 @@ object CuteInstConfigs {
     ))
     def cfgData2Fields = None
     def description = "配置A Scale（量化参数）的基地址"
+    def isYGJKInst = false
   }
 
   /**
@@ -627,6 +641,7 @@ object CuteInstConfigs {
     ))
     def cfgData2Fields = None
     def description = "配置B Scale（量化参数）的基地址"
+    def isYGJKInst = false
   }
 
   /**
@@ -638,6 +653,7 @@ object CuteInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "清除队尾的宏指令"
+    def isYGJKInst = false
   }
 
   /**
@@ -649,6 +665,7 @@ object CuteInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "查询当前完成宏指令的尾编号位置"
+    def isYGJKInst = false
   }
 
   /**
@@ -660,6 +677,7 @@ object CuteInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "保留指令（空操作）"
+    def isYGJKInst = false
   }
 
   /**
@@ -707,6 +725,7 @@ object YGJKInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "查询加速器是否正在运行"
+    def isYGJKInst = true
   }
 
   /**
@@ -718,6 +737,7 @@ object YGJKInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "查询加速器运行时间（时钟周期数）"
+    def isYGJKInst = true
   }
 
   /**
@@ -729,6 +749,7 @@ object YGJKInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "查询加速器对外访存读次数"
+    def isYGJKInst = true
   }
 
   /**
@@ -740,6 +761,7 @@ object YGJKInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "查询加速器对外访存写次数"
+    def isYGJKInst = true
   }
 
   /**
@@ -751,6 +773,7 @@ object YGJKInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "查询加速器计算时间"
+    def isYGJKInst = true
   }
 
   /**
@@ -762,6 +785,7 @@ object YGJKInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "查询 CUTE 宏指令的完成情况"
+    def isYGJKInst = true
   }
 
   /**
@@ -773,6 +797,7 @@ object YGJKInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "查询 CUTE 宏指令队列是否已满"
+    def isYGJKInst = true
   }
 
   /**
@@ -784,13 +809,13 @@ object YGJKInstConfigs {
     def cfgData1Fields = None
     def cfgData2Fields = None
     def description = "查询 CUTE 宏指令队列目前有多少指令"
+    def isYGJKInst = true
   }
 
   /**
    * 所有 YGK 接口指令列表（按funct值排序）
    */
   val allInsts: Seq[CuteInstConfig] = Seq(
-    // StartAccelerator,
     QueryAcceleratorBusy,
     QueryRuntime,
     QueryMemReadCount,
@@ -968,10 +993,10 @@ case class CuteParams(
     }
 
     /**
-     * 便捷方法：获取所有指令配置
+     * 便捷方法：获取所有指令配置（YGK + CUTE内部）
      */
     def allInstConfigs: Seq[CuteInstConfig] = {
-        CuteInstConfigs.allInsts
+        YGJKInstConfigs.allInsts ++ CuteInstConfigs.allInsts
     }
 
 }

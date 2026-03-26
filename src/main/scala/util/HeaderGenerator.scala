@@ -275,9 +275,15 @@ object HeaderGenerator {
     writer.println("// ========================================")
     writer.println("// Instruction Function Codes")
     writer.println("// ========================================")
+    writer.println("// YGK/RoCC Interface Instructions (funct 1-8): direct values")
+    writer.println("// CUTE Internal Instructions (funct + 64): need to add 64")
+    writer.println()
+
     params.allInstConfigs.foreach { inst =>
       val macroName = s"CUTE_INST_FUNCT_${inst.name}"
-      writer.println(s"#define ${macroName.padTo(45, ' ')} ${inst.funct}  // ${inst.description}")
+      val actualFunct = if (inst.isYGJKInst) inst.funct else inst.funct + 64
+      val comment = if (inst.isYGJKInst) inst.description else s"[+64] ${inst.description}"
+      writer.println(s"#define ${macroName.padTo(45, ' ')} ${actualFunct}  // $comment")
     }
     writer.println()
   }
@@ -449,9 +455,14 @@ object HeaderGenerator {
     writer.println()
 
     params.allInstConfigs.foreach { inst =>
+      val instType = if (inst.isYGJKInst) "YGK/RoCC Interface" else "CUTE Internal"
+      val actualFunct = if (inst.isYGJKInst) inst.funct else inst.funct + 64
+      val functNote = if (inst.isYGJKInst) s"${inst.funct}" else s"${inst.funct} + 64 = ${actualFunct}"
+
       writer.println(s"/*")
       writer.println(s" * Instruction: ${inst.name}")
-      writer.println(s" * Funct: ${inst.funct}")
+      writer.println(s" * Type: ${instType}")
+      writer.println(s" * Funct: ${functNote}")
       writer.println(s" * Description: ${inst.description}")
       writer.println(s" *")
 
