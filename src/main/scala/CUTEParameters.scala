@@ -362,6 +362,327 @@ case class CuteFPEParams(
     val FP4P0AddNum :Int = 2,
 )
 
+/**
+ * 指令配置寄存器字段定义
+ * @param name 字段名称
+ * @param bitHigh 高位（包含）
+ * @param bitLow 低位（包含）
+ * @param description 字段描述
+ */
+/**
+ * 指令配置寄存器字段定义
+ * @param name 字段名称
+ * @param bitHigh 高位（包含）
+ * @param bitLow 低位（包含）
+ * @param maxValue 字段允许的最大值（None表示无约束，用于地址等全范围字段）
+ * @param description 字段描述
+ */
+case class InstField(
+  name: String,
+  bitHigh: Int,
+  bitLow: Int,
+  maxValue: Option[Long],
+  description: String
+) {
+  def width: Int = bitHigh - bitLow + 1
+  def mask: Long = ((1L << width) - 1) << bitLow
+
+  /**
+   * 存储maxValue需要的最小位宽
+   * 例如：maxValue=65536 → requiredWidth=17 (因为2^16=65536 < 65536 <= 2^17)
+   */
+  def requiredWidth: Int = maxValue match {
+    case Some(v) => log2Ceil(v + 1)  // +1因为范围是[0, maxValue]
+    case None => width
+  }
+
+  /**
+   * 验证InstField的位宽是否足够存储maxValue
+   */
+  require(width >= requiredWidth || maxValue.isEmpty,
+    s"InstField $name: width=$width < requiredWidth=$requiredWidth " +
+    s"(maxValue=$maxValue, bits [$bitHigh:$bitLow]), " +
+    s"field cannot store the maximum value!")
+}
+
+/**
+ * InstField伴生对象：提供便捷构造函数
+ */
+object InstField {
+  /**
+   * 创建有最大值约束的字段（用于维度、大小等）
+   */
+  def apply(name: String, bitHigh: Int, bitLow: Int, maxValue: Long, description: String): InstField =
+    new InstField(name, bitHigh, bitLow, Some(maxValue), description)
+
+  /**
+   * 创建无约束字段（用于地址、指针等全范围字段）
+   */
+  def apply(name: String, bitHigh: Int, bitLow: Int, description: String): InstField =
+    new InstField(name, bitHigh, bitLow, None, description)
+}
+
+/**
+ * 指令配置基类
+ * 每个指令是一个单例对象，继承此类
+ */
+sealed abstract class CuteInstConfig {
+  /**
+   * funct值
+   */
+  def funct: Int
+
+  /**
+   * 指令名称（用于生成C宏名称）
+   */
+  def name: String
+
+  /**
+   * cfgData1字段定义（None表示不使用cfgData1）
+   */
+  def cfgData1Fields: Option[Seq[InstField]]
+
+  /**
+   * cfgData2字段定义（None表示不使用cfgData2）
+   */
+  def cfgData2Fields: Option[Seq[InstField]]
+
+  /**
+   * 指令描述
+   */
+  def description: String
+
+  /**
+   * 是否使用cfgData1
+   */
+  def usesCfgData1: Boolean = cfgData1Fields.isDefined
+
+  /**
+   * 是否使用cfgData2
+   */
+  def usesCfgData2: Boolean = cfgData2Fields.isDefined
+
+  /**
+   * 按名称查找字段（在cfgData1和cfgData2中查找）
+   *
+   * @param fieldName 字段名称
+   * @return InstField定义
+   * @throws NoSuchElementException 如果字段不存在
+   */
+  def field(fieldName: String): InstField = {
+    val allFields = cfgData1Fields.toSeq.flatten ++ cfgData2Fields.toSeq.flatten
+    allFields.find(_.name == fieldName).getOrElse(
+      throw new NoSuchElementException(
+        s"Field '$fieldName' not found in ${this.name}. " +
+        s"Available fields: ${allFields.map(_.name).mkString(", ")}"))
+  }
+}
+
+/**
+ * CUTE指令集定义
+ * 每个指令是一个单例对象
+ */
+object CuteInstConfigs {
+
+  /**
+   * funct === 0: 发送宏指令
+   */
+  case object SendMacroInst extends CuteInstConfig {
+    def funct = 0
+    def name = "SEND_MACRO_INST"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "发送已配置的宏指令到指令FIFO"
+  }
+
+  /**
+   * funct === 1: 配置A张量
+   */
+  case object ConfigTensorA extends CuteInstConfig {
+    def funct = 1
+    def name = "CONFIG_TENSOR_A"
+    def cfgData1Fields = Some(Seq(
+      InstField("ApplicationTensor_A_BaseVaddr", 63, 0, "A张量的基地址")
+    ))
+    def cfgData2Fields = Some(Seq(
+      InstField("ApplicationTensor_A_Stride", 63, 0, "A张量的步长")
+    ))
+    def description = "配置A张量的基地址和步长"
+  }
+
+  /**
+   * funct === 2: 配置B张量
+   */
+  case object ConfigTensorB extends CuteInstConfig {
+    def funct = 2
+    def name = "CONFIG_TENSOR_B"
+    def cfgData1Fields = Some(Seq(
+      InstField("ApplicationTensor_B_BaseVaddr", 63, 0, "B张量的基地址")
+    ))
+    def cfgData2Fields = Some(Seq(
+      InstField("ApplicationTensor_B_Stride", 63, 0, "B张量的步长")
+    ))
+    def description = "配置B张量的基地址和步长"
+  }
+
+  /**
+   * funct === 3: 配置C张量
+   */
+  case object ConfigTensorC extends CuteInstConfig {
+    def funct = 3
+    def name = "CONFIG_TENSOR_C"
+    def cfgData1Fields = Some(Seq(
+      InstField("ApplicationTensor_C_BaseVaddr", 63, 0, "C张量的基地址")
+    ))
+    def cfgData2Fields = Some(Seq(
+      InstField("ApplicationTensor_C_Stride", 63, 0, "C张量的步长")
+    ))
+    def description = "配置C张量的基地址和步长"
+  }
+
+  /**
+   * funct === 4: 配置D张量
+   */
+  case object ConfigTensorD extends CuteInstConfig {
+    def funct = 4
+    def name = "CONFIG_TENSOR_D"
+    def cfgData1Fields = Some(Seq(
+      InstField("ApplicationTensor_D_BaseVaddr", 63, 0, "D张量的基地址")
+    ))
+    def cfgData2Fields = Some(Seq(
+      InstField("ApplicationTensor_D_Stride", 63, 0, "D张量的步长")
+    ))
+    def description = "配置D张量的基地址和步长"
+  }
+
+  /**
+   * funct === 5: 配置张量维度
+   * maxValue = ApplicationMaxTensorSize = 65536
+   */
+  case object ConfigTensorDim extends CuteInstConfig {
+    def funct = 5
+    def name = "CONFIG_TENSOR_DIM"
+    def cfgData1Fields = Some(Seq(
+      InstField("Application_M", 19, 0, 65535, "张量M维度 (max=65536)"),
+      InstField("Application_N", 39, 20, 65535, "张量N维度 (max=65536)"),
+      InstField("Application_K", 59, 40, 65535, "张量K维度 (max=65536)")
+    ))
+    def cfgData2Fields = Some(Seq(
+      InstField("kernel_stride", 63, 0, "卷积核步长（矩阵乘时为0），64位地址无约束")
+    ))
+    def description = "配置张量维度(M,N,K)，对于卷积则是(ohow,oc,ic)"
+  }
+
+  /**
+   * funct === 6: 配置卷积参数
+   */
+  case object ConfigConvParams extends CuteInstConfig {
+    def funct = 6
+    def name = "CONFIG_CONV_PARAMS"
+    def cfgData1Fields = Some(Seq(
+      InstField("element_type", 7, 0, 15, "元素数据类型 (8位枚举，max=15)"),
+      InstField("bias_type", 15, 8, 3, "偏置数据类型 (8位枚举，max=4)"),
+      InstField("transpose_result", 23, 16, 1, "是否转置结果 (Bool, max=1)"),
+      InstField("conv_stride", 31, 24, 3, "卷积步长 (max=4)"),
+      InstField("conv_oh_max", 47, 32, 16383, "卷积输出高度最大值 (max=16384)"),
+      InstField("conv_ow_max", 63, 48, 16383, "卷积输出宽度最大值 (max=16384)")
+    ))
+    def cfgData2Fields = Some(Seq(
+      InstField("kernel_size", 7, 0, 15, "卷积核大小 (max=16)"),
+      InstField("RESERVED_16_18", 15, 8, "保留位[18:16] (3位，max=7)"),
+      InstField("conv_oh_per_add", 25, 16, 1023, "卷积输出高度每次增加量 (max=16384)"),
+      InstField("conv_ow_per_add", 35, 26, 1023, "卷积输出宽度每次增加量 (max=16384)"),
+      InstField("conv_oh_index", 45, 36, 1023, "卷积输出的高起始值"),
+	  InstField("conv_ow_index", 55, 46, 1023, "卷积输出的宽起始值")
+    ))
+    def description = "配置卷积相关参数（element_type, bias_type, kernel_size等）"
+  }
+
+  /**
+   * funct === 7: 配置A Scale
+   */
+  case object ConfigScaleA extends CuteInstConfig {
+    def funct = 7
+    def name = "CONFIG_SCALE_A"
+    def cfgData1Fields = Some(Seq(
+      InstField("ApplicationScale_A_BaseVaddr", 63, 0, "A Scale的基地址")
+    ))
+    def cfgData2Fields = None
+    def description = "配置A Scale（量化参数）的基地址"
+  }
+
+  /**
+   * funct === 8: 配置B Scale
+   */
+  case object ConfigScaleB extends CuteInstConfig {
+    def funct = 8
+    def name = "CONFIG_SCALE_B"
+    def cfgData1Fields = Some(Seq(
+      InstField("ApplicationScale_B_BaseVaddr", 63, 0, "B Scale的基地址")
+    ))
+    def cfgData2Fields = None
+    def description = "配置B Scale（量化参数）的基地址"
+  }
+
+  /**
+   * funct === 16: 清除指令
+   */
+  case object ClearInst extends CuteInstConfig {
+    def funct = 16
+    def name = "CLEAR_INST"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "清除队尾的宏指令"
+  }
+
+  /**
+   * funct === 17: 查询指令
+   */
+  case object QueryInst extends CuteInstConfig {
+    def funct = 17
+    def name = "QUERY_INST"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "查询当前完成宏指令的尾编号位置"
+  }
+
+  /**
+   * funct === 18: 保留
+   */
+  case object ReservedInst extends CuteInstConfig {
+    def funct = 18
+    def name = "RESERVED"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "保留指令（空操作）"
+  }
+
+  /**
+   * 所有指令列表（按funct值排序）
+   */
+  val allInsts: Seq[CuteInstConfig] = Seq(
+    SendMacroInst,
+    ConfigTensorA,
+    ConfigTensorB,
+    ConfigTensorC,
+    ConfigTensorD,
+    ConfigTensorDim,
+    ConfigConvParams,
+    ConfigScaleA,
+    ConfigScaleB,
+    ClearInst,
+    QueryInst,
+    ReservedInst
+  ).sortBy(_.funct)
+
+  /**
+   * 根据funct值查找指令
+   */
+  def getInstByFunct(funct: Int): Option[CuteInstConfig] = {
+    allInsts.find(_.funct == funct)
+  }
+}
+
 case class CuteParams(
     val outsideDataWidth :Int = 512, //cute对外访存的带宽
     val MemoryDataWidth :Int = 64,   //TODO:DRAM的访存通道的数据位宽
@@ -369,12 +690,12 @@ case class CuteParams(
     val VectorWidth :Int = 256,      //向量流水线的宽度
 
     val ConvolutionApplicationConfigDataWidth :Int = 32, //卷积相关的配置信息的宽度
-    val ConvolutionDIM_Max :Int = 65536, //卷积相关的配置信息的宽度
-    val Convolution_Input_Height_Weight_Dim_Max :Int = 16384,
-    val KernelSizeMax :Int = 16, //卷积核的最大尺寸
-    val StrideSizeMax :Int = 4,  //步长的最大尺寸
+    val ConvolutionDIM_Max :Int = 65535, //卷积相关的配置信息的宽度
+    val Convolution_Input_Height_Weight_Dim_Max :Int = 16383,
+    val KernelSizeMax :Int = 15, //卷积核的最大尺寸
+    val StrideSizeMax :Int = 3,  //步长的最大尺寸
 
-    val ApplicationMaxTensorSize :Int = 65536, //最大可处理的程序的张量形状，
+    val ApplicationMaxTensorSize :Int = 65535, //最大可处理的程序的张量形状，
 
     val MMUAddrWidth :Int = 39 , //CUTE MMU的地址宽度
 
@@ -417,12 +738,12 @@ case class CuteParams(
     require((outsideDataWidth & (outsideDataWidth - 1)) == 0, "outsideDataWidth must be power of 2")
     require((MemoryDataWidth & (MemoryDataWidth - 1)) == 0, "MemoryDataWidth must be power of 2")
     require((VectorWidth & (VectorWidth - 1)) == 0, "VectorWidth must be power of 2")
-    require((ConvolutionApplicationConfigDataWidth & (ConvolutionApplicationConfigDataWidth - 1)) == 0, "ConvolutionApplicationConfigDataWidth must be power of 2")
-    require((ConvolutionDIM_Max & (ConvolutionDIM_Max - 1)) == 0, "ConvolutionDIM_Max must be power of 2")
-    require((Convolution_Input_Height_Weight_Dim_Max & (Convolution_Input_Height_Weight_Dim_Max - 1)) == 0, "Convolution_Input_Height_Weight_Dim_Max must be power of 2")
-    require((KernelSizeMax & (KernelSizeMax - 1)) == 0, "KernelSizeMax must be power of 2")
-    require((StrideSizeMax & (StrideSizeMax - 1)) == 0, "StrideSizeMax must be power of 2")
-    require((ApplicationMaxTensorSize & (ApplicationMaxTensorSize - 1)) == 0, "ApplicationMaxTensorSize must be power of 2")
+    // require((ConvolutionApplicationConfigDataWidth & (ConvolutionApplicationConfigDataWidth - 1)) == 0, "ConvolutionApplicationConfigDataWidth must be power of 2")
+    // require((ConvolutionDIM_Max & (ConvolutionDIM_Max - 1)) == 0, "ConvolutionDIM_Max must be power of 2")
+    // require((Convolution_Input_Height_Weight_Dim_Max & (Convolution_Input_Height_Weight_Dim_Max - 1)) == 0, "Convolution_Input_Height_Weight_Dim_Max must be power of 2")
+    // require((KernelSizeMax & (KernelSizeMax - 1)) == 0, "KernelSizeMax must be power of 2")
+    // require((StrideSizeMax & (StrideSizeMax - 1)) == 0, "StrideSizeMax must be power of 2")
+    // require((ApplicationMaxTensorSize & (ApplicationMaxTensorSize - 1)) == 0, "ApplicationMaxTensorSize must be power of 2")
     // require((MMUAddrWidth & (MMUAddrWidth - 1)) == 0, "MMUAddrWidth must be power of 2" )
     require((LLCSourceMaxNum & (LLCSourceMaxNum - 1)) == 0, "LLCSourceMaxNum must be power of 2")
     require((MemorysourceMaxNum & (MemorysourceMaxNum - 1)) == 0, "MemorysourceMaxNum must be power of 2")
@@ -504,6 +825,20 @@ case class CuteParams(
 
     // require(ReduceGroupSize == 2, "ReduceGroupSize must be 2, Wait for update")
     require(outsideDataWidthByte <= Tensor_K, "outsideDataWidthByte must be less than or equal to Tensor_K, or a load will exceed the subtensor in micro load")
+
+    /**
+     * 便捷方法：获取指令配置
+     */
+    def getInstConfig(funct: Int): Option[CuteInstConfig] = {
+        CuteInstConfigs.getInstByFunct(funct)
+    }
+
+    /**
+     * 便捷方法：获取所有指令配置
+     */
+    def allInstConfigs: Seq[CuteInstConfig] = {
+        CuteInstConfigs.allInsts
+    }
 
 }
 

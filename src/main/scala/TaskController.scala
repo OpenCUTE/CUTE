@@ -262,7 +262,62 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
         val MacroInst_Reg_Wire = Wire(new MacroInst)
         MacroInst_Reg_Wire := MacroInst_Reg.asTypeOf(MacroInst_Reg_Wire)
-        
+
+        // ==================== 工具函数 ====================
+
+        /**
+         * 字段映射：字段名 + 硬件Wire
+         * InstField会根据字段名自动从指令配置中查找
+         */
+        case class FieldMapping(
+          name: String,    // 字段名称
+          wire: UInt       // 硬件Wire引用
+        )
+
+        /**
+         * 批量验证并应用字段映射（自动查找InstField版本）
+         *
+         * 验证逻辑：所有位宽都必须 >= maxValue所需的最小位宽
+         * - maxValue: 字段允许的最大值（如65536）
+         * - requiredWidth: 存储maxValue需要的最小位宽（log2Ceil(65536+1)=17）
+         * - InstField.width: cfgData中分配的位数（如20位）✅ 必须 >= requiredWidth
+         * - Wire.getWidth: 硬件Wire的实际位宽（如16位）✅ 必须 >= requiredWidth
+         *
+         * @param mappings 字段映射序列（只包含字段名和Wire）
+         * @param data 配置数据（cfgData1/cfgData2）
+         * @param fields InstField定义序列（cfgData1Fields或cfgData2Fields）
+         */
+        def applyFieldMappings(mappings: Seq[FieldMapping], data: UInt, fields: Seq[InstField]): Unit = {
+          mappings.foreach { mapping =>
+            // 从fields序列中根据字段名查找InstField定义
+            val instField = fields.find(_.name == mapping.name).getOrElse(
+              throw new NoSuchElementException(
+                s"Field '${mapping.name}' not found in fields. " +
+                s"Available fields: ${fields.map(_.name).mkString(", ")}"))
+
+            // 验证：Wire宽度必须 >= maxValue所需的最小位宽
+            instField.maxValue match {
+              case Some(maxVal) =>
+                val requiredWidth = instField.requiredWidth
+                require(mapping.wire.getWidth >= requiredWidth,
+                  s"Width mismatch for ${mapping.name}: " +
+                  s"Wire width=${mapping.wire.getWidth} < maxValue required width=${requiredWidth} " +
+                  s"(maxValue=${maxVal}, bits [${instField.bitHigh}:${instField.bitLow}]), " +
+                  s"Wire cannot store the maximum value, data will be truncated!")
+              case None =>
+                // 无约束字段（如地址）：验证Wire宽度 >= InstField宽度
+                require(mapping.wire.getWidth >= instField.width,
+                  s"Width mismatch for ${mapping.name}: " +
+                  s"Wire width=${mapping.wire.getWidth} < InstField width=${instField.width} " +
+                  s"(bits [${instField.bitHigh}:${instField.bitLow}]), " +
+                  s"data will be truncated!")
+            }
+
+            // 应用字段值：从cfgData提取字段并赋值给Wire
+            mapping.wire := data(instField.bitHigh, instField.bitLow)
+          }
+        }
+
         //funct为func去除最高位的部分
         val funct = io.ygjkctrl.config.bits.func(5,0)
         //funct === 0，将配置好的Marco指令加入指令FIFO
@@ -282,7 +337,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         //val conv_oh_per_add //避免在计算过程中进行除法运算，这里可以提前计算好
         //val conv_ow_per_add //避免在计算过程中进行取余运算，这里可以提前计算好
 
-        when(funct === 0.U)
+        when(funct === CuteInstConfigs.SendMacroInst.funct.U)
         {
             //这里最好是生成一条VLSW送到加速器的指令buff里，然后在TaskController继续分解成不同期间的指令
             //目前先实现成单条指令触发
@@ -335,7 +390,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             }
 
 
-        }.elsewhen(funct === 1.U)
+        }.elsewhen(funct === CuteInstConfigs.ConfigTensorA.funct.U)
         {
             MacroInst_Reg_Wire.ApplicationTensor_A_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
             MacroInst_Reg_Wire.ApplicationTensor_A_Stride := io.ygjkctrl.config.bits.cfgData2
@@ -343,82 +398,84 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
             get_configred := true.B
             
-        }.elsewhen(funct === 2.U)
+        }.elsewhen(funct === CuteInstConfigs.ConfigTensorB.funct.U)
         {
             MacroInst_Reg_Wire.ApplicationTensor_B_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
             MacroInst_Reg_Wire.ApplicationTensor_B_Stride := io.ygjkctrl.config.bits.cfgData2
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
             get_configred := true.B
-        }.elsewhen(funct === 3.U)
+        }.elsewhen(funct === CuteInstConfigs.ConfigTensorC.funct.U)
         {
             MacroInst_Reg_Wire.ApplicationTensor_C_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
             MacroInst_Reg_Wire.ApplicationTensor_C_Stride := io.ygjkctrl.config.bits.cfgData2
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
             get_configred := true.B
-        }.elsewhen(funct === 4.U)
+        }.elsewhen(funct === CuteInstConfigs.ConfigTensorD.funct.U)
         {
             MacroInst_Reg_Wire.ApplicationTensor_D_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
             MacroInst_Reg_Wire.ApplicationTensor_D_Stride := io.ygjkctrl.config.bits.cfgData2
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
             get_configred := true.B
-        }.elsewhen(funct === 5.U)
+        }.elsewhen(funct === CuteInstConfigs.ConfigTensorDim.funct.U)
         {
-            assert(MacroInst_Reg_Wire.Application_M.getWidth <= 20)
-            assert(MacroInst_Reg_Wire.Application_N.getWidth <= 20)
-            assert(MacroInst_Reg_Wire.Application_K.getWidth <= 20)
-            MacroInst_Reg_Wire.Application_M := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_M.getWidth-1,0)
-            MacroInst_Reg_Wire.Application_N := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_N.getWidth+19,20)
-            MacroInst_Reg_Wire.Application_K := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_K.getWidth+39,40)
-            MacroInst_Reg_Wire.kernel_stride := io.ygjkctrl.config.bits.cfgData2
+            val cfg1Fields = CuteInstConfigs.ConfigTensorDim.cfgData1Fields.get
+            val cfg2Fields = CuteInstConfigs.ConfigTensorDim.cfgData2Fields.get
+
+            // ✅ 简洁：只需字段名和Wire，传入cfgData1Fields自动查找
+            applyFieldMappings(Seq(
+              FieldMapping("Application_M", MacroInst_Reg_Wire.Application_M),
+              FieldMapping("Application_N", MacroInst_Reg_Wire.Application_N),
+              FieldMapping("Application_K", MacroInst_Reg_Wire.Application_K)
+            ), io.ygjkctrl.config.bits.cfgData1, cfg1Fields)
+
+            applyFieldMappings(Seq(
+              FieldMapping("kernel_stride", MacroInst_Reg_Wire.kernel_stride)
+            ), io.ygjkctrl.config.bits.cfgData2, cfg2Fields)
+
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
             get_configred := true.B
-        }.elsewhen(funct === 6.U)
+        }.elsewhen(funct === CuteInstConfigs.ConfigConvParams.funct.U)
         {
-            assert(MacroInst_Reg_Wire.element_type.getWidth <= 8)
-            assert(MacroInst_Reg_Wire.bias_type.getWidth <= 8)
-            assert(MacroInst_Reg_Wire.transpose_result.getWidth <= 8)
-            assert(MacroInst_Reg_Wire.conv_stride.getWidth <= 8)
-            assert(MacroInst_Reg_Wire.conv_oh_max.getWidth <= 16)
-            assert(MacroInst_Reg_Wire.conv_ow_max.getWidth <= 16)
+            val cfg1Fields = CuteInstConfigs.ConfigConvParams.cfgData1Fields.get
+            val cfg2Fields = CuteInstConfigs.ConfigConvParams.cfgData2Fields.get
 
-            assert(MacroInst_Reg_Wire.kernel_size.getWidth <= 4)
-            assert(MacroInst_Reg_Wire.conv_oh_per_add.getWidth <= 15)
-            assert(MacroInst_Reg_Wire.conv_ow_per_add.getWidth <= 15)
-            assert(MacroInst_Reg_Wire.conv_oh_index.getWidth <= 15)
-            assert(MacroInst_Reg_Wire.conv_ow_index.getWidth <= 15)
+            // ✅ 简洁：只需字段名和Wire，传入cfgData1Fields自动查找
+            applyFieldMappings(Seq(
+              FieldMapping("element_type", MacroInst_Reg_Wire.element_type),
+              FieldMapping("bias_type", MacroInst_Reg_Wire.bias_type),
+              FieldMapping("transpose_result", MacroInst_Reg_Wire.transpose_result),
+              FieldMapping("conv_stride", MacroInst_Reg_Wire.conv_stride),
+              FieldMapping("conv_oh_max", MacroInst_Reg_Wire.conv_oh_max),
+              FieldMapping("conv_ow_max", MacroInst_Reg_Wire.conv_ow_max)
+            ), io.ygjkctrl.config.bits.cfgData1, cfg1Fields)
 
+            applyFieldMappings(Seq(
+              FieldMapping("kernel_size", MacroInst_Reg_Wire.kernel_size),
+              FieldMapping("conv_oh_per_add", MacroInst_Reg_Wire.conv_oh_per_add),
+              FieldMapping("conv_ow_per_add", MacroInst_Reg_Wire.conv_ow_per_add),
+              FieldMapping("conv_oh_index", MacroInst_Reg_Wire.conv_oh_index),
+              FieldMapping("conv_ow_index", MacroInst_Reg_Wire.conv_ow_index)
+            ), io.ygjkctrl.config.bits.cfgData2, cfg2Fields)
 
-
-            MacroInst_Reg_Wire.element_type := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.element_type.getWidth-1,0)
-            MacroInst_Reg_Wire.bias_type := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.bias_type.getWidth-1+8,8)
-            MacroInst_Reg_Wire.transpose_result := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.transpose_result.getWidth-1+16,16)
-            MacroInst_Reg_Wire.conv_stride := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_stride.getWidth-1+24,24)
-            MacroInst_Reg_Wire.conv_oh_max := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_oh_max.getWidth-1+32,32)
-            MacroInst_Reg_Wire.conv_ow_max := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_ow_max.getWidth-1+48,48)
-            MacroInst_Reg_Wire.kernel_size := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.kernel_size.getWidth-1,0)
-            MacroInst_Reg_Wire.conv_oh_per_add := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_oh_per_add.getWidth-1+4,4)
-            MacroInst_Reg_Wire.conv_ow_per_add := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_ow_per_add.getWidth-1+19,19)
-            MacroInst_Reg_Wire.conv_oh_index := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_oh_index.getWidth-1+34,34)
-            MacroInst_Reg_Wire.conv_ow_index := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_ow_index.getWidth-1+49,49)
             MacroInst_Reg_Wire.bias_data_type := PEDataType.CdataByteWidth(MacroInst_Reg_Wire.element_type)
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
             get_configred := true.B //TODO:[yb]开启性能计数器时，才会引出的线束
-        }.elsewhen(funct === 7.U){
+        }.elsewhen(funct === CuteInstConfigs.ConfigScaleA.funct.U){
             MacroInst_Reg_Wire.ApplicationScale_A_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
             get_configred := true.B //TODO:[yb]开启性能计数器时，才会引出的线束
-        }.elsewhen(funct === 8.U){
+        }.elsewhen(funct === CuteInstConfigs.ConfigScaleB.funct.U){
             MacroInst_Reg_Wire.ApplicationScale_B_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
             get_configred := true.B //TODO:[yb]开启性能计数器时，才会引出的线束
-        }.elsewhen(funct === 16.U)
+        }.elsewhen(funct === CuteInstConfigs.ClearInst.funct.U)
         {
             if(TaskCtrl_AutoClear)
             {
@@ -450,7 +507,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                     }
                 }   
             }
-        }.elsewhen(funct === 17.U)
+        }.elsewhen(funct === CuteInstConfigs.QueryInst.funct.U)
         {
             //查询当前完成宏指令的尾编号的位置
             io.ygjkctrl.cute_return_val := MacroInst_FIFO_Tail
@@ -459,7 +516,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             {
                 printf("[TaskController<%d>]:Inst Query!  MacroInst_FIFO_Head = %d, MacroInst_FIFO_Tail = %d\n", io.DebugTimeStampe,MacroInst_FIFO_Head, MacroInst_FIFO_Tail)
             }
-        }.elsewhen(funct === 18.U)
+        }.elsewhen(funct === CuteInstConfigs.ReservedInst.funct.U)
         {
         }
     }
