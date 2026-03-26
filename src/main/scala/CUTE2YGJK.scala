@@ -220,22 +220,22 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     io.resp.bits.data := rd_data
     io.resp.valid := canResp
 
-    when(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 1.U){ //查询加速器是否在运行
+    when(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGKInstConfigs.QueryAcceleratorBusy.funct.U){ //查询加速器是否在运行
       rd_data := ac_busy
-    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 2.U){ //查询加速器运行时间
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGKInstConfigs.QueryRuntime.funct.U){ //查询加速器运行时间
       rd_data := count
-    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 3.U){ //查询加速器对外访存读次数
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGKInstConfigs.QueryMemReadCount.funct.U){ //查询加速器对外访存读次数
       rd_data := memNum_r
-    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 4.U){ //查询加速器对外访存写次数
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGKInstConfigs.QueryMemWriteCount.funct.U){ //查询加速器对外访存写次数
       rd_data := memNum_w
-    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 5.U){ //查询加速器计算时间
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGKInstConfigs.QueryComputeTime.funct.U){ //查询加速器计算时间
       rd_data := compute
-    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 6.U){ //查询CUTE宏指令的完成情况
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGKInstConfigs.QueryMacroInstFinish.funct.U){ //查询CUTE宏指令的完成情况
       rd_data := acc.io.ctrl2top.InstFIFO_Finish
-    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 7.U){ //查询CUTE宏指令队列是否已满
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGKInstConfigs.QueryMacroInstFIFOFull.funct.U){ //查询CUTE宏指令队列是否已满
       rd_data := acc.io.ctrl2top.InstFIFO_Full
-    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === 8.U){ //查询CUTE宏指令队列目前有多少指令
-      rd_data := acc.io.ctrl2top.InstFIFO_Info 
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGKInstConfigs.QueryMacroInstFIFOInfo.funct.U){ //查询CUTE宏指令队列目前有多少指令
+      rd_data := acc.io.ctrl2top.InstFIFO_Info
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct >= 64.U){
       rd_data := acc.io.ctrl2top.cute_return_val
     }

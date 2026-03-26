@@ -477,13 +477,20 @@ sealed abstract class CuteInstConfig {
 }
 
 /**
- * CUTE指令集定义
- * 每个指令是一个单例对象
+ * CUTE 内部控制指令集定义
+ *
+ * 这些指令在 CUTE 加速器核心内部使用
+ * 在 RoCC 接口层通过 funct >= 64 访问（bit 6 = 1）
+ * 实际传递给核心的 funct 值为 0-18（去掉高位）
+ *
+ * 指令分类：
+ * - funct 0-63: YGK/RoCC 接口指令（见 YGKInstConfigs）
+ * - funct >= 64: CUTE 内部控制指令（本对象定义）
  */
 object CuteInstConfigs {
 
   /**
-   * funct === 0: 发送宏指令
+   * funct === 0 (RoCC funct === 64): 发送宏指令
    */
   case object SendMacroInst extends CuteInstConfig {
     def funct = 0
@@ -494,7 +501,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 1: 配置A张量
+   * funct === 1 (RoCC funct === 65): 配置A张量
    */
   case object ConfigTensorA extends CuteInstConfig {
     def funct = 1
@@ -509,7 +516,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 2: 配置B张量
+   * funct === 2 (RoCC funct === 66): 配置B张量
    */
   case object ConfigTensorB extends CuteInstConfig {
     def funct = 2
@@ -524,7 +531,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 3: 配置C张量
+   * funct === 3 (RoCC funct === 67): 配置C张量
    */
   case object ConfigTensorC extends CuteInstConfig {
     def funct = 3
@@ -539,7 +546,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 4: 配置D张量
+   * funct === 4 (RoCC funct === 68): 配置D张量
    */
   case object ConfigTensorD extends CuteInstConfig {
     def funct = 4
@@ -554,7 +561,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 5: 配置张量维度
+   * funct === 5 (RoCC funct === 69): 配置张量维度
    * maxValue = ApplicationMaxTensorSize = 65536
    */
   case object ConfigTensorDim extends CuteInstConfig {
@@ -572,7 +579,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 6: 配置卷积参数
+   * funct === 6 (RoCC funct === 70): 配置卷积参数
    */
   case object ConfigConvParams extends CuteInstConfig {
     def funct = 6
@@ -597,7 +604,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 7: 配置A Scale
+   * funct === 7 (RoCC funct === 71): 配置A Scale
    */
   case object ConfigScaleA extends CuteInstConfig {
     def funct = 7
@@ -610,7 +617,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 8: 配置B Scale
+   * funct === 8 (RoCC funct === 72): 配置B Scale
    */
   case object ConfigScaleB extends CuteInstConfig {
     def funct = 8
@@ -623,7 +630,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 16: 清除指令
+   * funct === 16 (RoCC funct === 80): 清除指令
    */
   case object ClearInst extends CuteInstConfig {
     def funct = 16
@@ -634,7 +641,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 17: 查询指令
+   * funct === 17 (RoCC funct === 81): 查询指令
    */
   case object QueryInst extends CuteInstConfig {
     def funct = 17
@@ -645,7 +652,7 @@ object CuteInstConfigs {
   }
 
   /**
-   * funct === 18: 保留
+   * funct === 18 (RoCC funct === 82): 保留
    */
   case object ReservedInst extends CuteInstConfig {
     def funct = 18
@@ -675,6 +682,127 @@ object CuteInstConfigs {
 
   /**
    * 根据funct值查找指令
+   */
+  def getInstByFunct(funct: Int): Option[CuteInstConfig] = {
+    allInsts.find(_.funct == funct)
+  }
+}
+
+/**
+ * YGK/RoCC 接口指令定义
+ *
+ * 这些指令在 RoCC 接口层使用，funct 值范围为 0-63
+ * 与 CUTE 内部控制指令（funct >= 64）区分：
+ * - funct 0-63: YGK 接口指令（查询/控制类，直接在 CUTE2YGJK 中处理）
+ * - funct >= 64: CUTE 内部控制指令（配置类，转发到 CUTE 核心处理）
+ */
+object YGJKInstConfigs {
+
+  /**
+   * funct === 1: 查询加速器运行状态
+   */
+  case object QueryAcceleratorBusy extends CuteInstConfig {
+    def funct = 1
+    def name = "QUERY_ACCELERATOR_BUSY"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "查询加速器是否正在运行"
+  }
+
+  /**
+   * funct === 2: 查询运行时间
+   */
+  case object QueryRuntime extends CuteInstConfig {
+    def funct = 2
+    def name = "QUERY_RUNTIME"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "查询加速器运行时间（时钟周期数）"
+  }
+
+  /**
+   * funct === 3: 查询访存读次数
+   */
+  case object QueryMemReadCount extends CuteInstConfig {
+    def funct = 3
+    def name = "QUERY_MEM_READ_COUNT"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "查询加速器对外访存读次数"
+  }
+
+  /**
+   * funct === 4: 查询访存写次数
+   */
+  case object QueryMemWriteCount extends CuteInstConfig {
+    def funct = 4
+    def name = "QUERY_MEM_WRITE_COUNT"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "查询加速器对外访存写次数"
+  }
+
+  /**
+   * funct === 5: 查询计算时间
+   */
+  case object QueryComputeTime extends CuteInstConfig {
+    def funct = 5
+    def name = "QUERY_COMPUTE_TIME"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "查询加速器计算时间"
+  }
+
+  /**
+   * funct === 6: 查询宏指令完成情况
+   */
+  case object QueryMacroInstFinish extends CuteInstConfig {
+    def funct = 6
+    def name = "QUERY_MACRO_INST_FINISH"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "查询 CUTE 宏指令的完成情况"
+  }
+
+  /**
+   * funct === 7: 查询宏指令队列是否已满
+   */
+  case object QueryMacroInstFIFOFull extends CuteInstConfig {
+    def funct = 7
+    def name = "QUERY_MACRO_INST_FIFO_FULL"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "查询 CUTE 宏指令队列是否已满"
+  }
+
+  /**
+   * funct === 8: 查询宏指令队列当前指令数
+   */
+  case object QueryMacroInstFIFOInfo extends CuteInstConfig {
+    def funct = 8
+    def name = "QUERY_MACRO_INST_FIFO_INFO"
+    def cfgData1Fields = None
+    def cfgData2Fields = None
+    def description = "查询 CUTE 宏指令队列目前有多少指令"
+  }
+
+  /**
+   * 所有 YGK 接口指令列表（按funct值排序）
+   */
+  val allInsts: Seq[CuteInstConfig] = Seq(
+    // StartAccelerator,
+    QueryAcceleratorBusy,
+    QueryRuntime,
+    QueryMemReadCount,
+    QueryMemWriteCount,
+    QueryComputeTime,
+    QueryMacroInstFinish,
+    QueryMacroInstFIFOFull,
+    QueryMacroInstFIFOInfo
+  ).sortBy(_.funct)
+
+  /**
+   * 根据funct值查找YGK指令
    */
   def getInstByFunct(funct: Int): Option[CuteInstConfig] = {
     allInsts.find(_.funct == funct)

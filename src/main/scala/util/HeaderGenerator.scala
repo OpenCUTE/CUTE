@@ -215,7 +215,7 @@ object HeaderGenerator {
     writer.println("// FPE Configuration (from CuteFPEParams)")
     writer.println(s"#define CUTE_FPE_MIN_GROUP_SIZE ${params.FPEparams.MinGroupSize}")
     writer.println(s"#define CUTE_FPE_MIN_DATA_TYPE_WIDTH ${params.FPEparams.MinDataTypeWidth}")
-    writer.println(s"#define CUTE_FPE_SCALE_WIDTH ${params.FPEparams.ScaleWidth}")
+    // writer.println(s"#define CUTE_FPE_SCALE_WIDTH ${params.FPEparams.ScaleWidth}")
     writer.println(s"#define CUTE_FPE_COMP_TREE_LAYERS ${params.FPEparams.cmptreelayers}")
     writer.println(s"#define CUTE_FPE_FP8_COMP_TREE_LAYERS ${params.FPEparams.fp8cmptreelayers}")
     writer.println()
@@ -405,12 +405,12 @@ object HeaderGenerator {
           val macroName = s"CUTE_ASSEMBLY_${inst.name}_CFGDATA1"
           val paramsList = fields.map(f => f.name.toLowerCase).mkString(", ")
           writer.println(s"// Assemble cfgData1 for ${inst.name}")
-          writer.println(s"#define ${macroName}(${paramsList}) \\")
+          writer.println(s"#define ${macroName}(${paramsList}) ( \\")
           fields.reverse.zipWithIndex.foreach { case (field, idx) =>
             val mask = (BigInt(1) << field.width) - 1
             val maskHex = f"0x${mask}%X"
             val isLast = idx == fields.length - 1
-            val line = if (isLast) "" else " | \\"
+            val line = if (isLast) ")" else " | \\"
             writer.println(s"  ((((uint64_t)(${field.name.toLowerCase})) & ${maskHex}UL) << ${field.bitLow})${line}")
           }
           writer.println()
@@ -423,12 +423,12 @@ object HeaderGenerator {
           val macroName = s"CUTE_ASSEMBLY_${inst.name}_CFGDATA2"
           val paramsList = fields.map(f => f.name.toLowerCase).mkString(", ")
           writer.println(s"// Assemble cfgData2 for ${inst.name}")
-          writer.println(s"#define ${macroName}(${paramsList}) \\")
+          writer.println(s"#define ${macroName}(${paramsList}) ( \\")
           fields.reverse.zipWithIndex.foreach { case (field, idx) =>
             val mask = (BigInt(1) << field.width) - 1
             val maskHex = f"0x${mask}%X"
             val isLast = idx == fields.length - 1
-            val line = if (isLast) "" else " | \\"
+            val line = if (isLast) ")" else " | \\"
             writer.println(s"  ((((uint64_t)(${field.name.toLowerCase})) & ${maskHex}UL) << ${field.bitLow})${line}")
           }
           writer.println()
