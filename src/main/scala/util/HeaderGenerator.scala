@@ -152,7 +152,6 @@ object HeaderGenerator {
     writer.println()
     writer.println("#include <stdint.h>")
     writer.println("#include <stdbool.h>")
-    writer.println("#include \"datatype.h.generated\"")
     writer.println()
 
     // 从 CuteParams 生成常量定义
@@ -241,6 +240,7 @@ object HeaderGenerator {
     writer.println("#define CUTE_INSTRUCTION_H")
     writer.println()
     writer.println("#include <stdint.h>")
+    writer.println("#include \"ygjk.h\"")
     writer.println()
 
     // 生成funct常量定义
@@ -261,6 +261,10 @@ object HeaderGenerator {
 
     // 生成指令文档
     generateInstDocumentation(writer, params)
+    writer.println()
+
+    // 生成包装函数
+    generateWrapperFunctions(writer, params)
     writer.println()
 
     writer.println("#endif // CUTE_INSTRUCTION_H")
@@ -444,6 +448,63 @@ object HeaderGenerator {
   }
 
   /**
+   * 生成包装函数（追加到 instruction.h.generated 末尾）
+   */
+  private def generateWrapperFunctions(writer: PrintWriter, params: CuteParams): Unit = {
+    writer.println("// ========================================")
+    writer.println("// Auto-Generated Wrapper Functions")
+    writer.println("// ========================================")
+    writer.println()
+
+    params.allInstConfigs.foreach { inst =>
+      val functMacro = s"CUTE_INST_FUNCT_${inst.name}"
+      val funcName = s"CUTE_${inst.name}"
+
+      val d1 = inst.cfgData1Fields
+      val d2 = inst.cfgData2Fields
+      val hasNoFields = d1.isEmpty && d2.isEmpty
+      val d1Packed = d1.exists(_.length > 1)
+      val d2Packed = d2.exists(_.length > 1)
+
+      // 构建参数列表（从字段定义）
+      val allFields = d1.toSeq.flatten ++ d2.toSeq.flatten
+      val paramList = allFields.map(f => s"uint64_t ${f.name.toLowerCase}").mkString(", ")
+      val paramDecl = if (paramList.nonEmpty) paramList else "void"
+
+      writer.println(s"// ${inst.description}")
+      writer.println(s"// 返回值: ${inst.returnDescription}")
+      writer.println(s"uint64_t ${funcName}(${paramDecl})")
+      writer.println(s"{")
+
+      // 如果有需要打包的 cfgData1，生成 ASSEMBLY 宏调用
+      if (d1Packed) {
+        val args1 = d1.get.map(_.name.toLowerCase).mkString(", ")
+        writer.println(s"    uint64_t cfgData1 = CUTE_ASSEMBLY_${inst.name}_CFGDATA1(${args1});")
+      }
+
+      // 如果有需要打包的 cfgData2，生成 ASSEMBLY 宏调用
+      if (d2Packed) {
+        val args2 = d2.get.map(_.name.toLowerCase).mkString(", ")
+        writer.println(s"    uint64_t cfgData2 = CUTE_ASSEMBLY_${inst.name}_CFGDATA2(${args2});")
+      }
+
+      // 构建 rs1 和 rs2 表达式
+      val rs1 = if (d1Packed) "cfgData1"
+                else if (d1.isDefined) d1.get.head.name.toLowerCase
+                else "0"
+      val rs2 = if (d2Packed) "cfgData2"
+                else if (d2.isDefined) d2.get.head.name.toLowerCase
+                else "0"
+
+      writer.println(s"    uint64_t res1=0;")
+      writer.println(s"    YGJK_INS_RRR(res1, ${rs1}, ${rs2}, ${functMacro});")
+      writer.println(s"    return res1;")
+      writer.println(s"}")
+      writer.println()
+    }
+  }
+
+  /**
    * 生成指令文档（注释格式）
    */
   private def generateInstDocumentation(writer: PrintWriter, params: CuteParams): Unit = {
@@ -464,6 +525,7 @@ object HeaderGenerator {
       writer.println(s" * Type: ${instType}")
       writer.println(s" * Funct: ${functNote}")
       writer.println(s" * Description: ${inst.description}")
+      writer.println(s" * Return: ${inst.returnDescription}")
       writer.println(s" *")
 
       inst.cfgData1Fields match {

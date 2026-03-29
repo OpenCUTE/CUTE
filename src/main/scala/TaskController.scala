@@ -282,8 +282,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
          * 验证逻辑：所有位宽都必须 >= maxValue所需的最小位宽
          * - maxValue: 字段允许的最大值（如65536）
          * - requiredWidth: 存储maxValue需要的最小位宽（log2Ceil(65536+1)=17）
-         * - InstField.width: cfgData中分配的位数（如20位）✅ 必须 >= requiredWidth
-         * - Wire.getWidth: 硬件Wire的实际位宽（如16位）✅ 必须 >= requiredWidth
+         * - InstField.width: cfgData中分配的位数（如20位）必须 >= requiredWidth
+         * - Wire.getWidth: 硬件Wire的实际位宽（如16位）必须 >= requiredWidth
          *
          * @param mappings 字段映射序列（只包含字段名和Wire）
          * @param data 配置数据（cfgData1/cfgData2）
@@ -320,24 +320,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
           }
         }
 
-        //funct为func去除最高位的部分
         val funct = io.ygjkctrl.config.bits.func(5,0)
-        //funct === 0，将配置好的Marco指令加入指令FIFO
-
-        //funct === 1    配置加速器，cfgData1 = ATensor的起始地址，cfgData2 = next_reduce_dim的stride
-        //funct === 2    配置加速器，cfgData1 = BTensor的起始地址，cfgData2 = next_reduce_dim的stride
-        //funct === 3    配置加速器，cfgData1 = CTensor的起始地址，cfgData2 = next_reduce_dim的stride
-        //funct === 4    配置加速器，cfgData1 = DTensor的起始地址，cfgData2 = next_reduce_dim的stride
-
-        //funct === 5    配置加速器，cfgData1 = (M[0~19bit]，N[20~39bit]，K[40~59bit])
-        //               对于卷积就是cfgData1 = (ohow[0~19bit]，oc[20~39bit]，ic[40~59bit])
-        //                         cfgData2 = kernel_stride 对于矩阵乘来说是0，对于卷积来说是下一个卷积核的起始地址卷积核是(kh,kw,oc,ic)排的
-
-        //funct === 6    配置加速器，cfgData1 = (element_type[0~7bit]，bias_type[8~15bit]，transpose_result[16~23bit],conv_stride[24~31bit],conv_oh_max[32~47bit],conv_ow_max[48~63bit])
-        //               配置加速器，cfgData2 = (kernel_size[0~7bit]，kernel_stride[8~15bit]，conv_oh_per_add[16~25]，conv_ow_per_add[26~35]， conv_oh_index[36~45bit],conv_oh_index[46~55bit])
-        //funct === 8    配置加速器，cfgData1 = BScale的起始位置
-        //val conv_oh_per_add //避免在计算过程中进行除法运算，这里可以提前计算好
-        //val conv_ow_per_add //避免在计算过程中进行取余运算，这里可以提前计算好
 
         when(funct === CuteInstConfigs.SendMacroInst.funct.U)
         {
@@ -376,7 +359,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                         //输出宏指令的的信息
                         printf("[TaskController<%d>]:ApplicationTensor_A_BaseVaddr = %x, ApplicationTensor_A_Stride = %x, ApplicationTensor_B_BaseVaddr = %x, ApplicationTensor_B_Stride = %x, ApplicationTensor_C_BaseVaddr = %x, ApplicationTensor_C_Stride = %x, ApplicationTensor_D_BaseVaddr = %x, ApplicationTensor_D_Stride = %x, Application_M = %x, Application_N = %x, Application_K = %x, kernel_stride = %x, element_type = %x, bias_type = %x, transpose_result = %x, conv_stride = %x, conv_oh_max = %x, conv_ow_max = %x, kernel_size = %x, conv_oh_per_add = %x, conv_ow_per_add = %x, conv_oh_index = %x, conv_ow_index = %x\n", io.DebugTimeStampe, matmul_inst.ApplicationTensor_A_BaseVaddr, matmul_inst.ApplicationTensor_A_Stride, matmul_inst.ApplicationTensor_B_BaseVaddr, matmul_inst.ApplicationTensor_B_Stride, matmul_inst.ApplicationTensor_C_BaseVaddr, matmul_inst.ApplicationTensor_C_Stride, matmul_inst.ApplicationTensor_D_BaseVaddr, matmul_inst.ApplicationTensor_D_Stride, matmul_inst.Application_M, matmul_inst.Application_N, matmul_inst.Application_K, matmul_inst.kernel_stride, matmul_inst.element_type, matmul_inst.bias_type, matmul_inst.transpose_result, matmul_inst.conv_stride, matmul_inst.conv_oh_max, matmul_inst.conv_ow_max, matmul_inst.kernel_size, matmul_inst.conv_oh_per_add, matmul_inst.conv_ow_per_add, matmul_inst.conv_oh_index, matmul_inst.conv_ow_index)
                     }
-
 
                 }
 

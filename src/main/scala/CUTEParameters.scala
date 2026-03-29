@@ -457,6 +457,11 @@ sealed abstract class CuteInstConfig {
   def isYGJKInst: Boolean
 
   /**
+   * 返回值描述（RD寄存器中的值的含义）
+   */
+  def returnDescription: String
+
+  /**
    * 是否使用cfgData1
    */
   def usesCfgData1: Boolean = cfgData1Fields.isDefined
@@ -505,6 +510,7 @@ object CuteInstConfigs {
     def cfgData2Fields = None
     def description = "发送已配置的宏指令到指令FIFO"
     def isYGJKInst = false
+    def returnDescription = "返回指令在FIFO中的编号"
   }
 
   /**
@@ -521,6 +527,7 @@ object CuteInstConfigs {
     ))
     def description = "配置A张量的基地址和步长"
     def isYGJKInst = false
+    def returnDescription = "未使用"
   }
 
   /**
@@ -537,6 +544,7 @@ object CuteInstConfigs {
     ))
     def description = "配置B张量的基地址和步长"
     def isYGJKInst = false
+    def returnDescription = "未使用"
   }
 
   /**
@@ -553,6 +561,7 @@ object CuteInstConfigs {
     ))
     def description = "配置C张量的基地址和步长"
     def isYGJKInst = false
+    def returnDescription = "未使用"
   }
 
   /**
@@ -569,6 +578,7 @@ object CuteInstConfigs {
     ))
     def description = "配置D张量的基地址和步长"
     def isYGJKInst = false
+    def returnDescription = "未使用"
   }
 
   /**
@@ -588,6 +598,7 @@ object CuteInstConfigs {
     ))
     def description = "配置张量维度(M,N,K)，对于卷积则是(ohow,oc,ic)"
     def isYGJKInst = false
+    def returnDescription = "未使用"
   }
 
   /**
@@ -606,7 +617,6 @@ object CuteInstConfigs {
     ))
     def cfgData2Fields = Some(Seq(
       InstField("kernel_size", 7, 0, 15, "卷积核大小 (max=16)"),
-      InstField("RESERVED_16_18", 15, 8, "保留位[18:16] (3位，max=7)"),
       InstField("conv_oh_per_add", 25, 16, 1023, "卷积输出高度每次增加量 (max=16384)"),
       InstField("conv_ow_per_add", 35, 26, 1023, "卷积输出宽度每次增加量 (max=16384)"),
       InstField("conv_oh_index", 45, 36, 1023, "卷积输出的高起始值"),
@@ -614,6 +624,7 @@ object CuteInstConfigs {
     ))
     def description = "配置卷积相关参数（element_type, bias_type, kernel_size等）"
     def isYGJKInst = false
+    def returnDescription = "未使用"
   }
 
   /**
@@ -628,6 +639,7 @@ object CuteInstConfigs {
     def cfgData2Fields = None
     def description = "配置A Scale（量化参数）的基地址"
     def isYGJKInst = false
+    def returnDescription = "未使用"
   }
 
   /**
@@ -642,6 +654,7 @@ object CuteInstConfigs {
     def cfgData2Fields = None
     def description = "配置B Scale（量化参数）的基地址"
     def isYGJKInst = false
+    def returnDescription = "未使用"
   }
 
   /**
@@ -654,6 +667,7 @@ object CuteInstConfigs {
     def cfgData2Fields = None
     def description = "清除队尾的宏指令"
     def isYGJKInst = false
+    def returnDescription = "未使用"
   }
 
   /**
@@ -666,6 +680,7 @@ object CuteInstConfigs {
     def cfgData2Fields = None
     def description = "查询当前完成宏指令的尾编号位置"
     def isYGJKInst = false
+    def returnDescription = "返回已完成宏指令的尾编号位置"
   }
 
   /**
@@ -678,6 +693,7 @@ object CuteInstConfigs {
     def cfgData2Fields = None
     def description = "保留指令（空操作）"
     def isYGJKInst = false
+    def returnDescription = "未使用"
   }
 
   /**
@@ -726,6 +742,7 @@ object YGJKInstConfigs {
     def cfgData2Fields = None
     def description = "查询加速器是否正在运行"
     def isYGJKInst = true
+    def returnDescription = "返回加速器是否忙碌 (1=忙碌, 0=空闲)"
   }
 
   /**
@@ -738,6 +755,7 @@ object YGJKInstConfigs {
     def cfgData2Fields = None
     def description = "查询加速器运行时间（时钟周期数）"
     def isYGJKInst = true
+    def returnDescription = "返回加速器运行时间（时钟周期数）"
   }
 
   /**
@@ -750,6 +768,7 @@ object YGJKInstConfigs {
     def cfgData2Fields = None
     def description = "查询加速器对外访存读次数"
     def isYGJKInst = true
+    def returnDescription = "返回对外访存读次数"
   }
 
   /**
@@ -762,6 +781,7 @@ object YGJKInstConfigs {
     def cfgData2Fields = None
     def description = "查询加速器对外访存写次数"
     def isYGJKInst = true
+    def returnDescription = "返回对外访存写次数"
   }
 
   /**
@@ -774,6 +794,7 @@ object YGJKInstConfigs {
     def cfgData2Fields = None
     def description = "查询加速器计算时间"
     def isYGJKInst = true
+    def returnDescription = "返回计算时间（时钟周期数）"
   }
 
   /**
@@ -786,6 +807,7 @@ object YGJKInstConfigs {
     def cfgData2Fields = None
     def description = "查询 CUTE 宏指令的完成情况"
     def isYGJKInst = true
+    def returnDescription = "返回宏指令队列中的完成情况 (0010 = id为1的指令已完成)"
   }
 
   /**
@@ -798,6 +820,7 @@ object YGJKInstConfigs {
     def cfgData2Fields = None
     def description = "查询 CUTE 宏指令队列是否已满"
     def isYGJKInst = true
+    def returnDescription = "返回FIFO是否已满 (1=满, 0=未满)"
   }
 
   /**
@@ -810,6 +833,7 @@ object YGJKInstConfigs {
     def cfgData2Fields = None
     def description = "查询 CUTE 宏指令队列目前有多少指令"
     def isYGJKInst = true
+    def returnDescription = "返回FIFO中当前指令状态 (0010 = id为1的位置已有指令)"
   }
 
   /**
