@@ -160,13 +160,19 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
 
             IH_Stride :=  ConfigInfo.ApplicationTensor_A.Convolution_Stride_W * ConfigInfo.ApplicationTensor_A.Convolution_OW_DIM_Length * ConfigInfo.ApplicationTensor_A.ApplicationTensor_A_Stride_M //每移动一次IH，需要增加的地址偏移量
             IW_Stride :=  ConfigInfo.ApplicationTensor_A.ApplicationTensor_A_Stride_M //每移动一次IW，需要增加的地址偏移量
-
+            //IW_Stride: 输入平面上 IW+1 时，内存地址增加多少（沿宽度方向移动一格的 stride）。
+            //IH_Stride: 输入平面上 IH+1 时，内存地址增加多少（沿高度方向移动一格的 stride）
+            //等于 stride_W * OW * stride_M，因为 NHW*C 排布下，一行 OH 对应多个 OW，每个 OW 又对应 stride_M 的偏移。
+            
             Convolution_IW_DIM_Length := ConfigInfo.ApplicationTensor_A.Convolution_OW_DIM_Length * ConfigInfo.ApplicationTensor_A.Convolution_Stride_W//可以提前算，存成Reg
             Convolution_IH_DIM_Length := ConfigInfo.ApplicationTensor_A.Convolution_OH_DIM_Length * ConfigInfo.ApplicationTensor_A.Convolution_Stride_H//可以提前算，存成Reg
-
+            //Convolution_IW_DIM_Length: 有效输入宽度（IW 范围），等于 OW * stride_W。
+            //Convolution_IH_DIM_Length: 有效输入高度（IH 范围），等于 OH * stride_H。
             //TODO:这里可能是性能瓶颈，如果这里不满足时序要求，我们可以在这里切流水，提前算好然后喂进AML,我们有一百种方法在这里优化时序:p
+            
             Current_IH_Index := Cat(0.U(1.W),ConfigInfo.Convolution_Current_OH_Index).asSInt * Cat(0.U(1.W),ConfigInfo.ApplicationTensor_A.Convolution_Stride_H).asSInt + Cat(0.U(1.W),ConfigInfo.Convolution_Current_KH_Index).asSInt - Cat(0.U(1.W),ConfigInfo.ApplicationTensor_A.Convolution_KH_DIM_Length/2.U).asSInt//这里是计算当前的IH的index的初始值,如果变瓶颈了再改
             Current_IW_Index := Cat(0.U(1.W),ConfigInfo.Convolution_Current_OW_Index).asSInt * Cat(0.U(1.W),ConfigInfo.ApplicationTensor_A.Convolution_Stride_W).asSInt + Cat(0.U(1.W),ConfigInfo.Convolution_Current_KW_Index).asSInt - Cat(0.U(1.W),ConfigInfo.ApplicationTensor_A.Convolution_KW_DIM_Length/2.U).asSInt//这里是计算当前的IW的index的初始值,如果变瓶颈了再改
+            //当前输入坐标IH/IW的初始值，即IH = OH *stride + KH - KH_DIM/2
 
             Init_IH_DIM_Length := Cat(0.U(1.W),ConfigInfo.Convolution_Current_OH_Index).asSInt * Cat(0.U(1.W),ConfigInfo.ApplicationTensor_A.Convolution_Stride_H).asSInt + Cat(0.U(1.W),ConfigInfo.Convolution_Current_KH_Index).asSInt - Cat(0.U(1.W),ConfigInfo.ApplicationTensor_A.Convolution_KH_DIM_Length/2.U).asSInt//这里是计算当前的IH的index的初始值,如果变瓶颈了再改
             Init_IW_DIM_Length := Cat(0.U(1.W),ConfigInfo.Convolution_Current_OW_Index).asSInt * Cat(0.U(1.W),ConfigInfo.ApplicationTensor_A.Convolution_Stride_W).asSInt + Cat(0.U(1.W),ConfigInfo.Convolution_Current_KW_Index).asSInt - Cat(0.U(1.W),ConfigInfo.ApplicationTensor_A.Convolution_KW_DIM_Length/2.U).asSInt//这里是计算当前的IW的index的初始值,如果变瓶颈了再改
@@ -305,6 +311,8 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
             val TableItem = Wire(new ASourceIdSearch)
             TableItem.ScratchpadBankId := CurrentLoaded_BlockTensor_M % AScratchpadNBanks.U
             TableItem.ScratchpadAddr := ((CurrentLoaded_BlockTensor_M / AScratchpadNBanks.U) * ReduceGroupSize.U) + CurrentLoaded_BlockTensor_K
+            //bank = M % bank 数
+            //addr = (M / bank数) * ReduceGroupSize + K
             SoureceIdSearchTable(sourceId.bits) := TableItem.asUInt
 
             if(YJPAMLDebugEnable)
