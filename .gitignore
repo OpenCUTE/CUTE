@@ -13,3 +13,4 @@ tool/*
 build/chipyard/simulator-*
 .metals
 .vscode
+Miniconda3-latest-Linux-x86_64.sh
