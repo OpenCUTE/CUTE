@@ -16,3 +16,6 @@
 [submodule "cute-fpe"]
 	path = cute-fpe
 	url = git@github.com:OpenCUTE/cute-fpe.git
+[submodule "doc/design-doc"]
+	path = doc/design-doc
+	url = git@github.com:OpenCUTE/CUTE-Design-Doc.git

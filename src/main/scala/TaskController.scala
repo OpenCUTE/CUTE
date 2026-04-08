@@ -18,9 +18,13 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         // val TaskCtrlInfo = (new TaskCtrlInfo)
         val ADC_MicroTask_Config = (new ADCMicroTaskConfigIO)
         val BDC_MicroTask_Config = (new BDCMicroTaskConfigIO)
+        val ASC_MicroTask_Config = (new ADCMicroTaskConfigIO)
+        val BSC_MicroTask_Config = (new BDCMicroTaskConfigIO)
         val CDC_MicroTask_Config = (new CDCMicroTaskConfigIO)
         val AML_MicroTask_Config = (new AMLMicroTaskConfigIO)
         val BML_MicroTask_Config = (new BMLMicroTaskConfigIO)
+        val ASL_MicroTask_Config = (new ASLMicroTaskConfigIO)
+        val BSL_MicroTask_Config = (new BSLMicroTaskConfigIO)
         val CML_MicroTask_Config = (new CMLMicroTaskConfigIO)
         val MTE_MicroTask_Config = (new MTEMicroTaskConfigIO)
         val AOP_MicroTask_Config = (new AfterOpsMicroTaskConfigIO)
@@ -32,8 +36,13 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     })
 
     val get_configred = RegInit(false.B)
+    io.ctrlCounter := 0.U.asTypeOf(io.ctrlCounter)
 
-    io.ctrlCounter.getConfigured := get_configred
+    if (EnablePerfCounter)
+    {
+        // val get_configred = RegInit(false.B)
+        io.ctrlCounter.getConfigured := get_configred
+    }
 
     var PEDataType = new FReducePEDataType
 
@@ -46,6 +55,15 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.ADC_MicroTask_Config.MicroTaskValid := false.B
     io.ADC_MicroTask_Config.MicroTaskEndReady := false.B
 
+    // ASC_MicroTask_Config 的 默认配置
+    io.ASC_MicroTask_Config.Is_Transpose := false.B
+    io.ASC_MicroTask_Config.ApplicationTensor_A := 0.U.asTypeOf(io.ASC_MicroTask_Config.ApplicationTensor_A)
+    io.ASC_MicroTask_Config.ScaratchpadTensor_K := 0.U
+    io.ASC_MicroTask_Config.ScaratchpadTensor_N := 0.U
+    io.ASC_MicroTask_Config.ScaratchpadTensor_M := 0.U
+    io.ASC_MicroTask_Config.MicroTaskValid := false.B
+    io.ASC_MicroTask_Config.MicroTaskEndReady := false.B
+
     //BDC_MicroTask_Config 的 默认配置
     io.BDC_MicroTask_Config.Is_Transpose := false.B
     io.BDC_MicroTask_Config.ApplicationTensor_B := 0.U.asTypeOf(io.BDC_MicroTask_Config.ApplicationTensor_B)
@@ -54,6 +72,15 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.BDC_MicroTask_Config.ScaratchpadTensor_M := 0.U
     io.BDC_MicroTask_Config.MicroTaskValid := false.B
     io.BDC_MicroTask_Config.MicroTaskEndReady := false.B
+
+    //BSC_MicroTask_Config 的 默认配置
+    io.BSC_MicroTask_Config.Is_Transpose := false.B
+    io.BSC_MicroTask_Config.ApplicationTensor_B := 0.U.asTypeOf(io.BSC_MicroTask_Config.ApplicationTensor_B)
+    io.BSC_MicroTask_Config.ScaratchpadTensor_K := 0.U
+    io.BSC_MicroTask_Config.ScaratchpadTensor_N := 0.U
+    io.BSC_MicroTask_Config.ScaratchpadTensor_M := 0.U
+    io.BSC_MicroTask_Config.MicroTaskValid := false.B
+    io.BSC_MicroTask_Config.MicroTaskEndReady := false.B
 
     //CDC_MicroTask_Config 的 默认配置
     io.CDC_MicroTask_Config.ApplicationTensor_C := 0.U.asTypeOf(io.CDC_MicroTask_Config.ApplicationTensor_C)
@@ -82,6 +109,14 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.AML_MicroTask_Config.MicroTaskValid := false.B
     io.AML_MicroTask_Config.MicroTaskEndReady := false.B
 
+    //ASL_MicroTask_Config 的 默认配置
+    io.ASL_MicroTask_Config.ApplicationScale_A := 0.U.asTypeOf(io.ASL_MicroTask_Config.ApplicationScale_A)
+    io.ASL_MicroTask_Config.ScaratchpadTensor_M := 0.U
+    io.ASL_MicroTask_Config.ScaratchpadTensor_K := 0.U
+    io.ASL_MicroTask_Config.Conherent := false.B
+    io.ASL_MicroTask_Config.MicroTaskValid := false.B
+    io.ASL_MicroTask_Config.MicroTaskEndReady := false.B
+
     //BML_MicroTask_Config 的 默认配置
     io.BML_MicroTask_Config.ApplicationTensor_B := 0.U.asTypeOf(io.BML_MicroTask_Config.ApplicationTensor_B)
     io.BML_MicroTask_Config.ScaratchpadTensor_N := 0.U
@@ -91,6 +126,14 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.BML_MicroTask_Config.Conherent := false.B
     io.BML_MicroTask_Config.MicroTaskValid := false.B
     io.BML_MicroTask_Config.MicroTaskEndReady := false.B
+
+    // BSL_MicroTask_Config 的 默认配置
+    io.BSL_MicroTask_Config.ApplicationScale_B := 0.U.asTypeOf(io.BSL_MicroTask_Config.ApplicationScale_B)
+    io.BSL_MicroTask_Config.ScaratchpadTensor_N := 0.U
+    io.BSL_MicroTask_Config.ScaratchpadTensor_K := 0.U
+    io.BSL_MicroTask_Config.Conherent := false.B
+    io.BSL_MicroTask_Config.MicroTaskValid := false.B
+    io.BSL_MicroTask_Config.MicroTaskEndReady := false.B
 
     //CML_MicroTask_Config 的 默认配置
     io.CML_MicroTask_Config.ApplicationTensor_C := 0.U.asTypeOf(io.CML_MicroTask_Config.ApplicationTensor_C)
@@ -208,7 +251,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.ygjkctrl.InstFIFO_Full := MacroInst_FIFO_Full
     io.ygjkctrl.InstFIFO_Finish := MacroInst_FIFO_Total_Finish.asUInt
 
-    io.ctrlCounter.InstQueueEmpty := MacroInst_FIFO_Empty
+    if (EnablePerfCounter)
+    {io.ctrlCounter.InstQueueEmpty := MacroInst_FIFO_Empty}
 
     when(io.ygjkctrl.config.valid)
     {
@@ -220,26 +264,65 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
         val MacroInst_Reg_Wire = Wire(new MacroInst)
         MacroInst_Reg_Wire := MacroInst_Reg.asTypeOf(MacroInst_Reg_Wire)
-        
-        //funct为func去除最高位的部分
+
+        // ==================== 工具函数 ====================
+
+        /**
+         * 字段映射：字段名 + 硬件Wire
+         * InstField会根据字段名自动从指令配置中查找
+         */
+        case class FieldMapping(
+          name: String,    // 字段名称
+          wire: UInt       // 硬件Wire引用
+        )
+
+        /**
+         * 批量验证并应用字段映射（自动查找InstField版本）
+         *
+         * 验证逻辑：所有位宽都必须 >= maxValue所需的最小位宽
+         * - maxValue: 字段允许的最大值（如65536）
+         * - requiredWidth: 存储maxValue需要的最小位宽（log2Ceil(65536+1)=17）
+         * - InstField.width: cfgData中分配的位数（如20位）必须 >= requiredWidth
+         * - Wire.getWidth: 硬件Wire的实际位宽（如16位）必须 >= requiredWidth
+         *
+         * @param mappings 字段映射序列（只包含字段名和Wire）
+         * @param data 配置数据（cfgData1/cfgData2）
+         * @param fields InstField定义序列（cfgData1Fields或cfgData2Fields）
+         */
+        def applyFieldMappings(mappings: Seq[FieldMapping], data: UInt, fields: Seq[InstField]): Unit = {
+          mappings.foreach { mapping =>
+            // 从fields序列中根据字段名查找InstField定义
+            val instField = fields.find(_.name == mapping.name).getOrElse(
+              throw new NoSuchElementException(
+                s"Field '${mapping.name}' not found in fields. " +
+                s"Available fields: ${fields.map(_.name).mkString(", ")}"))
+
+            // 验证：Wire宽度必须 >= maxValue所需的最小位宽
+            instField.maxValue match {
+              case Some(maxVal) =>
+                val requiredWidth = instField.requiredWidth
+                require(mapping.wire.getWidth >= requiredWidth,
+                  s"Width mismatch for ${mapping.name}: " +
+                  s"Wire width=${mapping.wire.getWidth} < maxValue required width=${requiredWidth} " +
+                  s"(maxValue=${maxVal}, bits [${instField.bitHigh}:${instField.bitLow}]), " +
+                  s"Wire cannot store the maximum value, data will be truncated!")
+              case None =>
+                // 无约束字段（如地址）：验证Wire宽度 >= InstField宽度
+                require(mapping.wire.getWidth >= instField.width,
+                  s"Width mismatch for ${mapping.name}: " +
+                  s"Wire width=${mapping.wire.getWidth} < InstField width=${instField.width} " +
+                  s"(bits [${instField.bitHigh}:${instField.bitLow}]), " +
+                  s"data will be truncated!")
+            }
+
+            // 应用字段值：从cfgData提取字段并赋值给Wire
+            mapping.wire := data(instField.bitHigh, instField.bitLow)
+          }
+        }
+
         val funct = io.ygjkctrl.config.bits.func(5,0)
-        //funct === 0，将配置好的Marco指令加入指令FIFO
 
-        //funct === 1    配置加速器，cfgData1 = ATensor的起始地址，cfgData2 = next_reduce_dim的stride
-        //funct === 2    配置加速器，cfgData1 = BTensor的起始地址，cfgData2 = next_reduce_dim的stride
-        //funct === 3    配置加速器，cfgData1 = CTensor的起始地址，cfgData2 = next_reduce_dim的stride
-        //funct === 4    配置加速器，cfgData1 = DTensor的起始地址，cfgData2 = next_reduce_dim的stride
-
-        //funct === 5    配置加速器，cfgData1 = (M[0~19bit]，N[20~39bit]，K[40~59bit])
-        //               对于卷积就是cfgData1 = (ohow[0~19bit]，oc[20~39bit]，ic[40~59bit])
-        //                         cfgData2 = kernel_stride 对于矩阵乘来说是0，对于卷积来说是下一个卷积核的起始地址卷积核是(kh,kw,oc,ic)排的
-
-        //funct === 6    配置加速器，cfgData1 = (element_type[0~7bit]，bias_type[8~15bit]，transpose_result[16~23bit],conv_stride[24~31bit],conv_oh_max[32~47bit],conv_ow_max[48~63bit])
-        //               配置加速器，cfgData2 = (kernel_size[0~7bit]，kernel_stride[8~15bit]，conv_oh_per_add[16~25]，conv_ow_per_add[26~35]， conv_oh_index[36~45bit],conv_oh_index[46~55bit])
-        //val conv_oh_per_add //避免在计算过程中进行除法运算，这里可以提前计算好
-        //val conv_ow_per_add //避免在计算过程中进行取余运算，这里可以提前计算好
-
-        when(funct === 0.U)
+        when(funct === CuteInstConfigs.SendMacroInst.funct.U)
         {
             //这里最好是生成一条VLSW送到加速器的指令buff里，然后在TaskController继续分解成不同期间的指令
             //目前先实现成单条指令触发
@@ -251,6 +334,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                 val matmul_inst = MacroInst_Reg.asTypeOf(new MacroInst)
                 when(is_matmul_inst)
                 {
+                    matmul_inst.is_matmul := true.B
                     matmul_inst.conv_oh_max := 1.U
                     matmul_inst.conv_ow_max := MacroInst_Reg.asTypeOf(new MacroInst).Application_M
                     matmul_inst.conv_ow_per_add := Tensor_M.U
@@ -276,10 +360,9 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                         printf("[TaskController<%d>]:ApplicationTensor_A_BaseVaddr = %x, ApplicationTensor_A_Stride = %x, ApplicationTensor_B_BaseVaddr = %x, ApplicationTensor_B_Stride = %x, ApplicationTensor_C_BaseVaddr = %x, ApplicationTensor_C_Stride = %x, ApplicationTensor_D_BaseVaddr = %x, ApplicationTensor_D_Stride = %x, Application_M = %x, Application_N = %x, Application_K = %x, kernel_stride = %x, element_type = %x, bias_type = %x, transpose_result = %x, conv_stride = %x, conv_oh_max = %x, conv_ow_max = %x, kernel_size = %x, conv_oh_per_add = %x, conv_ow_per_add = %x, conv_oh_index = %x, conv_ow_index = %x\n", io.DebugTimeStampe, matmul_inst.ApplicationTensor_A_BaseVaddr, matmul_inst.ApplicationTensor_A_Stride, matmul_inst.ApplicationTensor_B_BaseVaddr, matmul_inst.ApplicationTensor_B_Stride, matmul_inst.ApplicationTensor_C_BaseVaddr, matmul_inst.ApplicationTensor_C_Stride, matmul_inst.ApplicationTensor_D_BaseVaddr, matmul_inst.ApplicationTensor_D_Stride, matmul_inst.Application_M, matmul_inst.Application_N, matmul_inst.Application_K, matmul_inst.kernel_stride, matmul_inst.element_type, matmul_inst.bias_type, matmul_inst.transpose_result, matmul_inst.conv_stride, matmul_inst.conv_oh_max, matmul_inst.conv_ow_max, matmul_inst.kernel_size, matmul_inst.conv_oh_per_add, matmul_inst.conv_ow_per_add, matmul_inst.conv_oh_index, matmul_inst.conv_ow_index)
                     }
 
-
                 }
 
-                get_configred := false.B
+                if(EnablePerfCounter) {get_configred := false.B}
             }.otherwise
             {
                 io.ygjkctrl.cute_return_val := 0xdeadbeefL.U
@@ -291,80 +374,92 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             }
 
 
-        }.elsewhen(funct === 1.U)
+        }.elsewhen(funct === CuteInstConfigs.ConfigTensorA.funct.U)
         {
             MacroInst_Reg_Wire.ApplicationTensor_A_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
             MacroInst_Reg_Wire.ApplicationTensor_A_Stride := io.ygjkctrl.config.bits.cfgData2
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
-            get_configred := true.B
+            if(EnablePerfCounter) {get_configred := true.B} 
             
-        }.elsewhen(funct === 2.U)
+        }.elsewhen(funct === CuteInstConfigs.ConfigTensorB.funct.U)
         {
             MacroInst_Reg_Wire.ApplicationTensor_B_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
             MacroInst_Reg_Wire.ApplicationTensor_B_Stride := io.ygjkctrl.config.bits.cfgData2
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
-            get_configred := true.B
-        }.elsewhen(funct === 3.U)
+            if(EnablePerfCounter) {get_configred := true.B} 
+        }.elsewhen(funct === CuteInstConfigs.ConfigTensorC.funct.U)
         {
             MacroInst_Reg_Wire.ApplicationTensor_C_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
             MacroInst_Reg_Wire.ApplicationTensor_C_Stride := io.ygjkctrl.config.bits.cfgData2
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
-            get_configred := true.B
-        }.elsewhen(funct === 4.U)
+            if(EnablePerfCounter) {get_configred := true.B} 
+        }.elsewhen(funct === CuteInstConfigs.ConfigTensorD.funct.U)
         {
             MacroInst_Reg_Wire.ApplicationTensor_D_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
             MacroInst_Reg_Wire.ApplicationTensor_D_Stride := io.ygjkctrl.config.bits.cfgData2
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
-            get_configred := true.B
-        }.elsewhen(funct === 5.U)
+            if(EnablePerfCounter) {get_configred := true.B} 
+        }.elsewhen(funct === CuteInstConfigs.ConfigTensorDim.funct.U)
         {
-            assert(MacroInst_Reg_Wire.Application_M.getWidth <= 20)
-            assert(MacroInst_Reg_Wire.Application_N.getWidth <= 20)
-            assert(MacroInst_Reg_Wire.Application_K.getWidth <= 20)
-            MacroInst_Reg_Wire.Application_M := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_M.getWidth-1,0)
-            MacroInst_Reg_Wire.Application_N := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_N.getWidth+19,20)
-            MacroInst_Reg_Wire.Application_K := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.Application_K.getWidth+39,40)
-            MacroInst_Reg_Wire.kernel_stride := io.ygjkctrl.config.bits.cfgData2
+            val cfg1Fields = CuteInstConfigs.ConfigTensorDim.cfgData1Fields.get
+            val cfg2Fields = CuteInstConfigs.ConfigTensorDim.cfgData2Fields.get
+
+            // ✅ 简洁：只需字段名和Wire，传入cfgData1Fields自动查找
+            applyFieldMappings(Seq(
+              FieldMapping("Application_M", MacroInst_Reg_Wire.Application_M),
+              FieldMapping("Application_N", MacroInst_Reg_Wire.Application_N),
+              FieldMapping("Application_K", MacroInst_Reg_Wire.Application_K)
+            ), io.ygjkctrl.config.bits.cfgData1, cfg1Fields)
+
+            applyFieldMappings(Seq(
+              FieldMapping("kernel_stride", MacroInst_Reg_Wire.kernel_stride)
+            ), io.ygjkctrl.config.bits.cfgData2, cfg2Fields)
+
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
-            get_configred := true.B
-        }.elsewhen(funct === 6.U)
+            if(EnablePerfCounter) {get_configred := true.B} 
+        }.elsewhen(funct === CuteInstConfigs.ConfigConvParams.funct.U)
         {
-            assert(MacroInst_Reg_Wire.element_type.getWidth <= 8)
-            assert(MacroInst_Reg_Wire.bias_type.getWidth <= 8)
-            assert(MacroInst_Reg_Wire.transpose_result.getWidth <= 8)
-            assert(MacroInst_Reg_Wire.conv_stride.getWidth <= 8)
-            assert(MacroInst_Reg_Wire.conv_oh_max.getWidth <= 16)
-            assert(MacroInst_Reg_Wire.conv_ow_max.getWidth <= 16)
+            val cfg1Fields = CuteInstConfigs.ConfigConvParams.cfgData1Fields.get
+            val cfg2Fields = CuteInstConfigs.ConfigConvParams.cfgData2Fields.get
 
-            assert(MacroInst_Reg_Wire.kernel_size.getWidth <= 4)
-            assert(MacroInst_Reg_Wire.conv_oh_per_add.getWidth <= 15)
-            assert(MacroInst_Reg_Wire.conv_ow_per_add.getWidth <= 15)
-            assert(MacroInst_Reg_Wire.conv_oh_index.getWidth <= 15)
-            assert(MacroInst_Reg_Wire.conv_ow_index.getWidth <= 15)
+            // ✅ 简洁：只需字段名和Wire，传入cfgData1Fields自动查找
+            applyFieldMappings(Seq(
+              FieldMapping("element_type", MacroInst_Reg_Wire.element_type),
+              FieldMapping("bias_type", MacroInst_Reg_Wire.bias_type),
+              FieldMapping("transpose_result", MacroInst_Reg_Wire.transpose_result),
+              FieldMapping("conv_stride", MacroInst_Reg_Wire.conv_stride),
+              FieldMapping("conv_oh_max", MacroInst_Reg_Wire.conv_oh_max),
+              FieldMapping("conv_ow_max", MacroInst_Reg_Wire.conv_ow_max)
+            ), io.ygjkctrl.config.bits.cfgData1, cfg1Fields)
 
+            applyFieldMappings(Seq(
+              FieldMapping("kernel_size", MacroInst_Reg_Wire.kernel_size),
+              FieldMapping("conv_oh_per_add", MacroInst_Reg_Wire.conv_oh_per_add),
+              FieldMapping("conv_ow_per_add", MacroInst_Reg_Wire.conv_ow_per_add),
+              FieldMapping("conv_oh_index", MacroInst_Reg_Wire.conv_oh_index),
+              FieldMapping("conv_ow_index", MacroInst_Reg_Wire.conv_ow_index)
+            ), io.ygjkctrl.config.bits.cfgData2, cfg2Fields)
 
-
-            MacroInst_Reg_Wire.element_type := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.element_type.getWidth-1,0)
-            MacroInst_Reg_Wire.bias_type := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.bias_type.getWidth-1+8,8)
-            MacroInst_Reg_Wire.transpose_result := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.transpose_result.getWidth-1+16,16)
-            MacroInst_Reg_Wire.conv_stride := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_stride.getWidth-1+24,24)
-            MacroInst_Reg_Wire.conv_oh_max := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_oh_max.getWidth-1+32,32)
-            MacroInst_Reg_Wire.conv_ow_max := io.ygjkctrl.config.bits.cfgData1(MacroInst_Reg_Wire.conv_ow_max.getWidth-1+48,48)
-            MacroInst_Reg_Wire.kernel_size := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.kernel_size.getWidth-1,0)
-            MacroInst_Reg_Wire.conv_oh_per_add := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_oh_per_add.getWidth-1+4,4)
-            MacroInst_Reg_Wire.conv_ow_per_add := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_ow_per_add.getWidth-1+19,19)
-            MacroInst_Reg_Wire.conv_oh_index := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_oh_index.getWidth-1+34,34)
-            MacroInst_Reg_Wire.conv_ow_index := io.ygjkctrl.config.bits.cfgData2(MacroInst_Reg_Wire.conv_ow_index.getWidth-1+49,49)
             MacroInst_Reg_Wire.bias_data_type := PEDataType.CdataByteWidth(MacroInst_Reg_Wire.element_type)
             MacroInst_Reg := MacroInst_Reg_Wire.asUInt
 
-            get_configred := true.B
-        }.elsewhen(funct === 16.U)
+            if(EnablePerfCounter) {get_configred := true.B} 
+        }.elsewhen(funct === CuteInstConfigs.ConfigScaleA.funct.U){
+            MacroInst_Reg_Wire.ApplicationScale_A_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
+            MacroInst_Reg := MacroInst_Reg_Wire.asUInt
+
+            if(EnablePerfCounter) {get_configred := true.B} 
+        }.elsewhen(funct === CuteInstConfigs.ConfigScaleB.funct.U){
+            MacroInst_Reg_Wire.ApplicationScale_B_BaseVaddr := io.ygjkctrl.config.bits.cfgData1
+            MacroInst_Reg := MacroInst_Reg_Wire.asUInt
+
+            if(EnablePerfCounter) {get_configred := true.B} 
+        }.elsewhen(funct === CuteInstConfigs.ClearInst.funct.U)
         {
             if(TaskCtrl_AutoClear)
             {
@@ -396,7 +491,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                     }
                 }   
             }
-        }.elsewhen(funct === 17.U)
+        }.elsewhen(funct === CuteInstConfigs.QueryInst.funct.U)
         {
             //查询当前完成宏指令的尾编号的位置
             io.ygjkctrl.cute_return_val := MacroInst_FIFO_Tail
@@ -405,7 +500,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             {
                 printf("[TaskController<%d>]:Inst Query!  MacroInst_FIFO_Head = %d, MacroInst_FIFO_Tail = %d\n", io.DebugTimeStampe,MacroInst_FIFO_Head, MacroInst_FIFO_Tail)
             }
-        }.elsewhen(funct === 18.U)
+        }.elsewhen(funct === CuteInstConfigs.ReservedInst.funct.U)
         {
         }
     }
@@ -417,7 +512,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
     val Decoding_MarcoInst_Going = RegInit(false.B)
 
-    io.ctrlCounter.InstCanDecode := MarcoInst_Can_Decode
+    if (EnablePerfCounter)
+    {io.ctrlCounter.InstCanDecode := MarcoInst_Can_Decode}
 
     //宏指令译码时，会不断向微指令发射队列发射微指令
     //微指令发射队列，深度为8,4,4
@@ -538,13 +634,13 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             Current_Tile_OW_Index := Decoding_MacroInst.conv_ow_index
             Current_Tile_KH_Index := 0.U
             Current_Tile_KW_Index := 0.U
-            Decode_Tensor_K_iter_Add := (Tensor_K.U / PEDataType.AdataByteWidth(Decoding_MacroInst.element_type))
+            Decode_Tensor_K_iter_Add := ((Tensor_K * 8).U / PEDataType.AdataBitWidth(Decoding_MacroInst.element_type))
             Current_Tile_Tensor_K_Iter := 0.U
             Decoding_MarcoInst_Going := true.B
 
             if (YJPDebugEnable)
             {
-                printf("[TaskController<%d>]:MacroInst Decode Start!  MacroInst_FIFO_Head = %d, MacroInst_FIFO_Tail = %d, Decode_Tensor_K_iter_Add = %d, AdataByteWidth = %d \n",io.DebugTimeStampe, MacroInst_FIFO_Head, MacroInst_FIFO_Tail, Decode_Tensor_K_iter_Add, PEDataType.AdataByteWidth(Decoding_MacroInst.element_type))
+                printf("[TaskController<%d>]:MacroInst Decode Start!  MacroInst_FIFO_Head = %d, MacroInst_FIFO_Tail = %d, Decode_Tensor_K_iter_Add = %d, AdataBitWidth = %d \n",io.DebugTimeStampe, MacroInst_FIFO_Head, MacroInst_FIFO_Tail, Decode_Tensor_K_iter_Add, PEDataType.AdataBitWidth(Decoding_MacroInst.element_type))
             }
         }.otherwise
         {
@@ -553,7 +649,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             val Have_Store_Micro_Inst   = WireInit(false.B)//由宏指令拆解出来的微指令，只在暂存器切换时才发射Store指令
             val Current_ScaratchpadTensor_M = WireInit(Tensor_M.U)
             val Current_ScaratchpadTensor_N = WireInit(Tensor_N.U)
-            val Current_ScaratchpadTensor_K = WireInit(ReduceGroupSize.U)
+            val Current_ScaratchpadTensor_K = WireInit(ReduceGroupSize.U)       // 这个K指的是一个Tensor_K里有几个ReduceWidth长度
 
             val Can_Issue_Load_Micro_Inst = !Load_MicroInst_FIFO_Full
             val Can_Issue_Compute_Micro_Inst = !Compute_MicroInst_FIFO_Full
@@ -564,6 +660,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
             val LoadMicroInst_Have_A_work = WireInit(true.B)//由宏指令拆解出的微指令，每个微指令都有AB的Load任务
             val LoadMicroInst_Have_B_work = WireInit(true.B)//由宏指令拆解出的微指令，每个微指令都有AB的Load任务
+            val LoadMicroInst_Have_A_Scale_work = WireInit(false.B)//由宏指令拆解出的微指令，只有block scale float格式才有AScale的Load任务
+            val LoadMicroInst_Have_B_Scale_work = WireInit(false.B)//由宏指令拆解出的微指令，只有block scale float格式才有BScale的Load任务
             val LoadMicroInst_Have_C_work = WireInit(false.B)//由宏指令拆解出的微指令，只有K/IC迭代完成后才有C的Load任务
 
             val StoreMicroInst_Is_Last_Store = WireInit(false.B)//由宏指令拆解出的微指令，只有最后一次Store任务将指令置位已完成
@@ -607,6 +705,9 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
                 Decode_A_SCP_ID := Mux(Decode_A_SCP_ID === 0.U, 1.U, 0.U)
                 Decode_B_SCP_ID := Mux(Decode_B_SCP_ID === 0.U, 1.U, 0.U)
+
+                LoadMicroInst_Have_A_Scale_work := (Decoding_MacroInst.element_type === ElementDataType.DataTypeMxfp8e4m3F32 || Decoding_MacroInst.element_type === ElementDataType.DataTypeMxfp8e5m2F32 || Decoding_MacroInst.element_type === ElementDataType.DataTypenvfp4F32 || Decoding_MacroInst.element_type === ElementDataType.DataTypemxfp4F32) && Decoding_MacroInst.is_matmul
+                LoadMicroInst_Have_B_Scale_work := (Decoding_MacroInst.element_type === ElementDataType.DataTypeMxfp8e4m3F32 || Decoding_MacroInst.element_type === ElementDataType.DataTypeMxfp8e5m2F32 || Decoding_MacroInst.element_type === ElementDataType.DataTypenvfp4F32 || Decoding_MacroInst.element_type === ElementDataType.DataTypemxfp4F32) && Decoding_MacroInst.is_matmul
                 //迭代生成微指令
                 Current_Tile_K_Iter := Current_Tile_K_Iter + Decode_Tensor_K_iter_Add
                 Current_Tile_Tensor_K_Iter := Current_Tile_Tensor_K_Iter + 1.U
@@ -694,6 +795,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
             Load_MicroInst.Is_A_Work := LoadMicroInst_Have_A_work
             Load_MicroInst.Is_B_Work := LoadMicroInst_Have_B_work
+            Load_MicroInst.Is_A_Scale_Work := LoadMicroInst_Have_A_Scale_work
+            Load_MicroInst.Is_B_Scale_Work := LoadMicroInst_Have_B_Scale_work
             Load_MicroInst.Is_C_Work := LoadMicroInst_Have_C_work
 
             Load_MicroInst.A_SCPID := Decode_A_SCP_ID
@@ -708,6 +811,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
             Load_MicroInst.ApplicationTensor_A.ApplicationTensor_A_BaseVaddr := Decoding_MacroInst.ApplicationTensor_A_BaseVaddr + Current_Tile_Tensor_K_Iter*(ReduceWidthByte*ReduceGroupSize).U  //TODO:初始地址需要改！因为当前的K移动了！
             Load_MicroInst.ApplicationTensor_A.ApplicationTensor_A_Stride_M := Decoding_MacroInst.ApplicationTensor_A_Stride
+            // Load_MicroInst.ApplicationTensor_A.BlockTensor_A_BaseVaddr := Decoding_MacroInst.ApplicationTensor_A_BaseVaddr + Current_Tile_Tensor_K_Iter*(ReduceWidthByte*ReduceGroupSize).U
             Load_MicroInst.ApplicationTensor_A.Convolution_OH_DIM_Length := Decoding_MacroInst.conv_oh_max
             Load_MicroInst.ApplicationTensor_A.Convolution_OW_DIM_Length := Decoding_MacroInst.conv_ow_max
             Load_MicroInst.ApplicationTensor_A.Convolution_KH_DIM_Length := Decoding_MacroInst.kernel_size
@@ -715,15 +819,23 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             Load_MicroInst.ApplicationTensor_A.Convolution_Stride_H := Decoding_MacroInst.conv_stride
             Load_MicroInst.ApplicationTensor_A.Convolution_Stride_W := Decoding_MacroInst.conv_stride
             Load_MicroInst.ApplicationTensor_A.dataType := Decoding_MacroInst.element_type
+
+            Load_MicroInst.ApplicationScale_A.ApplicationScale_A_BaseVaddr := Decoding_MacroInst.ApplicationScale_A_BaseVaddr
+            Load_MicroInst.ApplicationScale_A.BlockScale_A_BaseVaddr := Decoding_MacroInst.ApplicationScale_A_BaseVaddr + Current_ScaratchpadTensor_M * Current_Tile_Tensor_K_Iter * ScaleVecWidth(Decoding_MacroInst.element_type) * ReduceGroupSize.U + Current_Tile_M_Iter * Decoding_MacroInst.Application_K * PEDataType.AdataBitWidth(Decoding_MacroInst.element_type) / ReduceWidth.U * ScaleVecWidth(Decoding_MacroInst.element_type)
+            Load_MicroInst.ApplicationScale_A.dataType := Decoding_MacroInst.element_type
             
             Load_MicroInst.ApplicationTensor_B.ApplicationTensor_B_BaseVaddr := Decoding_MacroInst.ApplicationTensor_B_BaseVaddr
             Load_MicroInst.ApplicationTensor_B.ApplicationTensor_B_Stride_N := Decoding_MacroInst.ApplicationTensor_B_Stride
-            Load_MicroInst.ApplicationTensor_B.BlockTensor_B_BaseVaddr := Decoding_MacroInst.ApplicationTensor_B_BaseVaddr + Current_Tile_K_Iter * PEDataType.AdataByteWidth(Decoding_MacroInst.element_type) + Current_Tile_N_Iter * Decoding_MacroInst.ApplicationTensor_B_Stride + (Current_Tile_KH_Index * Decoding_MacroInst.kernel_size + Current_Tile_KW_Index)*Decoding_MacroInst.kernel_stride //TODO:kernel_conv_stride!!!
+            Load_MicroInst.ApplicationTensor_B.BlockTensor_B_BaseVaddr := Decoding_MacroInst.ApplicationTensor_B_BaseVaddr + Current_Tile_K_Iter * PEDataType.AdataBitWidth(Decoding_MacroInst.element_type) / 8.U + Current_Tile_N_Iter * Decoding_MacroInst.ApplicationTensor_B_Stride + (Current_Tile_KH_Index * Decoding_MacroInst.kernel_size + Current_Tile_KW_Index)*Decoding_MacroInst.kernel_stride //TODO:kernel_conv_stride!!!
             Load_MicroInst.ApplicationTensor_B.Convolution_KH_DIM_Length := Decoding_MacroInst.kernel_size
             Load_MicroInst.ApplicationTensor_B.Convolution_KW_DIM_Length := Decoding_MacroInst.kernel_size
             Load_MicroInst.ApplicationTensor_B.dataType := Decoding_MacroInst.element_type
 
-            Load_MicroInst.ApplicationTensor_C.dataType := PEDataType.CdataByteWidth(Decoding_MacroInst.element_type)
+            Load_MicroInst.ApplicationScale_B.ApplicationScale_B_BaseVaddr := Decoding_MacroInst.ApplicationScale_B_BaseVaddr
+            Load_MicroInst.ApplicationScale_B.BlockScale_B_BaseVaddr := Decoding_MacroInst.ApplicationScale_B_BaseVaddr + Current_ScaratchpadTensor_N * Current_Tile_Tensor_K_Iter * ScaleVecWidth(Decoding_MacroInst.element_type) * ReduceGroupSize.U + Current_Tile_N_Iter * Decoding_MacroInst.Application_K * PEDataType.BdataBitWidth(Decoding_MacroInst.element_type) / ReduceWidth.U * ScaleVecWidth(Decoding_MacroInst.element_type)  //TODO:kernel_conv_stride!!!
+            Load_MicroInst.ApplicationScale_B.dataType := Decoding_MacroInst.element_type
+
+            Load_MicroInst.ApplicationTensor_C.dataType := Decoding_MacroInst.element_type
             Load_MicroInst.ApplicationTensor_C.ApplicationTensor_C_BaseVaddr := Decoding_MacroInst.ApplicationTensor_C_BaseVaddr
             Load_MicroInst.ApplicationTensor_C.ApplicationTensor_C_Stride_M := Decoding_MacroInst.ApplicationTensor_C_Stride
             // Load_MicroInst.ApplicationTensor_C.BlockTensor_C_BaseVaddr := Decoding_MacroInst.ApplicationTensor_C_BaseVaddr + Current_Tile_M_Iter * Decoding_MacroInst.element_type + Current_Tile_N_Iter * Decoding_MacroInst.ApplicationTensor_C_Stride//转置？
@@ -875,11 +987,14 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     val Load_Micro_Inst_Issue_State_Reg = RegInit(issue_state_idle)
     val Load_Micro_Inst_Wait_A_Finish = RegInit(false.B)
     val Load_Micro_Inst_Wait_B_Finish = RegInit(false.B)
+    val Load_Micro_Inst_Wait_A_Scale_Finish = RegInit(false.B)
+    val Load_Micro_Inst_Wait_B_Scale_Finish = RegInit(false.B)
     val Load_Micro_Inst_Wait_C_Finish = RegInit(false.B)
 
-    io.ctrlCounter.ALoad := Load_Micro_Inst_Wait_A_Finish
+    if (EnablePerfCounter)
+    {io.ctrlCounter.ALoad := Load_Micro_Inst_Wait_A_Finish
     io.ctrlCounter.BLoad := Load_Micro_Inst_Wait_B_Finish
-    io.ctrlCounter.CLoad := Load_Micro_Inst_Wait_C_Finish
+    io.ctrlCounter.CLoad := Load_Micro_Inst_Wait_C_Finish}
     when(!Load_MicroInst_FINISH_All)
     {
         val Load_MicroInst = Load_MicroInst_FIFO(Load_MicroInst_FINISH_Head).asTypeOf(new LoadMicroInst)//取出的Load指令
@@ -887,14 +1002,19 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         //发射这条指令，填AML、BML、CML的config输入
         val Can_Issue_AML_Micro_Inst = io.AML_MicroTask_Config.MicroTaskReady && A_SCP_Free(Load_MicroInst.A_SCPID) //缺少ASCP的空闲状态,保证同时任务被发射
         val Can_Issue_BML_Micro_Inst = io.BML_MicroTask_Config.MicroTaskReady && B_SCP_Free(Load_MicroInst.B_SCPID) //缺少BSCP的空闲状态,保证同时任务被发射
+        val Can_Issue_ASL_Micro_Inst = io.ASL_MicroTask_Config.MicroTaskReady && A_SCP_Free(Load_MicroInst.A_SCPID) //缺少ASCP的空闲状态,保证同时任务被发射
+        val Can_Issue_BSL_Micro_Inst = io.BSL_MicroTask_Config.MicroTaskReady && B_SCP_Free(Load_MicroInst.B_SCPID) //缺少BSCP的空闲状态,保证同时任务被发射 
         val Can_Issue_CML_Micro_Inst = io.CML_MicroTask_Config.MicroTaskReady && C_SCP_Free(Load_MicroInst.C_SCPID) //缺少CSCP的空闲状态,保证同时任务被发射
 
         val Need_Issue_AML_Micro_Inst = Load_MicroInst.Is_A_Work
         val Need_Issue_BML_Micro_Inst = Load_MicroInst.Is_B_Work
+        val Need_Issue_ASL_Micro_Inst = Load_MicroInst.Is_A_Scale_Work
+        val Need_Issue_BSL_Micro_Inst = Load_MicroInst.Is_B_Scale_Work
         val Need_Issue_CML_Micro_Inst = Load_MicroInst.Is_C_Work
 
-        val Can_Issue_Load_Micro_Inst = (Can_Issue_AML_Micro_Inst | !Need_Issue_AML_Micro_Inst) && (Can_Issue_BML_Micro_Inst | !Need_Issue_BML_Micro_Inst) && (Can_Issue_CML_Micro_Inst | !Need_Issue_CML_Micro_Inst)
+        val Can_Issue_Load_Micro_Inst = (Can_Issue_AML_Micro_Inst | !Need_Issue_AML_Micro_Inst) && (Can_Issue_BML_Micro_Inst | !Need_Issue_BML_Micro_Inst) && (Can_Issue_BSL_Micro_Inst | !Need_Issue_BSL_Micro_Inst) && (Can_Issue_ASL_Micro_Inst | !Need_Issue_ASL_Micro_Inst) && (Can_Issue_CML_Micro_Inst | !Need_Issue_CML_Micro_Inst)
         // 即need又can，才能发射这条Load微指令
+        printf("[TaskController<%d>]:Can_Issue_AML_Micro_Inst = %d, Can_Issue_BML_Micro_Inst = %d, Can_Issue_CML_Micro_Inst = %d, Need_Issue_AML_Micro_Inst = %d, Need_Issue_BML_Micro_Inst = %d, Need_Issue_CML_Micro_Inst = %d\n", io.DebugTimeStampe, Can_Issue_AML_Micro_Inst, Can_Issue_BML_Micro_Inst, Can_Issue_CML_Micro_Inst, Need_Issue_AML_Micro_Inst, Need_Issue_BML_Micro_Inst, Need_Issue_CML_Micro_Inst)
         if (YJPDebugEnable)
             {
                 printf("[TaskController<%d>]:Can_Issue_AML_Micro_Inst = %d, Can_Issue_BML_Micro_Inst = %d, Can_Issue_CML_Micro_Inst = %d, Need_Issue_AML_Micro_Inst = %d, Need_Issue_BML_Micro_Inst = %d, Need_Issue_CML_Micro_Inst = %d\n", io.DebugTimeStampe, Can_Issue_AML_Micro_Inst, Can_Issue_BML_Micro_Inst, Can_Issue_CML_Micro_Inst, Need_Issue_AML_Micro_Inst, Need_Issue_BML_Micro_Inst, Need_Issue_CML_Micro_Inst)
@@ -911,11 +1031,21 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             io.AML_MicroTask_Config.Convolution_Current_OW_Index := Load_MicroInst.Convolution_Current_OW_Index
             io.AML_MicroTask_Config.ScaratchpadTensor_M := Load_MicroInst.ScaratchpadTensor_M
             io.AML_MicroTask_Config.ScaratchpadTensor_K := Load_MicroInst.ScaratchpadTensor_K
+
+            io.ASL_MicroTask_Config.ApplicationScale_A := Load_MicroInst.ApplicationScale_A
+            io.ASL_MicroTask_Config.Conherent        := Load_MicroInst.ConherentA
+            io.ASL_MicroTask_Config.ScaratchpadTensor_M := Load_MicroInst.ScaratchpadTensor_M
+            io.ASL_MicroTask_Config.ScaratchpadTensor_K := Load_MicroInst.ScaratchpadTensor_K
             
             io.BML_MicroTask_Config.ApplicationTensor_B := Load_MicroInst.ApplicationTensor_B
             io.BML_MicroTask_Config.Conherent        := Load_MicroInst.ConherentB
             io.BML_MicroTask_Config.ScaratchpadTensor_K := Load_MicroInst.ScaratchpadTensor_K
             io.BML_MicroTask_Config.ScaratchpadTensor_N := Load_MicroInst.ScaratchpadTensor_N
+
+            io.BSL_MicroTask_Config.ApplicationScale_B := Load_MicroInst.ApplicationScale_B
+            io.BSL_MicroTask_Config.Conherent        := Load_MicroInst.ConherentB
+            io.BSL_MicroTask_Config.ScaratchpadTensor_K := Load_MicroInst.ScaratchpadTensor_K
+            io.BSL_MicroTask_Config.ScaratchpadTensor_N := Load_MicroInst.ScaratchpadTensor_N
             
             io.CML_MicroTask_Config.ApplicationTensor_C := Load_MicroInst.ApplicationTensor_C
             io.CML_MicroTask_Config.Conherent        := Load_MicroInst.ConherentC
@@ -937,11 +1067,15 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
             io.AML_MicroTask_Config.MicroTaskValid := Need_Issue_AML_Micro_Inst
             io.BML_MicroTask_Config.MicroTaskValid := Need_Issue_BML_Micro_Inst
+            io.ASL_MicroTask_Config.MicroTaskValid := Need_Issue_ASL_Micro_Inst
+            io.BSL_MicroTask_Config.MicroTaskValid := Need_Issue_BSL_Micro_Inst
             io.CML_MicroTask_Config.MicroTaskValid := Need_Issue_CML_Micro_Inst
 
             Load_Micro_Inst_Issue_State_Reg := issue_state_issue
             Load_Micro_Inst_Wait_A_Finish := Need_Issue_AML_Micro_Inst
             Load_Micro_Inst_Wait_B_Finish := Need_Issue_BML_Micro_Inst
+            Load_Micro_Inst_Wait_A_Scale_Finish := Need_Issue_ASL_Micro_Inst
+            Load_Micro_Inst_Wait_B_Scale_Finish := Need_Issue_BSL_Micro_Inst
             Load_Micro_Inst_Wait_C_Finish := Need_Issue_CML_Micro_Inst
 
             Will_Issuse_CML_Load := Need_Issue_CML_Micro_Inst
@@ -957,6 +1091,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             //等待这条指令完成
             io.AML_MicroTask_Config.MicroTaskEndReady := Load_Micro_Inst_Wait_A_Finish
             io.BML_MicroTask_Config.MicroTaskEndReady := Load_Micro_Inst_Wait_B_Finish
+            io.ASL_MicroTask_Config.MicroTaskEndReady := Load_Micro_Inst_Wait_A_Scale_Finish
+            io.BSL_MicroTask_Config.MicroTaskEndReady := Load_Micro_Inst_Wait_B_Scale_Finish
             io.CML_MicroTask_Config.MicroTaskEndReady := Load_Micro_Inst_Wait_C_Finish
             when(Load_Micro_Inst_Wait_A_Finish && io.AML_MicroTask_Config.MicroTaskEndValid)
             {
@@ -974,6 +1110,22 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                     printf("[TaskController<%d>]:Load MicroInst B Finish! \n",io.DebugTimeStampe)
                 }
             }
+            when(Load_Micro_Inst_Wait_A_Scale_Finish && io.ASL_MicroTask_Config.MicroTaskEndValid)
+            {
+                Load_Micro_Inst_Wait_A_Scale_Finish := false.B
+                if(YJPDebugEnable)
+                {
+                    printf("[TaskController<%d>]:Load MicroInst A Scale Finish! \n",io.DebugTimeStampe)
+                }
+            }
+            when(Load_Micro_Inst_Wait_B_Scale_Finish && io.BSL_MicroTask_Config.MicroTaskEndValid)
+            {
+                Load_Micro_Inst_Wait_B_Scale_Finish := false.B
+                if(YJPDebugEnable)
+                {
+                    printf("[TaskController<%d>]:Load MicroInst B Scale Finish! \n",io.DebugTimeStampe)
+                }
+            }
             when(Load_Micro_Inst_Wait_C_Finish && io.CML_MicroTask_Config.MicroTaskEndValid)
             {
                 Load_Micro_Inst_Wait_C_Finish := false.B
@@ -982,7 +1134,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                     printf("[TaskController<%d>]:Load MicroInst C Finish! \n",io.DebugTimeStampe)
                 }
             }
-            when(!Load_Micro_Inst_Wait_A_Finish && !Load_Micro_Inst_Wait_B_Finish && !Load_Micro_Inst_Wait_C_Finish)
+            when(!Load_Micro_Inst_Wait_A_Finish && !Load_Micro_Inst_Wait_B_Finish && !Load_Micro_Inst_Wait_A_Scale_Finish && !Load_Micro_Inst_Wait_B_Scale_Finish && !Load_Micro_Inst_Wait_C_Finish)
             {
                 Load_MicroInst_FINISH_Head := WrapInc(Load_MicroInst_FINISH_Head, 4)
                 Load_MicroInst_FINISH_Ready_GO(Load_MicroInst_FINISH_Head) := true.B
@@ -1011,12 +1163,15 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     val Compute_Micro_Inst_Issue_State_Reg = RegInit(issue_state_idle)
     val Compute_Micro_Inst_Wait_A_Finish = RegInit(false.B)
     val Compute_Micro_Inst_Wait_B_Finish = RegInit(false.B)
+    val Compute_Micro_Inst_Wait_A_Scale_Finish = RegInit(false.B)
+    val Compute_Micro_Inst_Wait_B_Scale_Finish = RegInit(false.B)
     val Compute_Micro_Inst_Wait_C_Finish = RegInit(false.B)
     val Compute_Micro_Inst_Wait_Aop_Finish = RegInit(false.B)
 
-    io.ctrlCounter.AOPBusy := Compute_Micro_Inst_Wait_Aop_Finish
+    if (EnablePerfCounter)
+    {io.ctrlCounter.AOPBusy := Compute_Micro_Inst_Wait_Aop_Finish
     io.ctrlCounter.computeInstQueueEmpty := Compute_MicroInst_FINISH_All 
-    io.ctrlCounter.computeInstCanIssue := false.B
+    io.ctrlCounter.computeInstCanIssue := false.B}
 
     when(!Compute_MicroInst_FINISH_All)
     {
@@ -1025,14 +1180,19 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
         val Dependent_Load_Finish_Ready_Go = Load_MicroInst_FINISH_Ready_GO(Compute_MicroInst_Resource_Info.Load_Micro_Inst_FIFO_Index)
 
+        val Is_Block_Scale = Compute_MicroInst.DataType === ElementDataType.DataTypeMxfp8e4m3F32 || Compute_MicroInst.DataType === ElementDataType.DataTypeMxfp8e5m2F32 || Compute_MicroInst.DataType === ElementDataType.DataTypenvfp4F32 || Compute_MicroInst.DataType === ElementDataType.DataTypemxfp4F32
+
         val Can_Issue_ADC_Micro_Inst = io.ADC_MicroTask_Config.MicroTaskReady //缺少ASCP的空闲状态,保证同时任务被发射
         val Can_Issue_BDC_Micro_Inst = io.BDC_MicroTask_Config.MicroTaskReady //缺少BSCP的空闲状态,保证同时任务被发射
+        val Can_Issue_ASC_Micro_Inst = io.ASC_MicroTask_Config.MicroTaskReady
+        val Can_Issue_BSC_Micro_Inst = io.BSC_MicroTask_Config.MicroTaskReady
         val Can_Issue_CDC_Micro_Inst = io.CDC_MicroTask_Config.MicroTaskReady //缺少CSCP的空闲状态,保证同时任务被发射
         val Can_Issue_AOP_Micro_Inst = true.B
 
-        val Can_Issue_Compute_Micro_Inst = Can_Issue_ADC_Micro_Inst && Can_Issue_BDC_Micro_Inst && Can_Issue_CDC_Micro_Inst && Dependent_Load_Finish_Ready_Go && Can_Issue_AOP_Micro_Inst
+        val Can_Issue_Compute_Micro_Inst = Can_Issue_ADC_Micro_Inst && Can_Issue_BDC_Micro_Inst && (!Is_Block_Scale || (Can_Issue_BSC_Micro_Inst && Can_Issue_ASC_Micro_Inst)) && Can_Issue_CDC_Micro_Inst && Dependent_Load_Finish_Ready_Go && Can_Issue_AOP_Micro_Inst
 
-        io.ctrlCounter.computeInstCanIssue := Can_Issue_Compute_Micro_Inst && Compute_Micro_Inst_Issue_State_Reg === issue_state_idle
+        if (EnablePerfCounter)
+        {io.ctrlCounter.computeInstCanIssue := Can_Issue_Compute_Micro_Inst && Compute_Micro_Inst_Issue_State_Reg === issue_state_idle}
 
         // if (YJPDebugEnable)
         // {
@@ -1050,10 +1210,20 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             io.ADC_MicroTask_Config.ScaratchpadTensor_K := Compute_MicroInst.ScaratchpadTensor_K
             io.ADC_MicroTask_Config.ApplicationTensor_A.dataType := Compute_MicroInst.DataType_A //TODO:需要修改
 
+            io.ASC_MicroTask_Config.ScaratchpadTensor_M := Compute_MicroInst.ScaratchpadTensor_M
+            io.ASC_MicroTask_Config.ScaratchpadTensor_N := Compute_MicroInst.ScaratchpadTensor_N
+            io.ASC_MicroTask_Config.ScaratchpadTensor_K := Compute_MicroInst.ScaratchpadTensor_K
+            io.ASC_MicroTask_Config.ApplicationTensor_A.dataType := Compute_MicroInst.DataType //TODO:需要修改
+
             io.BDC_MicroTask_Config.ScaratchpadTensor_M := Compute_MicroInst.ScaratchpadTensor_M
             io.BDC_MicroTask_Config.ScaratchpadTensor_N := Compute_MicroInst.ScaratchpadTensor_N
             io.BDC_MicroTask_Config.ScaratchpadTensor_K := Compute_MicroInst.ScaratchpadTensor_K
             io.BDC_MicroTask_Config.ApplicationTensor_B.dataType := Compute_MicroInst.DataType_B //TODO:需要修改
+
+            io.BSC_MicroTask_Config.ScaratchpadTensor_M := Compute_MicroInst.ScaratchpadTensor_M
+            io.BSC_MicroTask_Config.ScaratchpadTensor_N := Compute_MicroInst.ScaratchpadTensor_N
+            io.BSC_MicroTask_Config.ScaratchpadTensor_K := Compute_MicroInst.ScaratchpadTensor_K
+            io.BSC_MicroTask_Config.ApplicationTensor_B.dataType := Compute_MicroInst.DataType //TODO:需要修改
 
             io.CDC_MicroTask_Config.ScaratchpadTensor_M := Compute_MicroInst.ScaratchpadTensor_M
             io.CDC_MicroTask_Config.ScaratchpadTensor_N := Compute_MicroInst.ScaratchpadTensor_N
@@ -1081,6 +1251,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
             io.ADC_MicroTask_Config.MicroTaskValid := true.B
             io.BDC_MicroTask_Config.MicroTaskValid := true.B
+            io.ASC_MicroTask_Config.MicroTaskValid := Is_Block_Scale
+            io.BSC_MicroTask_Config.MicroTaskValid := Is_Block_Scale
             io.CDC_MicroTask_Config.MicroTaskValid := true.B
             // io.MTE_MicroTask_Config.valid := true.B
             // io.AOP_MicroTask_Config.MicroTaskValid := Compute_MicroInst.Have_Aops
@@ -1092,6 +1264,9 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             Compute_Micro_Inst_Issue_State_Reg := issue_state_issue
             Compute_Micro_Inst_Wait_A_Finish := true.B
             Compute_Micro_Inst_Wait_B_Finish := true.B
+            Compute_Micro_Inst_Wait_A_Scale_Finish := Is_Block_Scale
+            Compute_Micro_Inst_Wait_B_Scale_Finish := Is_Block_Scale
+
             Compute_Micro_Inst_Wait_C_Finish := true.B
             Compute_Micro_Inst_Wait_Aop_Finish := Compute_MicroInst.Have_Aops
 
@@ -1107,6 +1282,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         {
             io.ADC_MicroTask_Config.MicroTaskEndReady := Compute_Micro_Inst_Wait_A_Finish
             io.BDC_MicroTask_Config.MicroTaskEndReady := Compute_Micro_Inst_Wait_B_Finish
+            io.ASC_MicroTask_Config.MicroTaskEndReady := Compute_Micro_Inst_Wait_A_Scale_Finish
+            io.BSC_MicroTask_Config.MicroTaskEndReady := Compute_Micro_Inst_Wait_B_Scale_Finish
             io.CDC_MicroTask_Config.MicroTaskEndReady := Compute_Micro_Inst_Wait_C_Finish
             io.AOP_MicroTask_Config.MicroTaskEndReady := Compute_Micro_Inst_Wait_Aop_Finish
             when(Compute_Micro_Inst_Wait_A_Finish && io.ADC_MicroTask_Config.MicroTaskEndValid)
@@ -1127,6 +1304,22 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                 }
                 B_SCP_Free(Current_BDC_SCP_ID) := true.B
             }
+            when(Compute_Micro_Inst_Wait_A_Scale_Finish && io.ASC_MicroTask_Config.MicroTaskEndValid)
+            {
+                Compute_Micro_Inst_Wait_A_Scale_Finish := false.B
+                if(YJPDebugEnable)
+                {
+                    printf("[TaskController<%d>]:Compute MicroInst A Scale Finish! \n",io.DebugTimeStampe)
+                }
+            }
+            when(Compute_Micro_Inst_Wait_B_Scale_Finish && io.BSC_MicroTask_Config.MicroTaskEndValid)
+            {
+                Compute_Micro_Inst_Wait_B_Scale_Finish := false.B
+                if(YJPDebugEnable)
+                {
+                    printf("[TaskController<%d>]:Compute MicroInst B Scale Finish! \n",io.DebugTimeStampe)
+                }
+            }
             when(Compute_Micro_Inst_Wait_C_Finish && io.CDC_MicroTask_Config.MicroTaskEndValid)
             {
                 Compute_Micro_Inst_Wait_C_Finish := false.B
@@ -1143,7 +1336,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                     printf("[TaskController<%d>]:Compute MicroInst Aop Finish! \n",io.DebugTimeStampe)
                 }
             }
-            when(!Compute_Micro_Inst_Wait_A_Finish && !Compute_Micro_Inst_Wait_B_Finish && !Compute_Micro_Inst_Wait_C_Finish)
+            when(!Compute_Micro_Inst_Wait_A_Finish && !Compute_Micro_Inst_Wait_B_Finish && !Compute_Micro_Inst_Wait_C_Finish && !Compute_Micro_Inst_Wait_B_Scale_Finish && !Compute_Micro_Inst_Wait_A_Scale_Finish)
             {
                 Compute_MicroInst_FINISH_HEAD := WrapInc(Compute_MicroInst_FINISH_HEAD, 4)
                 Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FINISH_HEAD) := true.B
@@ -1183,7 +1376,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     val Store_Micro_Inst_Issue_State_Reg = RegInit(issue_state_idle)
     val Store_Micro_Inst_Wait_C_Finish = RegInit(false.B)
     val Store_Micro_Inst_Is_Last_Store = RegInit(false.B)
-    io.ctrlCounter.DStore := Store_Micro_Inst_Wait_C_Finish
+    if (EnablePerfCounter)
+    {io.ctrlCounter.DStore := Store_Micro_Inst_Wait_C_Finish}
     when(!Store_MicroInst_FIFO_Empty)
     {
         val Store_MicroInst = Store_MicroInst_FIFO(Store_MicroInst_FIFO_Tail).asTypeOf(new StoreMicroInst)//取出的Store指令

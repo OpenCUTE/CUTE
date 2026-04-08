@@ -83,6 +83,7 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
     val Is_FullLoad = RegInit(false.B)
     val Is_RepeatRowLoad = RegInit(false.B)
 
+    val C_DataWidth = RegInit(0.U(ElementDataType.DataTypeBitWidth.W))
     val C_DataType = RegInit(0.U(ElementDataType.DataTypeBitWidth.W))
     val D_DataType = RegInit(0.U(ElementDataType.DataTypeBitWidth.W))
 
@@ -101,11 +102,14 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
                 Is_ZeroLoad := io.ConfigInfo.LoadTaskInfo.Is_ZeroLoad
                 Is_FullLoad := io.ConfigInfo.LoadTaskInfo.Is_FullLoad
                 Is_RepeatRowLoad := io.ConfigInfo.LoadTaskInfo.Is_RepeatRowLoad
+                
 
+                var PEDataType = new FReducePEDataType
+                C_DataWidth := PEDataType.CdataByteWidth(io.ConfigInfo.ApplicationTensor_C.dataType)
                 C_DataType := io.ConfigInfo.ApplicationTensor_C.dataType
                 if(YJPCMLDebugEnable)
                 {
-                    printf("[CMemoryLoader_Load<%d>]Load C Tensor Start, Tensor_Block_BaseAddr: %x, ApplicationTensor_C_Stride_M: %x, IsConherent: %x,ScaratchpadTensor_M: %x,ScaratchpadTensor_N: %x,C_DataType(zero,full,repeatrow) :(%d,%d,%d)\n", io.DebugInfo.DebugTimeStampe, io.ConfigInfo.ApplicationTensor_C.BlockTensor_C_BaseVaddr, io.ConfigInfo.ApplicationTensor_C.ApplicationTensor_C_Stride_M, io.ConfigInfo.Conherent,io.ConfigInfo.ScaratchpadTensor_M,io.ConfigInfo.ScaratchpadTensor_N,io.ConfigInfo.LoadTaskInfo.Is_ZeroLoad.asUInt,io.ConfigInfo.LoadTaskInfo.Is_FullLoad.asUInt,io.ConfigInfo.LoadTaskInfo.Is_RepeatRowLoad.asUInt)
+                    printf("[CMemoryLoader_Load<%d>]Load C Tensor Start, Tensor_Block_BaseAddr: %x, ApplicationTensor_C_Stride_M: %x, IsConherent: %x,ScaratchpadTensor_M: %x,ScaratchpadTensor_N: %x,C_DataWidth(zero,full,repeatrow) :(%d,%d,%d)\n", io.DebugInfo.DebugTimeStampe, io.ConfigInfo.ApplicationTensor_C.BlockTensor_C_BaseVaddr, io.ConfigInfo.ApplicationTensor_C.ApplicationTensor_C_Stride_M, io.ConfigInfo.Conherent,io.ConfigInfo.ScaratchpadTensor_M,io.ConfigInfo.ScaratchpadTensor_N,io.ConfigInfo.LoadTaskInfo.Is_ZeroLoad.asUInt,io.ConfigInfo.LoadTaskInfo.Is_FullLoad.asUInt,io.ConfigInfo.LoadTaskInfo.Is_RepeatRowLoad.asUInt)
                 }
 
             }.elsewhen(io.ConfigInfo.IsLoadMicroTask === false.B && io.ConfigInfo.IsStoreMicroTask === true.B){
@@ -267,7 +271,7 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
             val RequestScratchpadBankId = (CurrentLoaded_BlockTensor_M_Iter + Request_M_Iter_Time) % CScratchpadNBanks.U //访存请求落在哪个ScratchpadBank上
             val RequestScratchpadAddr = (CurrentLoaded_BlockTensor_M_Iter / CScratchpadNBanks.U * ScaratchpadTensor_N / Matrix_M.U) + (CurrentLoaded_BlockTensor_N_Iter / Matrix_M.U) //该访存请求的第零号数据，落在哪个ScratchpadBank的哪个地址上
             
-            ReadRequest.bits.RequestVirtualAddr := Tensor_Block_BaseAddr + (CurrentLoaded_BlockTensor_M_Iter + Request_M_Iter_Time) * ApplicationTensor_C_Stride_M + CurrentLoaded_BlockTensor_N_Iter * C_DataType
+            ReadRequest.bits.RequestVirtualAddr := Tensor_Block_BaseAddr + (CurrentLoaded_BlockTensor_M_Iter + Request_M_Iter_Time) * ApplicationTensor_C_Stride_M + CurrentLoaded_BlockTensor_N_Iter * C_DataWidth
             
             // val CurrentBankID = RequestScratchpadBankId
             // val CurrentFIFOIndex = FromMemoryLoaderReadFIFOHead
@@ -290,8 +294,8 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
                 Request_M_Iter_Time := Request_M_Iter_Time + 1.U//连续的跨bank去访存
                 when(Request_M_Iter_Time === (Matrix_M - 1).U || (CurrentLoaded_BlockTensor_M_Iter + Request_M_Iter_Time) === ScaratchpadTensor_M - 1.U){
                     Request_M_Iter_Time := 0.U
-                    CurrentLoaded_BlockTensor_N_Iter := CurrentLoaded_BlockTensor_N_Iter + outsideDataWidthByte.U / C_DataType
-                    when(CurrentLoaded_BlockTensor_N_Iter + outsideDataWidthByte.U / C_DataType === ScaratchpadTensor_N){
+                    CurrentLoaded_BlockTensor_N_Iter := CurrentLoaded_BlockTensor_N_Iter + outsideDataWidthByte.U / C_DataWidth
+                    when(CurrentLoaded_BlockTensor_N_Iter + outsideDataWidthByte.U / C_DataWidth === ScaratchpadTensor_N){
                         CurrentLoaded_BlockTensor_N_Iter := 0.U
                         CurrentLoaded_BlockTensor_M_Iter := CurrentLoaded_BlockTensor_M_Iter + Matrix_M.U
                     }
@@ -443,11 +447,11 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
         {
             //由于RepeatRowLoad的特殊性，我们一次Load需要写SCP很多次,导致我们的FIFO在被写满时，会导致长时间的TL无法握手。
             //故，我们针对这样的情况，我们需要为每一个发出的访存请求预留一个FIFO的空位，这样就可以保证TL握手成功，从而不浪费访存带宽，这样可能会导致整体延迟增加(但不会低到阻碍吞吐)，但我们的访存带宽利用率一定不会低
-            //获取整个Row的数据，然后重复填充，Row的总数据量为Tensor_N*C_DataType
+            //获取整个Row的数据，然后重复填充，Row的总数据量为Tensor_N*C_DataWidth
             val sourceId = Mux(IsConherent,io.LocalMMUIO.ConherentRequsetSourceID,io.LocalMMUIO.nonConherentRequsetSourceID)
-            val Max_RepeatRowLoad_Memory_Load_Times = Tensor_N.U * C_DataType / outsideDataWidthByte.U //总共要发出的访存请求的次数
+            val Max_RepeatRowLoad_Memory_Load_Times = Tensor_N.U * C_DataWidth / outsideDataWidthByte.U //总共要发出的访存请求的次数
             val Max_SCP_Write_Times = Tensor_M*Tensor_N*ResultWidthByte/CScratchpad_Total_Bandwidth //总共要写入SCP的次数
-            ReadRequest.bits.RequestVirtualAddr := Tensor_Block_BaseAddr +  CurrentLoaded_BlockTensor_N_Iter * C_DataType
+            ReadRequest.bits.RequestVirtualAddr := Tensor_Block_BaseAddr +  CurrentLoaded_BlockTensor_N_Iter * C_DataWidth
             ReadRequest.bits.RequestConherent := IsConherent
             ReadRequest.bits.RequestSourceID := sourceId.bits
             ReadRequest.bits.RequestType_isWrite := false.B
@@ -459,7 +463,7 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
             val Per_Memory_Load_Have_Data_Write_Group = (outsideDataWidthByte/CScratchpadEntryByteSize)//每次Memory的load，有几组数据要写回
             val Per_Write_SCP_Addr_Add = (Tensor_N / Matrix_N).U //一组数据Per_Data_Repeat_Times迭代中，下一次写入的scp地址的增量
 
-            // val Load_Time = CurrentLoaded_BlockTensor_N_Iter / (outsideDataWidthByte.U/C_DataType)
+            // val Load_Time = CurrentLoaded_BlockTensor_N_Iter / (outsideDataWidthByte.U/C_DataWidth)
 
             //向量的访存顺序
             //01,23,45,67.....
@@ -488,7 +492,7 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
                 TableItem.ScratchpadAddr := TotalRequestSize * Per_Memory_Load_Have_Data_Write_Group.U//这个数据的第一个数据，落在哪个ScratchpadBank的哪个地址上
                 SoureceIdSearchTable(sourceId.bits) := TableItem.asUInt
 
-                CurrentLoaded_BlockTensor_N_Iter := CurrentLoaded_BlockTensor_N_Iter + outsideDataWidthByte.U / C_DataType
+                CurrentLoaded_BlockTensor_N_Iter := CurrentLoaded_BlockTensor_N_Iter + outsideDataWidthByte.U / C_DataWidth
                 Repeat_Fill_Request_Infight := Repeat_Fill_Request_Infight + 1.U
                 if (YJPCMLDebugEnable)
                 {

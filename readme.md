@@ -92,9 +92,9 @@ Use `scripts/setup-get-rvv-toolchain.sh` to install the RISC-V toolchain.
 RVV toolchain is set up at: .....
 ```
 
-Then, with `scripts/build-cute-test.sh`, you can compile various bare-metal binaries that can be executed on the Verilator simulator. 
+Then, with `scripts/build-cute-test.sh`, you can compile various bare-metal binaries that can be executed on the Verilator simulator.
 
-```bash 
+```bash
 $ ./scripts/build-test.sh
 [CUTE-Test-Generate-step-1] Script absolute path: .....
 [CUTE-Test-Generate-step-1] CUTE root absolute path: .....
@@ -139,6 +139,7 @@ All test programs are located at: .....
 For the detailed compilation process and the corresponding execution flow, please refer to the C files and Makefiles in the specific folders.
 
 ⚠️ If you want to run the `rvv+tcm+CUTE` workload, like `resnet50`, `bert`, `llama`, you need to build the specific simulator, which has TCM and RVV (like this config `CUTE4TopsShuttle512D512V512M512Sysbus512Membus1CoreConfig`).
+
 
 
 ## Run Programs by Simulation
