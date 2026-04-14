@@ -8,6 +8,7 @@ CUTE is an CPU-centric and Ultra-utilized Tensor Engine project.
 ## Publications
 
 [CUTE: A scalable CPU-centric and Ultra-utilized Tensor Engine for convolutions](https://www.sciencedirect.com/science/article/pii/S1383762124000432)
+[CUTEv2: Unified and Configurable Matrix Extension for Diverse CPU Architectures with Minimal Design Overhead](https://arxiv.org/abs/2604.11615)
 
 Paper PDF | IEEE Xplore | BibTeX | Presentation Slides | Presentation Video
 
