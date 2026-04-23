@@ -45,6 +45,9 @@ class ASourceIdSearch(implicit p: Parameters) extends CuteBundle{
 //1.计算IH、IW是否超界，如果超界，需要进行0填充，而不是发出访存请求(这里可能是时序不满足的点，如果不满足，可以提前就算好)
 //2.0填充的逻辑，需要单独处理，需要找机会和某一次写回合并。故需要一个NACK寄存器来记录哪个bank此刻有ZeroFill任务，如果无法记录NACK任务，则停止发出访存请求，直到有空闲的bank
 
+
+
+
 class AMemoryLoader(implicit p: Parameters) extends CuteModule{
     val io = IO(new Bundle{
         //先整一个ScarchPad的接口的总体设计
@@ -53,7 +56,7 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
         val LocalMMUIO = Flipped(new LocalMMUIO)
         val DebugInfo = Input(new DebugInfoIO)
     })
-    //TODO:init
+
     io.ToScarchPadIO.BankAddr := 0.U.asTypeOf(io.ToScarchPadIO.BankAddr)
     io.ToScarchPadIO.BankId.valid := false.B
     io.ToScarchPadIO.BankId.bits := 0.U
@@ -67,11 +70,12 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
     io.ConfigInfo.MicroTaskReady := false.B
 
 
-    val ScaratchpadBankAddr = io.ToScarchPadIO.BankAddr
-    val ScaratchpadData = io.ToScarchPadIO.Data
+    //val ScaratchpadBankAddr = io.ToScarchPadIO.BankAddr
+    //val ScaratchpadData = io.ToScarchPadIO.Data
 
     val ConfigInfo = io.ConfigInfo
-
+    //TODO：对conv及mm的缓存变量进行初始化
+    when(ConfigInfo.isconv){
     val Tensor_A_BaseVaddr = RegInit(0.U(MMUAddrWidth.W))
     val Tensor_Block_BaseAddr = Reg(UInt(MMUAddrWidth.W)) //分块矩阵的基地址
 
@@ -133,6 +137,7 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
         ConfigInfo.MicroTaskReady := true.B
         when(ConfigInfo.MicroTaskReady && ConfigInfo.MicroTaskValid){
             //当前配置的指令有效
+            //TODO:这里加入选择逻辑，对conv和mm分别进行config填充
             state := s_mm_task
             memoryload_state := s_load_init
             ScaratchpadTensor_M := ConfigInfo.ScaratchpadTensor_M
@@ -227,11 +232,10 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
     val MaxBlockTensor_M_Index = ScaratchpadTensor_M / Matrix_M.U * Matrix_M.U + ((ScaratchpadTensor_M % Matrix_M.U) =/= 0.U) * 4.U
     val MaxBlockTensor_K_Index = ScaratchpadTensor_K
 
-    val Init_Current_M_BaseAddr = RegInit(0.U((MMUAddrWidth).W))//当前M不动的情况下的基地指
+    val Init_Current_M_BaseAddr = RegInit(0.U((MMUAddrWidth).W))//当前M不动的情况下的基地址
     
 
     val Request = io.LocalMMUIO.Request
-
     val Current_IH_Index_U = Current_IH_Index(log2Ceil(ConvolutionDIM_Max)-1,0)
     val Current_IW_Index_U = Current_IW_Index(log2Ceil(ConvolutionDIM_Max)-1,0)
     val Next_IW = Current_IW_Index + Cat(0.U,Convolution_Stride_W).asSInt
@@ -266,6 +270,8 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
         
     }.elsewhen(memoryload_state === s_load_working){
         //根据不同的MemoryOrder，执行不同的访存模式
+
+        //TODO:通过isconv逻辑分开
 
         //Is_invalid_IH_IW 需要单独处理，找机会和某一次写回合并！根据此刻某个bank是否被占用来偷时点
 
@@ -307,7 +313,7 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
         //
         // 在内存中的排布则是 0 1 2 3 4 5 6 7 8 9 a b c d e f g h i j k l m n o p q r s t u v w x y z .......
 
-        when(Request.fire && sourceId.valid && !Is_invalid_IH_IW && !Finish_Decode_Load_Request){
+        when(Request.fire && sourceId.valid && !Is_invalid_IH_IW && !Finish_Decode_Load_Request){ 
             val TableItem = Wire(new ASourceIdSearch)
             TableItem.ScratchpadBankId := CurrentLoaded_BlockTensor_M % AScratchpadNBanks.U
             TableItem.ScratchpadAddr := ((CurrentLoaded_BlockTensor_M / AScratchpadNBanks.U) * ReduceGroupSize.U) + CurrentLoaded_BlockTensor_K
@@ -338,6 +344,10 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
                 {
                     CurrentLoaded_BlockTensor_M := 0.U
                     CurrentLoaded_BlockTensor_K := CurrentLoaded_BlockTensor_K + MAX_Fill_Times.U
+                    //由于一次内存返回的数据太宽，scp一次写入的数据应该等于compute模块一次消费的数据(entrybyte)
+                    //MAX_Fill_Times = outsideDataWidthByte / AScratchpadEntryByteSize，每次load要写多少次
+                    //CurrentLoaded_BlockTensor_K 并不是通道 K 的真实 index.它表示：当前已经 load 到第几个 K-block（通道块）了
+                    //每个 K-block 的大小  = ReduceGroupSize
                     Convolution_Current_OH_Index := Init_Convolution_Current_OH_Index
                     Convolution_Current_OW_Index := Init_Convolution_Current_OW_Index
                     Current_IH_Index := Init_IH_DIM_Length
@@ -669,6 +679,245 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
         }
     }.otherwise{
 
+    }
+    }.elsewhen(ConfigInfo.isconv === 0.U)
+    {
+    val ScaratchpadTensor_M = RegInit(0.U(ScaratchpadMaxTensorDimBitSize.W))
+    val ScaratchpadTensor_K = RegInit(0.U(ScaratchpadMaxTensorDimBitSize.W))
+
+    val Tensor_A_BaseVaddr = RegInit(0.U(MMUAddrWidth.W))
+    val ApplicationTensor_A_Stride_M = RegInit(0.U(MMUAddrWidth.W))
+
+    // -------------------------
+    // 状态机
+    // -------------------------
+    val s_idle :: s_mm_task :: Nil = Enum(2)
+    val state = RegInit(s_idle)
+
+    val s_load_idle :: s_load_init :: s_load_working :: s_load_end :: Nil = Enum(4)
+    val memoryload_state = RegInit(s_load_idle)
+
+    val Tensor_Block_BaseAddr = Reg(UInt(MMUAddrWidth.W))
+    val Conherent = RegInit(true.B)
+
+    // -------------------------
+    // 接收配置
+    // -------------------------
+    when(state === s_idle){
+        io.ConfigInfo.MicroTaskReady := true.B
+
+        when(io.ConfigInfo.MicroTaskReady && io.ConfigInfo.MicroTaskValid){
+            state := s_mm_task
+            memoryload_state := s_load_init
+
+            ScaratchpadTensor_M := io.ConfigInfo.ScaratchpadTensor_M
+            ScaratchpadTensor_K := io.ConfigInfo.ScaratchpadTensor_K
+
+            Tensor_A_BaseVaddr := io.ConfigInfo.ApplicationTensor_A.ApplicationTensor_A_BaseVaddr
+            Tensor_Block_BaseAddr := io.ConfigInfo.ApplicationTensor_A.BlockTensor_A_BaseVaddr
+
+            ApplicationTensor_A_Stride_M := io.ConfigInfo.ApplicationTensor_A.ApplicationTensor_A_Stride_M
+            Conherent := io.ConfigInfo.Conherent
+        }
+    }
+
+    // -------------------------
+    // A 的 M×K 扫描计数器
+    // -------------------------
+    val CurrentLoaded_BlockTensor_M = RegInit(0.U(ScaratchpadMaxTensorDimBitSize.W))
+    val CurrentLoaded_BlockTensor_K = RegInit(0.U(ScaratchpadMaxTensorDimBitSize.W))
+
+    val MaxBlockTensor_M_Index = ScaratchpadTensor_M
+    val MaxBlockTensor_K_Index = ScaratchpadTensor_K
+
+    // -------------------------
+    // SourceID → Scratchpad 地址映射表
+    // -------------------------
+    val SoureceIdSearchTable = RegInit(VecInit(Seq.fill(SoureceMaxNum)(0.U((new ASourceIdSearch).getWidth.W))))
+
+    // -------------------------
+    // Fill Table（与 BMemoryLoader 完全一致）
+    // -------------------------
+    val SCP_Fill_Table = RegInit(VecInit(Seq.fill(AMemoryLoaderReadFromMemoryFIFODepth)(0.U(outsideDataWidth.W))))
+    val SCP_Fill_Table_SCP_Addr = RegInit(VecInit(Seq.fill(AMemoryLoaderReadFromMemoryFIFODepth)(0.U(log2Ceil(AScratchpadBankNEntrys).W))))
+    val SCP_Fill_Table_Time = RegInit(VecInit(Seq.fill(AMemoryLoaderReadFromMemoryFIFODepth)(0.U((log2Ceil(outsideDataWidthByte/AScratchpadEntryByteSize)+1).W))))
+
+    val SCP_Fill_Table_Free  = SCP_Fill_Table_Time.map(_ === 0.U)
+    val SCP_Fill_Table_Valid = SCP_Fill_Table_Time.map(_ =/= 0.U)
+    val SCP_Fill_Table_Insert_Index = PriorityEncoder(SCP_Fill_Table_Free)
+    val SCP_Fill_Table_Not_Full = SCP_Fill_Table_Free.reduce(_ || _)
+
+    val MAX_Fill_Times = outsideDataWidthByte / AScratchpadEntryByteSize
+
+    // -------------------------
+    // Bank Fill FIFO（与 BMemoryLoader 完全一致）
+    // -------------------------
+    val Bank_Fill_Search_FIFO = RegInit(VecInit(Seq.fill(AScratchpadNBanks)(
+        VecInit(Seq.fill(AMemoryLoaderReadFromMemoryFIFODepth)(0.U(log2Ceil(AMemoryLoaderReadFromMemoryFIFODepth).W)))
+    )))
+
+    val Bank_Fill_Search_FIFO_Head = RegInit(VecInit(Seq.fill(AScratchpadNBanks)(0.U(log2Ceil(AMemoryLoaderReadFromMemoryFIFODepth).W))))
+    val Bank_Fill_Search_FIFO_Tail = RegInit(VecInit(Seq.fill(AScratchpadNBanks)(0.U(log2Ceil(AMemoryLoaderReadFromMemoryFIFODepth).W))))
+
+    val Bank_Fill_Search_FIFO_Full  = WireInit(VecInit(Seq.fill(AScratchpadNBanks)(false.B)))
+    val Bank_Fill_Search_FIFO_Empty = WireInit(VecInit(Seq.fill(AScratchpadNBanks)(true.B)))
+
+    val Bank_Fill_Valid = Bank_Fill_Search_FIFO_Head.zip(Bank_Fill_Search_FIFO_Tail).map{ case (h,t) => h =/= t }
+    val Have_Bank_Fill = Bank_Fill_Valid.reduce(_ || _)
+
+    for(i <- 0 until AScratchpadNBanks){
+        Bank_Fill_Search_FIFO_Full(i) := Bank_Fill_Search_FIFO_Tail(i) === WrapInc(Bank_Fill_Search_FIFO_Head(i), AMemoryLoaderReadFromMemoryFIFODepth)
+        Bank_Fill_Search_FIFO_Empty(i) := Bank_Fill_Search_FIFO_Head(i) === Bank_Fill_Search_FIFO_Tail(i)
+    }
+
+    // -------------------------
+    // 访存状态机
+    // -------------------------
+    val Request = io.LocalMMUIO.Request
+    Request.valid := false.B
+
+    val TotalLoadSize = RegInit(0.U((log2Ceil(Tensor_M*ReduceGroupSize*ReduceWidthByte)+1).W))
+    val MaxRequestIter = RegInit(0.U((log2Ceil(Tensor_M*ReduceGroupSize*ReduceWidthByte)).W))
+
+    when(memoryload_state === s_load_init){
+        memoryload_state := s_load_working
+        TotalLoadSize := 0.U
+        CurrentLoaded_BlockTensor_M := 0.U
+        CurrentLoaded_BlockTensor_K := 0.U
+
+        MaxRequestIter := ScaratchpadTensor_M * ScaratchpadTensor_K * ReduceWidthByte.U / outsideDataWidthByte.U
+    }
+
+    .elsewhen(memoryload_state === s_load_working){
+
+        // -------------------------
+        // A 的 M×K 地址生成
+        // -------------------------
+        Request.bits.RequestVirtualAddr :=
+            Tensor_Block_BaseAddr +
+            (CurrentLoaded_BlockTensor_M * ApplicationTensor_A_Stride_M) +
+            (CurrentLoaded_BlockTensor_K * ReduceWidthByte.U)
+
+        val sourceId = Mux(Conherent, io.LocalMMUIO.ConherentRequsetSourceID, io.LocalMMUIO.nonConherentRequsetSourceID)
+
+        Request.bits.RequestConherent := Conherent
+        Request.bits.RequestSourceID  := sourceId.bits
+        Request.bits.RequestType_isWrite := false.B
+
+        Request.valid := true.B
+
+        when(CurrentLoaded_BlockTensor_M === MaxBlockTensor_M_Index ||
+             CurrentLoaded_BlockTensor_K === MaxBlockTensor_K_Index){
+            Request.valid := false.B
+        }
+
+        // -------------------------
+        // 记录 sourceId → Scratchpad 地址
+        // -------------------------
+        when(Request.fire && sourceId.valid){
+            val TableItem = Wire(new ASourceIdSearch)
+            TableItem.ScratchpadBankId := CurrentLoaded_BlockTensor_M % AScratchpadNBanks.U
+            TableItem.ScratchpadAddr :=
+                ((CurrentLoaded_BlockTensor_M / AScratchpadNBanks.U) * ReduceGroupSize.U) +
+                CurrentLoaded_BlockTensor_K
+
+            SoureceIdSearchTable(sourceId.bits) := TableItem.asUInt
+
+            // 推进 M×K
+            when(CurrentLoaded_BlockTensor_M < MaxBlockTensor_M_Index){
+                when(CurrentLoaded_BlockTensor_K + MAX_Fill_Times.U < MaxBlockTensor_K_Index){
+                    CurrentLoaded_BlockTensor_K := CurrentLoaded_BlockTensor_K + MAX_Fill_Times.U
+                }.otherwise{
+                    CurrentLoaded_BlockTensor_K := 0.U
+                    CurrentLoaded_BlockTensor_M := CurrentLoaded_BlockTensor_M + 1.U
+                }
+            }
+        }
+
+        // -------------------------
+        // Response → Fill Table → Scratchpad
+        // （与 BMemoryLoader 完全一致）
+        // -------------------------
+        val current_fill_fifo_full = WireInit(false.B)
+        when(io.LocalMMUIO.Response.valid){
+            val sourceId = io.LocalMMUIO.Response.bits.ReseponseSourceID
+            val ScratchpadBankId = SoureceIdSearchTable(sourceId).asTypeOf(new ASourceIdSearch).ScratchpadBankId
+            current_fill_fifo_full := Bank_Fill_Search_FIFO_Full(ScratchpadBankId)
+        }
+
+        io.LocalMMUIO.Response.ready := SCP_Fill_Table_Not_Full && (current_fill_fifo_full === false.B)
+
+        when(io.LocalMMUIO.Response.fire){
+            val sourceId = io.LocalMMUIO.Response.bits.ReseponseSourceID
+            val ScratchpadBankId = SoureceIdSearchTable(sourceId).asTypeOf(new ASourceIdSearch).ScratchpadBankId
+            val ScratchpadAddr   = SoureceIdSearchTable(sourceId).asTypeOf(new ASourceIdSearch).ScratchpadAddr
+            val ResponseData     = io.LocalMMUIO.Response.bits.ReseponseData
+
+            val FIFOIndex = Bank_Fill_Search_FIFO_Head(ScratchpadBankId)
+
+            SCP_Fill_Table(SCP_Fill_Table_Insert_Index) := ResponseData
+            SCP_Fill_Table_SCP_Addr(SCP_Fill_Table_Insert_Index) := ScratchpadAddr
+            SCP_Fill_Table_Time(SCP_Fill_Table_Insert_Index) := MAX_Fill_Times.U
+
+            Bank_Fill_Search_FIFO(ScratchpadBankId)(FIFOIndex) := SCP_Fill_Table_Insert_Index
+            Bank_Fill_Search_FIFO_Head(ScratchpadBankId) := WrapInc(Bank_Fill_Search_FIFO_Head(ScratchpadBankId), AMemoryLoaderReadFromMemoryFIFODepth)
+        }
+
+        // -------------------------
+        // Fill Table → Scratchpad 写入
+        // -------------------------
+        val Current_Fill_SCP_Time = WireInit(VecInit(Seq.fill(AScratchpadNBanks)(0.U(1.W))))
+
+        for(i <- 0 until AScratchpadNBanks){
+            when(Bank_Fill_Search_FIFO_Empty(i) === false.B){
+                val CurrentFIFOIndex = Bank_Fill_Search_FIFO(i)(Bank_Fill_Search_FIFO_Tail(i))
+                Current_Fill_SCP_Time(i) := 1.U
+
+                val FIFOData = WireInit(VecInit(Seq.fill(MAX_Fill_Times)(0.U((8*AScratchpadEntryByteSize).W))))
+                FIFOData := SCP_Fill_Table(CurrentFIFOIndex).asTypeOf(FIFOData)
+
+                io.ToScarchPadIO.BankAddr(i).bits :=
+                    SCP_Fill_Table_SCP_Addr(CurrentFIFOIndex) +
+                    (MAX_Fill_Times.U - SCP_Fill_Table_Time(CurrentFIFOIndex))
+
+                io.ToScarchPadIO.Data(i).bits :=
+                    FIFOData(MAX_Fill_Times.U - SCP_Fill_Table_Time(CurrentFIFOIndex))
+
+                io.ToScarchPadIO.BankAddr(i).valid := true.B
+                io.ToScarchPadIO.Data(i).valid := true.B
+
+                SCP_Fill_Table_Time(CurrentFIFOIndex) :=
+                    SCP_Fill_Table_Time(CurrentFIFOIndex) - 1.U
+
+                when(SCP_Fill_Table_Time(CurrentFIFOIndex) === 1.U){
+                    Bank_Fill_Search_FIFO_Tail(i) :=
+                        WrapInc(Bank_Fill_Search_FIFO_Tail(i), AMemoryLoaderReadFromMemoryFIFODepth)
+                }
+            }
+        }
+
+        val Current_Load_Fill_Size = PopCount(Current_Fill_SCP_Time.asUInt)
+        TotalLoadSize := TotalLoadSize + Current_Load_Fill_Size
+
+        when(TotalLoadSize === (MaxRequestIter * MAX_Fill_Times.U)){
+            memoryload_state := s_load_end
+        }
+    }
+
+    .elsewhen(memoryload_state === s_load_end){
+        io.ConfigInfo.MicroTaskEndValid := true.B
+
+        when(io.ConfigInfo.MicroTaskEndValid && io.ConfigInfo.MicroTaskEndReady){
+            memoryload_state := s_load_idle
+            state := s_idle
+
+            if(YJPAMLDebugEnable){
+                printf("[AML<%d>]AMemoryLoader Task End\n", io.DebugInfo.DebugTimeStampe)
+            }
+        }
+    }
+    }.otherwise{
+        printf("error input,neither conv nor mm")
     }
 
 }

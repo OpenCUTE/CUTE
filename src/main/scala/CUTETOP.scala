@@ -51,18 +51,6 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
 
     val MMU = Module(new LocalMMU)
 
-    cutecounter.ALoad := TaskCtrl.io.ctrlCounter.ALoad
-    cutecounter.BLoad := TaskCtrl.io.ctrlCounter.BLoad
-    cutecounter.CLoad := TaskCtrl.io.ctrlCounter.CLoad
-    cutecounter.DStore := TaskCtrl.io.ctrlCounter.DStore
-    cutecounter.InstQueueEmpty := TaskCtrl.io.ctrlCounter.InstQueueEmpty
-    cutecounter.getConfigured := TaskCtrl.io.ctrlCounter.getConfigured
-    cutecounter.AOPBusy := TaskCtrl.io.ctrlCounter.AOPBusy
-    cutecounter.computeInstQueueEmpty := TaskCtrl.io.ctrlCounter.computeInstQueueEmpty
-    cutecounter.computeInstCanIssue := TaskCtrl.io.ctrlCounter.computeInstCanIssue
-    cutecounter.InstCanDecode := TaskCtrl.io.ctrlCounter.InstCanDecode
-    cutecounter.mmu_req_valid := io.mmu2llc.Request.valid
-    cutecounter.mmu_req_ready := io.mmu2llc.Request.ready
 
 
     //debug reg

@@ -1,0 +1,2509 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>PRIVATE_L2_AND_AME_INTEGRATION_DESIGN.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> or <div class="page"></div> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="cute-私有-l2-缓存与-ame-指令集集成设计提案">CUTE 私有 L2 缓存与 AME 指令集集成设计提案</h1>
+<blockquote>
+<p>版本: v0.4
+日期: 2026-04-23
+状态: Draft (新增 TMA 后台搬运引擎)</p>
+</blockquote>
+<hr>
+<h2 id="目录">目录</h2>
+<ol>
+<li><a href="#1-%E8%83%8C%E6%99%AF%E4%B8%8E%E5%8A%A8%E6%9C%BA">背景与动机</a></li>
+<li><a href="#2-%E8%AE%BE%E8%AE%A1%E7%9B%AE%E6%A0%87">设计目标</a></li>
+<li><a href="#3-%E6%89%A9%E5%B1%95%E4%B8%80tile-%E5%86%85%E7%A7%81%E6%9C%89-l2-%E7%BC%93%E5%AD%98%E7%B3%BB%E7%BB%9F">扩展一：Tile 内私有 L2 缓存系统</a>
+<ul>
+<li>3.1 <a href="#31-%E6%80%BB%E4%BD%93%E6%9E%B6%E6%9E%84">总体架构</a></li>
+<li>3.2 <a href="#32-l2-cache-%E5%BE%AE%E6%9E%B6%E6%9E%84">L2 Cache 微架构</a></li>
+<li>3.3 <a href="#33-tcm-%E5%88%86%E5%8C%BA%E6%9C%BA%E5%88%B6">TCM 分区机制</a></li>
+<li>3.4 <a href="#34-tcm-%E8%AE%BF%E9%97%AE%E6%8E%A5%E5%8F%A3">TCM 访问接口</a></li>
+<li>3.5 <a href="#35-%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AE">一致性协议</a></li>
+<li>3.6 <a href="#36-%E6%95%B0%E6%8D%AE%E6%B5%81%E5%8F%98%E5%8C%96">数据流变化</a></li>
+<li>3.7 <a href="#37-%E5%8F%82%E6%95%B0%E5%8C%96%E9%85%8D%E7%BD%AE">参数化配置</a></li>
+</ul>
+</li>
+<li><a href="#4-%E6%89%A9%E5%B1%95%E4%BA%8Came-%E7%9F%A9%E9%98%B5%E6%89%A9%E5%B1%95%E6%8C%87%E4%BB%A4%E9%9B%86%E5%85%BC%E5%AE%B9">扩展二：AME 矩阵扩展指令集兼容</a>
+<ul>
+<li>4.1 <a href="#41-%E6%8C%87%E4%BB%A4%E9%9B%86%E6%A6%82%E8%BF%B0">指令集概述</a></li>
+<li>4.2 <a href="#42-tile-register-%E4%B8%8E-scratchpad-%E6%98%A0%E5%B0%84">Tile Register 与 Scratchpad 映射</a></li>
+<li>4.3 <a href="#43-%E6%8C%87%E4%BB%A4%E7%BC%96%E7%A0%81">指令编码</a></li>
+<li>4.4 <a href="#44-%E6%8C%87%E4%BB%A4%E8%AF%AD%E4%B9%89%E4%B8%8E-cute-%E5%BE%AE%E6%8C%87%E4%BB%A4%E6%98%A0%E5%B0%84">指令语义与 CUTE 微指令映射</a></li>
+<li>4.5 <a href="#45-%E9%85%8D%E7%BD%AE%E5%AF%84%E5%AD%98%E5%99%A8-csr">配置寄存器 (CSR)</a></li>
+<li>4.6 <a href="#46-%E4%B8%8E%E7%8E%B0%E6%9C%89-ygjk-%E6%8C%87%E4%BB%A4%E7%9A%84%E5%85%B3%E7%B3%BB">与现有 YGJK 指令的关系</a></li>
+</ul>
+</li>
+<li><a href="#5-%E7%B3%BB%E7%BB%9F%E9%9B%86%E6%88%90%E6%96%B9%E6%A1%88">系统集成方案</a></li>
+<li><a href="#6-%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90">性能分析</a></li>
+<li><a href="#7-%E5%AE%9E%E7%8E%B0%E8%AE%A1%E5%88%92">实现计划</a></li>
+<li><a href="#8-%E9%A3%8E%E9%99%A9%E4%B8%8E%E5%BC%80%E6%94%BE%E9%97%AE%E9%A2%98">风险与开放问题</a></li>
+</ol>
+<hr>
+<h2 id="1-背景与动机">1. 背景与动机</h2>
+<h3 id="11-现有架构的瓶颈">1.1 现有架构的瓶颈</h3>
+<p>CUTE 当前的存储层次结构如下：</p>
+<pre class="hljs"><code><div>DRAM → System L2 (TileLink, 512KB inclusive) → LocalMMU → MemoryLoader (AML/BML/CML) → Scratchpad → DataController → MTE
+</div></code></pre>
+<p>存在以下关键问题：</p>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>描述</th>
+<th>影响</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Load 延迟高</strong></td>
+<td>每次微指令均需通过 AML/BML 经 TileLink 从内存加载到 ASCP/BSCP</td>
+<td>每个 K 维迭代都触发内存访问，高延迟</td>
+</tr>
+<tr>
+<td><strong>CPU-CUTE 无数据共享</strong></td>
+<td>CPU 通过 ROCC 配置 CUTE，但无法共享中间结果</td>
+<td>中间数据必须写回内存再由 CUTE 重新加载</td>
+</tr>
+<tr>
+<td><strong>数据复用率低</strong></td>
+<td>Scratchpad 容量有限，K 维迭代间同一矩阵块被反复加载</td>
+<td>大量冗余内存流量，带宽浪费</td>
+</tr>
+<tr>
+<td><strong>独立 TCM 与缓存隔离</strong></td>
+<td>现有 Shuttle TCM (2MB @ 0x70000000) 独立于缓存层次</td>
+<td>TCM 与 Cache 之间的数据搬运开销大</td>
+</tr>
+</tbody>
+</table>
+<h3 id="12-动机">1.2 动机</h3>
+<p>高性能处理器普遍具备私有 L2 缓存（如 BOOM v3 的 L2、Apple M 系列的 L2 per cluster）。CUTE 作为高性能矩阵加速器，需要向这一架构范式看齐：</p>
+<ul>
+<li><strong>减少内存访问延迟</strong>：L2 命中可消除对 System L2 的依赖</li>
+<li><strong>提高数据复用</strong>：缓存自然保留跨 K 维迭代的复用数据</li>
+<li><strong>统一存储层次</strong>：CPU、RVV、CUTE 共享 L2，消除数据孤岛</li>
+<li><strong>灵活的 TCM 分区</strong>：从 L2 data array 中分配独立 Bank 作为 TCM，对程序员透明</li>
+</ul>
+<h3 id="13-与现有设计的对照">1.3 与现有设计的对照</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>现有设计 (v2/v3)</th>
+<th>新设计提案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU-CUTE 数据交互</td>
+<td>ROCC 配置 → 内存 → CUTE 重加载</td>
+<td>共享 L2 缓存，直接命中</td>
+</tr>
+<tr>
+<td>私有存储</td>
+<td>Scratchpad (SRAM)</td>
+<td>L2 Cache + TCM 分区</td>
+</tr>
+<tr>
+<td>TCM 实现</td>
+<td>独立 SRAM (Shuttle WithTCM)</td>
+<td>L2 data array 中独立的 TCM Banks</td>
+</tr>
+<tr>
+<td>编程模型</td>
+<td>YGJK 自定义指令</td>
+<td>YGJK + AME (RISC-V Matrix 兼容)</td>
+</tr>
+<tr>
+<td>数据加载</td>
+<td>AML/BML 通过 LocalMMU→TileLink→DRAM</td>
+<td>优先 L2 命中，未命中才访问 System L2</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="2-设计目标">2. 设计目标</h2>
+<h3 id="21-核心目标">2.1 核心目标</h3>
+<ol>
+<li><strong>共享私有 L2</strong>：CPU Core、RVV、CUTE 三者共享一个 Tile 内私有 L2 缓存</li>
+<li><strong>TileLink 一致性</strong>：私有 L2 通过 TileLink 与系统 L2 (LLC) 保持缓存一致性</li>
+<li><strong>可配置 TCM 分区</strong>：L2 data array 中部分 Bank 被配置为 TCM（物理独立 SRAM），直连 CUTE，对程序员不可见</li>
+<li><strong>AME 指令兼容</strong>：实现修改版 RISC-V Matrix Extension，将 SCP 组织方式改为 tile register，使 CUTE 可通过标准矩阵指令编程</li>
+</ol>
+<h3 id="22-非目标">2.2 非目标</h3>
+<ul>
+<li>不替代现有 Scratchpad：SCP 仍然是 CUTE 计算核心的高带宽暂存，L2/TCM 用于预取和数据交换</li>
+<li>不改变 MTE 计算引擎的微架构</li>
+<li>不支持多 Tile 之间的 L2 共享（本阶段）</li>
+</ul>
+<hr>
+<h2 id="3-扩展一tile-内私有-l2-缓存系统">3. 扩展一：Tile 内私有 L2 缓存系统</h2>
+<h3 id="31-总体架构">3.1 总体架构</h3>
+<pre><code class="language-mermaid"><div class="mermaid">graph TB
+    subgraph TILE["CUTE Tile"]
+        subgraph CORE["CPU Core"]
+            PIPE["CPU Pipeline"]
+            ROCC_IF["RoCC Interface"]
+        end
+
+        subgraph RVV_SUB["RVV"]
+            VREG["Vector Register File"]
+            VPU["Vector Processing Unit"]
+        end
+
+        subgraph CUTE_SUB["CUTE Accelerator"]
+            TC["TaskController"]
+            subgraph MEM_SYS["存储系统"]
+                ASP["ASCP ×2 (双缓冲)"]
+                BSP["BSCP ×2"]
+                CSP["CSCP ×2"]
+                DC_A["ADataController"]
+                DC_B["BDataController"]
+                DC_C["CDataController"]
+            end
+            MTE["MatrixTE (M×N PE)"]
+        end
+
+        subgraph PL2["Private L2 Cache + TMA"]
+            PL2_CTRL["L2 Controller"]
+            PL2_TAG["Tag Store"]
+            PL2_CACHE_DATA["Cache Banks (Bank N~M)"]
+            PL2_TCM_DATA["TCM Banks (Bank 0~N-1)<br/>直连 CUTE"]
+            TCM_CTRL["TCM Controller"]
+            TMA["TMA<br/>(Tensor Memory Accelerator)<br/>后台搬运引擎"]
+        end
+    end
+
+    subgraph SOC["片上系统"]
+        SYS_L2["System L2 (LLC)<br/>512KB Inclusive"]
+        DRAM["DRAM"]
+    end
+
+    PIPE ---|D/I Cache miss| PL2
+    VREG ---|Vector Load/Store| PL2
+    ROCC_IF ---|配置 / TMA 描述符| TC
+
+    TC ---|TCM 直连 (低延迟)| TCM_CTRL
+    TC ---|L2 读取 (优先)| PL2_CTRL
+    DC_A ---|Compute 读| ASP
+    DC_B ---|Compute 读| BSP
+    DC_C ---|Compute 读写| CSP
+
+    ASP ---|预取/L2 填充| PL2_CTRL
+    BSP ---|预取/L2 填充| PL2_CTRL
+    CSP ---|回写/L2 填充| PL2_CTRL
+
+    TCM_CTRL ---|CUTE/RVV 直连| PL2_TCM_DATA
+    TCM_CTRL ---|TMA 搬运| TMA
+    PL2_CTRL ---|Cache 访问| PL2_CACHE_DATA
+
+    TMA ---|TileLink Client (独立)| SYS_L2
+    PL2_CTRL ---|TileLink Client| SYS_L2
+    SYS_L2 --- DRAM
+</div></code></pre>
+<h3 id="32-l2-cache-微架构">3.2 L2 Cache 微架构</h3>
+<h4 id="321-基本参数">3.2.1 基本参数</h4>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>建议值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>总容量</td>
+<td>256KB ~ 1MB</td>
+<td>可参数化配置，典型 512KB</td>
+</tr>
+<tr>
+<td>Cache 部分</td>
+<td>Cache Banks 占用的容量</td>
+<td>Set-associative，仅 Cache Banks 参与</td>
+</tr>
+<tr>
+<td>TCM 部分</td>
+<td>TCM Banks 占用的容量</td>
+<td>独立 SRAM Bank，直连 CUTE，无 Tag</td>
+</tr>
+<tr>
+<td>总 Bank 数</td>
+<td>8 ~ 16</td>
+<td>物理 SRAM 实例数，所有 Bank 统一编址</td>
+</tr>
+<tr>
+<td>TCM Bank 数</td>
+<td>总 Bank 数的 1/4 ~ 1/2</td>
+<td>例: 8 Banks 中 4 个作为 TCM</td>
+</tr>
+<tr>
+<td>Associativity</td>
+<td>8-way ~ 16-way</td>
+<td>与 Rocket/BOOM L2 对齐</td>
+</tr>
+<tr>
+<td>Line Size</td>
+<td>64B (标准)</td>
+<td>与系统 L2 一致</td>
+</tr>
+<tr>
+<td>端口数</td>
+<td>2~4 读端口 + 1~2 写端口</td>
+<td>服务 CPU / RVV / CUTE</td>
+</tr>
+<tr>
+<td>Tag Store</td>
+<td>独立 SRAM</td>
+<td>仅覆盖 Cache Banks，TCM Banks 无 Tag</td>
+</tr>
+<tr>
+<td>Data Array</td>
+<td>统一 SRAM Bank 编址</td>
+<td>TCM Banks 与 Cache Banks 物理独立</td>
+</tr>
+</tbody>
+</table>
+<h4 id="322-微架构细节">3.2.2 微架构细节</h4>
+<p><strong>Bank 组织</strong>：Data Array 采用 N-bank 交织结构，Bank 按用途分为两组：</p>
+<ul>
+<li><strong>TCM Banks (Bank 0 ~ N_tcm-1)</strong>：整体作为 TCM，<strong>物理上独立的 SRAM 实例</strong>，无 Tag、无替换逻辑，直连 CUTE 和 RVV，提供确定性低延迟访问</li>
+<li><strong>Cache Banks (Bank N_tcm ~ N_total-1)</strong>：组成 Set-associative Cache，有 Tag Store，参与 TileLink 一致性协议，服务 CPU L1D miss / RVV / CUTE MemoryLoader</li>
+</ul>
+<p><strong>关键设计</strong>：当 RVV 或 CPU 需要更宽数据通路（如向量突发访问）时，可跨越 <strong>全部 Bank（TCM + Cache）聚合</strong> 获取更高带宽。但 TCM Banks 在聚合模式下仍保持无 Tag 访问的语义——Cache Banks 的聚合走正常 cache 通路，TCM Banks 的聚合走直连通路，两者在输出端 Mux 合并。</p>
+<p><strong>TMA (Tensor Memory Accelerator)</strong>：TMA 是独立的后台搬运引擎，拥有<strong>独立的 TileLink Client 端口</strong>连接 LLC。TMA 负责 TCM 与 DRAM 之间的批量数据搬运，软件下发一条&quot;搬运描述指令&quot;（Transfer Descriptor），TMA 在后台自动完成全部搬运，不占用 CPU 或 CUTE 的计算资源。TMA 与 Private L2 Controller 的 TileLink 端口独立，两者互不干扰。</p>
+<pre class="hljs"><code><div>Data Array Layout (以 8 Bank、4 TCM + 4 Cache 为例):
+┌──────────────────────────────────────────────────────────────────┐
+│                        物理 Bank 编号                             │
+│  Bank 0    Bank 1    Bank 2    Bank 3    Bank 4    ...   Bank 7 │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐       ┌──────┐  │
+│  │      │ │      │ │      │ │      │ │Cache │       │Cache │  │
+│  │ TCM  │ │ TCM  │ │ TCM  │ │ TCM  │ │Set 0 │       │Set 0 │  │
+│  │      │ │      │ │      │ │      │ │Set 1 │       │Set 1 │  │
+│  │      │ │      │ │      │ │      │ │ ...  │       │ ...  │  │
+│  │      │ │      │ │      │ │      │ │Set S │       │Set S │  │
+│  └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘       └──┬───┘  │
+│     │        │        │        │        │               │       │
+│  ←──┴────────┴────────┴────────┴──┐    ├───────────────┘       │
+│     TCM Controller (直连 CUTE)      │    L2 Cache Controller    │
+│     低延迟, 无 Tag 查找             │    有 Tag + Way 选择       │
+│     带宽: N_tcm × DataWidth        │    Bank 交织, TileLink     │
+└─────────────────────────────────────┴───────────────────────────┘
+
+CUTE 专用路径 (TCM 直连):
+  CUTE/RVV → TCM Controller → TCM Banks (Bank 0~3)
+  延迟: 1 cycle (read) / 1 cycle (write)
+  带宽: 4 × 512bit = 2048 bit/cycle
+
+L1D/RVV 正常路径 (Cache 访问):
+  CPU L1 miss → L2 Controller → Cache Banks (Bank 4~7)
+  延迟: 5~15 cycles (tag lookup + data read)
+
+RVV 宽向量聚合路径 (跨 Bank):
+  RVV burst → Cache Banks + TCM Banks → Mux 聚合 → RVV
+  带宽: 8 × 512bit = 4096 bit/cycle (全聚合)
+</div></code></pre>
+<p><strong>请求优先级</strong>（从高到低）：</p>
+<ol>
+<li><strong>TCM 直连访问</strong>（CUTE ↔ RVV 数据交换）—— 独立 Bank，不与 Cache 竞争，固定 1 cycle 延迟</li>
+<li><strong>CUTE L2 读取</strong>（MemoryLoader 从 Cache Banks 加载到 SCP）</li>
+<li><strong>CPU L1 miss 填充</strong></li>
+<li><strong>RVV Vector Load/Store</strong>（走 Cache Banks，或聚合全部 Banks）</li>
+<li><strong>L2 写回 / Eviction</strong></li>
+</ol>
+<p><strong>替换策略</strong>：仅 Cache Banks 参与 LRU/PLRU 替换。TCM Banks 作为专用 SRAM，不参与任何替换策略。</p>
+<h3 id="33-tcm-分区机制">3.3 TCM 分区机制</h3>
+<h4 id="331-设计原则">3.3.1 设计原则</h4>
+<p>TCM 由 Data Array 中<strong>物理独立的 Bank</strong> 组成（非从 Cache Bank 中切分），具有以下特性：</p>
+<ul>
+<li><strong>对程序员不可见</strong>：TCM 不是内存映射地址空间，CPU/VPU 不通过 Load/Store 指令访问</li>
+<li><strong>硬件管理</strong>：由 CUTE TaskController 和 RVV 控制逻辑通过专用端口访问</li>
+<li><strong>物理独立</strong>：TCM Banks 与 Cache Banks 是独立的 SRAM 实例，无地址空间重叠</li>
+<li><strong>直连 CUTE</strong>：TCM Banks 有专用数据通路直连 CUTE，不经过 L2 Cache Controller 的 Tag 查找和替换逻辑</li>
+<li><strong>固定低延迟</strong>：无 tag 查找、无 Mux 冲突、无替换逻辑，访问延迟确定且极低 (1 cycle)</li>
+</ul>
+<h4 id="332-bank-分配策略">3.3.2 Bank 分配策略</h4>
+<p>Bank 分配采用<strong>静态分区</strong>：在编译时确定哪些 Bank 作为 TCM，哪些作为 Cache：</p>
+<pre class="hljs"><code><div>Bank 分配规则:
+  Bank 0        ~ Bank (TCMBanks-1)     → TCM Banks (直连 CUTE)
+  Bank TCMBanks ~ Bank (L2NBanks-1)    → Cache Banks (Set-associative)
+
+示例 (L2NBanks=8, TCMBanks=4):
+  Bank 0~3 → TCM (4 × 16KB = 64KB, 或 4 × 32KB = 128KB)
+  Bank 4~7 → Cache (4-way interleaved, Set-associative)
+
+示例 (L2NBanks=16, TCMBanks=8):
+  Bank 0~7  → TCM (8 × 32KB = 256KB)
+  Bank 8~15 → Cache (8-way interleaved, Set-associative)
+</div></code></pre>
+<p><strong>TCMBanks 数量选择建议</strong>：</p>
+<ul>
+<li>TCM 总容量应 ≥ 2 × max(AScratchpadSize, BScratchpadSize)，以容纳 A/B 双缓冲数据交换</li>
+<li>建议 TCMBanks ≥ Matrix_M 且 ≥ Matrix_N，便于 MTE 供数时无 bank 冲突</li>
+<li>Cache Banks 数量应保证足够的关联度和 set 数量以维持 cache 命中率</li>
+</ul>
+<h4 id="333-tcm-容量配置">3.3.3 TCM 容量配置</h4>
+<p>TCM 容量通过编译时参数配置（参数化在 <code>CuteParams</code> 中）：</p>
+<pre class="hljs"><code><div><span class="hljs-keyword">case</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">CuteL2TCMParams</span>(<span class="hljs-params">
+    val <span class="hljs-type">L2NBanks</span>: <span class="hljs-type">Int</span> = 8,               <span class="hljs-comment">// Data Array 总 bank 数 (物理 SRAM 实例数)</span>
+    val <span class="hljs-type">TCMBanks</span>: <span class="hljs-type">Int</span> = 4,               <span class="hljs-comment">// TCM bank 数量 (Bank 0 ~ TCMBanks-1)</span>
+    val <span class="hljs-type">L2NWays</span>: <span class="hljs-type">Int</span> = 8,                <span class="hljs-comment">// Cache 关联度</span>
+    val <span class="hljs-type">L2LineSizeBytes</span>: <span class="hljs-type">Int</span> = 64,       <span class="hljs-comment">// Cache Line 大小</span>
+    val <span class="hljs-type">TCMDataWidthBits</span>: <span class="hljs-type">Int</span> = 512,     <span class="hljs-comment">// 每个 TCM Bank 的数据端口宽度</span>
+    val <span class="hljs-type">BankSizeKB</span>: <span class="hljs-type">Int</span> = 32,            <span class="hljs-comment">// 每个 Bank 的容量 (KB)</span>
+
+    <span class="hljs-comment">// === TMA (Tensor Memory Accelerator) 参数 ===</span>
+    val <span class="hljs-type">TMAEnable</span>: <span class="hljs-type">Boolean</span> = true,       <span class="hljs-comment">// 是否启用 TMA</span>
+    val <span class="hljs-type">TMADescriptorQueueDepth</span>: <span class="hljs-type">Int</span> = 4,<span class="hljs-comment">// TMA 描述符队列深度</span>
+    val <span class="hljs-type">TMAFIFODepth</span>: <span class="hljs-type">Int</span> = 8,           <span class="hljs-comment">// TMA 数据 FIFO 深度 (line 数)</span>
+    val <span class="hljs-type">TMASourceMaxNum</span>: <span class="hljs-type">Int</span> = 8,        <span class="hljs-comment">// TMA TileLink source ID 数量</span>
+</span>) </span>{
+    <span class="hljs-keyword">val</span> <span class="hljs-type">CacheNBanks</span> = <span class="hljs-type">L2NBanks</span> - <span class="hljs-type">TCMBanks</span>
+    <span class="hljs-keyword">val</span> <span class="hljs-type">L2TotalSizeKB</span> = <span class="hljs-type">L2NBanks</span> * <span class="hljs-type">BankSizeKB</span>
+    <span class="hljs-keyword">val</span> <span class="hljs-type">TCMSizeKB</span> = <span class="hljs-type">TCMBanks</span> * <span class="hljs-type">BankSizeKB</span>
+    <span class="hljs-keyword">val</span> <span class="hljs-type">CacheSizeKB</span> = <span class="hljs-type">CacheNBanks</span> * <span class="hljs-type">BankSizeKB</span>
+    <span class="hljs-keyword">val</span> <span class="hljs-type">L2NSets</span> = <span class="hljs-type">CacheSizeKB</span> / (<span class="hljs-type">CacheNBanks</span> * <span class="hljs-type">L2NWays</span> * <span class="hljs-type">L2LineSizeBytes</span>)
+    <span class="hljs-comment">// 注: 每个 Cache Bank 内的 Set 数 = CacheSizeKB / CacheNBanks / (L2NWays * L2LineSizeBytes)</span>
+    require(<span class="hljs-type">TCMBanks</span> &lt; <span class="hljs-type">L2NBanks</span>, <span class="hljs-string">&quot;TCM banks must be less than total banks&quot;</span>)
+    require(<span class="hljs-type">TCMBanks</span> &gt;= <span class="hljs-number">2</span>, <span class="hljs-string">&quot;At least 2 TCM banks for double buffering&quot;</span>)
+    require(isPow2(<span class="hljs-type">L2NBanks</span>) &amp;&amp; isPow2(<span class="hljs-type">TCMBanks</span>), <span class="hljs-string">&quot;Bank counts must be power of 2&quot;</span>)
+}
+</div></code></pre>
+<h4 id="334-tcm-寻址模型">3.3.4 TCM 寻址模型</h4>
+<p>TCM 在逻辑上被组织为一个线性地址空间，由 CUTE 内部地址寻址。地址直接译码为 Bank ID + Word Address：</p>
+<pre class="hljs"><code><div>TCM Address:
+┌──────────────┬──────────┬──────────┐
+│ Word Addr    │ Bank ID  │ Byte Off │
+│ (高位)       │ (log2(TCMBanks)) │ (log2(TCMDataWidthBits/8)) │
+└──────────────┴──────────┴──────────┘
+
+物理映射:
+  Bank ID = addr[log2(TCMBanks)+log2(TCMDataWidthBits/8)-1 : log2(TCMDataWidthBits/8)]
+  → 直接选择 Bank 0 ~ TCMBanks-1 中的一个 SRAM 实例
+
+  Word Addr = addr[高位]
+  → 选中 Bank 内的字地址
+
+优势: Bank 选择和字地址译码在同一周期完成，无需 Tag 查找
+</div></code></pre>
+<p>TCM 的逻辑地址空间映射到 tile register 机制，详见第 4 节。</p>
+<h3 id="34-tcm-访问接口">3.4 TCM 访问接口</h3>
+<h4 id="341-接口定义">3.4.1 接口定义</h4>
+<p>TCM Controller 直接管理 TCM Banks (Bank 0 ~ TCMBanks-1)，提供多端口并发访问。TMA 作为独立模块通过 TCM Controller 的 Port D 访问 TCM Banks：</p>
+<pre class="hljs"><code><div>┌──────────────────────────────────────────────────────────┐
+│                    TCM Controller                          │
+├────────────┬─────────────────────────────────────────────┤
+│ Port A     │ CUTE → TCM (直连路径, 最高优先级)            │
+│            │ - 写 TCM (CSCP → TCM)                        │
+│            │ - 读 TCM (TCM → ASCP/BSCP)                   │
+│            │ 延迟: 1 cycle (直接 SRAM 读写)                │
+├────────────┼─────────────────────────────────────────────┤
+│ Port B     │ RVV → TCM (Vector path, 直连路径)            │
+│            │ - 写 TCM (VRF → TCM)                         │
+│            │ - 读 TCM (TCM → VRF)                         │
+│            │ 延迟: 1 cycle                                 │
+├────────────┼─────────────────────────────────────────────┤
+│ Port C     │ 聚合路径 (Cache Banks + TCM Banks → L1D/RVV) │
+│            │ - RVV 宽向量 burst 跨 Bank 聚合读取           │
+│            │ - 带宽: 全部 N_banks × DataWidth             │
+│            │ 延迟: Cache 部分 5~15 cycles, TCM 部分 1 cyc  │
+├────────────┼─────────────────────────────────────────────┤
+│ Port D     │ TMA → TCM (Tensor Memory Accelerator)        │
+│            │ - TMA 写 TCM (DRAM → LLC → TMA → TCM, Load)  │
+│            │ - TMA 读 TCM (TCM → TMA → LLC → DRAM, Store) │
+│            │ 延迟: 1~2 cycles (TMA FIFO → TCM SRAM)       │
+│            │ 独立 TileLink 端口到 LLC，不经过 L2 Controller│
+└────────────┴─────────────────────────────────────────────┘
+
+端口仲裁:
+  Port A (CUTE) &gt; Port B (RVV) &gt; Port D (TMA)  // Port C 走独立聚合通路
+  同一 cycle 内不同 Port 可访问不同 Bank，无冲突
+  同一 Port 同时访问同一 Bank 时，Port A 优先
+  Port D (TMA) 与 Port A/B 的 Bank 冲突时，TMA 自动 stall (不影响 CUTE/RVV)
+</div></code></pre>
+<h4 id="342-cute-侧访问-port-a">3.4.2 CUTE 侧访问 (Port A)</h4>
+<p>CUTE 通过 MemoryLoader 与 TCM 交互，替代部分从内存加载的路径。TCM Banks 通过<strong>专用数据通路</strong>直连 CUTE，不经过 L2 Cache Controller：</p>
+<pre class="hljs"><code><div><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">TCMControllerIO</span> <span class="hljs-keyword">extends</span> <span class="hljs-title">Bundle</span> </span>{
+    <span class="hljs-comment">// CUTE → TCM (写入：将数据放入 TCM 供 RVV 读取)</span>
+    <span class="hljs-keyword">val</span> cute_write = <span class="hljs-type">Flipped</span>(<span class="hljs-type">Decoupled</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">Bundle</span> {
+        <span class="hljs-keyword">val</span> addr = <span class="hljs-type">UInt</span>(<span class="hljs-type">TCMAddrWidth</span>.<span class="hljs-type">W</span>)  <span class="hljs-comment">// TCM 内部地址</span>
+        <span class="hljs-keyword">val</span> data = <span class="hljs-type">UInt</span>(<span class="hljs-type">TCMDataWidthBits</span>.<span class="hljs-type">W</span>)
+        <span class="hljs-keyword">val</span> strb = <span class="hljs-type">UInt</span>((<span class="hljs-type">TCMDataWidthBits</span> / <span class="hljs-number">8</span>).<span class="hljs-type">W</span>)  <span class="hljs-comment">// Byte strobe</span>
+    }))
+
+    <span class="hljs-comment">// CUTE ← TCM (读取：从 TCM 获取 RVV 放入的数据)</span>
+    <span class="hljs-keyword">val</span> cute_read = <span class="hljs-type">Decoupled</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">Bundle</span> {
+        <span class="hljs-keyword">val</span> addr = <span class="hljs-type">UInt</span>(<span class="hljs-type">TCMAddrWidth</span>.<span class="hljs-type">W</span>)
+    })
+    <span class="hljs-keyword">val</span> cute_read_data = <span class="hljs-type">Input</span>(<span class="hljs-type">UInt</span>(<span class="hljs-type">TCMDataWidthBits</span>.<span class="hljs-type">W</span>))
+
+    <span class="hljs-comment">// RVV → TCM (写入：向量寄存器 → TCM)</span>
+    <span class="hljs-keyword">val</span> rvv_write = <span class="hljs-type">Flipped</span>(<span class="hljs-type">Decoupled</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">Bundle</span> {
+        <span class="hljs-keyword">val</span> addr = <span class="hljs-type">UInt</span>(<span class="hljs-type">TCMAddrWidth</span>.<span class="hljs-type">W</span>)
+        <span class="hljs-keyword">val</span> data = <span class="hljs-type">UInt</span>(<span class="hljs-type">TCMDataWidthBits</span>.<span class="hljs-type">W</span>)
+        <span class="hljs-keyword">val</span> strb = <span class="hljs-type">UInt</span>((<span class="hljs-type">TCMDataWidthBits</span> / <span class="hljs-number">8</span>).<span class="hljs-type">W</span>)
+    }))
+
+    <span class="hljs-comment">// RVV ← TCM (读取：TCM → 向量寄存器)</span>
+    <span class="hljs-keyword">val</span> rvv_read = <span class="hljs-type">Decoupled</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">Bundle</span> {
+        <span class="hljs-keyword">val</span> addr = <span class="hljs-type">UInt</span>(<span class="hljs-type">TCMAddrWidth</span>.<span class="hljs-type">W</span>)
+    })
+    <span class="hljs-keyword">val</span> rvv_read_data = <span class="hljs-type">Output</span>(<span class="hljs-type">UInt</span>(<span class="hljs-type">TCMDataWidthBits</span>.<span class="hljs-type">W</span>))
+}
+</div></code></pre>
+<h4 id="343-访问时序">3.4.3 访问时序</h4>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>延迟 (cycles)</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CUTE → TCM 写</td>
+<td>1</td>
+<td>直连路径，直接写入 TCM Bank SRAM</td>
+</tr>
+<tr>
+<td>CUTE ← TCM 读</td>
+<td>1</td>
+<td>直连路径，无 Tag 查找，Bank 读取即返回</td>
+</tr>
+<tr>
+<td>RVV → TCM 写</td>
+<td>1</td>
+<td>直连路径，直接写入 TCM Bank SRAM</td>
+</tr>
+<tr>
+<td>RVV ← TCM 读</td>
+<td>1</td>
+<td>直连路径，同上</td>
+</tr>
+<tr>
+<td>RVV 宽向量读取 (全 Bank 聚合)</td>
+<td>5~15</td>
+<td>Cache Banks 走 Tag 查找 + TCM Banks 直连，最后 Mux 合并</td>
+</tr>
+<tr>
+<td>TMA → TCM 写 (DRAM→TCM)</td>
+<td>1~2</td>
+<td>TMA FIFO → TCM Bank SRAM (TMA 独立 TileLink 端口)</td>
+</tr>
+<tr>
+<td>TCM → TMA 读 (TCM→DRAM)</td>
+<td>1~2</td>
+<td>TCM Bank SRAM → TMA FIFO → TileLink</td>
+</tr>
+<tr>
+<td>CPU L1 miss → L2 (Cache Banks)</td>
+<td>5~15</td>
+<td>标准缓存访问，仅访问 Cache Banks</td>
+</tr>
+<tr>
+<td><strong>TMA 后台搬运总延迟</strong></td>
+<td><strong>T_fill + N×T_line</strong></td>
+<td>T_fill 为首字延迟，N 为 line 数，T_line 为每 line 间隔</td>
+</tr>
+</tbody>
+</table>
+<h4 id="344-tma-tensor-memory-accelerator-接口">3.4.4 TMA (Tensor Memory Accelerator) 接口</h4>
+<p>TMA 是独立的硬件搬运引擎，接收软件下发的<strong>搬运描述符</strong>后在后台自动完成 TCM ↔ DRAM 的数据搬运。</p>
+<p><strong>TMA 功能特性：</strong></p>
+<ul>
+<li>支持 <strong>1D/2D/3D 张量搬运</strong>（带 stride 的非连续地址访问）</li>
+<li>支持 <strong>多描述符队列</strong>，可同时排队多条搬运任务</li>
+<li><strong>独立 TileLink Client 端口</strong>连接 LLC，与 Private L2 Controller 的 TileLink 端口独立</li>
+<li>支持 <strong>Load (DRAM→TCM)</strong> 和 <strong>Store (TCM→DRAM)</strong> 两个方向</li>
+<li><strong>后台异步执行</strong>：软件下发描述符后立即返回，通过 CSR 状态位或中断查询完成</li>
+<li><strong>Bank 冲突避让</strong>：当 TMA 访问的 TCM Bank 与 CUTE/RVV 冲突时，TMA 自动 stall</li>
+</ul>
+<p><strong>搬运描述符格式 (TMADescriptor, 256-bit)：</strong></p>
+<pre class="hljs"><code><div>TMADescriptor:
+┌──────────────────────────────────────────────────────────────┐
+│ Bit 255:192 (64-bit) - src_addr: 源物理地址                  │
+│   Load: DRAM 物理地址 (经 MMU 转换后)                        │
+│   Store: TCM 偏移地址                                        │
+├──────────────────────────────────────────────────────────────┤
+│ Bit 191:128 (64-bit) - dst_addr: 目标地址                    │
+│   Load: TCM 偏移地址                                        │
+│   Store: DRAM 物理地址                                       │
+├──────────────────────────────────────────────────────────────┤
+│ Bit 127:96  (32-bit) - byte_count: 总搬运字节数 (对齐到 line)│
+├──────────────────────────────────────────────────────────────┤
+│ Bit 95:64   (32-bit) - config: 搬运配置                      │
+│   [31:28] direction  - 0=Load(DRAM→TCM), 1=Store(TCM→DRAM)  │
+│   [27:16] src_stride - 源行步长 (bytes), 0=连续              │
+│   [15:4]  dst_stride - 目标行步长 (bytes), 0=连续            │
+│   [3:0]   flags      - [0]=完成中断使能                      │
+├──────────────────────────────────────────────────────────────┤
+│ Bit 63:32   (32-bit) - tensor_shape: 张量形状                │
+│   [31:16] width      - 每行搬运字节数 (bytes)                │
+│   [15:0]  height     - 行数                                  │
+└──────────────────────────────────────────────────────────────┘
+</div></code></pre>
+<p><strong>TMA 状态机：</strong></p>
+<pre class="hljs"><code><div>                    ┌─────────┐
+           描述符写入│  IDLE   │
+           ────────→│  等待   │
+                    └────┬────┘
+                         │ 收到有效描述符
+                    ┌────▼────┐
+                    │ ISSUING │
+                    │ 发起    │──── 首次 TileLink 请求
+                    │ TileLink│──── (AcquireBlock / Get)
+                    └────┬────┘
+                         │ 数据开始返回
+                    ┌────▼────┐
+            ┌──────→│ XFER    │
+            │       │ 搬运中  │──── 逐 line 搬运
+            │       └────┬────┘    (TMA FIFO ↔ TCM Banks)
+            │            │ byte_count 搬完
+            │       ┌────▼────┐
+            │       │  DONE   │──── 置完成标志 / 发中断
+            │       └────┬────┘
+            │            │
+            └────────────┘ 取下一条描述符 (如有)
+</div></code></pre>
+<p><strong>TMA CSR 接口：</strong></p>
+<pre class="hljs"><code><div><span class="hljs-comment">// TMA 通过 CSR 接收描述符和查询状态</span>
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">TMAIO</span> <span class="hljs-keyword">extends</span> <span class="hljs-title">Bundle</span> </span>{
+    <span class="hljs-comment">// 描述符提交 (CPU 通过 RoCC custom command 写入)</span>
+    <span class="hljs-keyword">val</span> descriptor = <span class="hljs-type">Flipped</span>(<span class="hljs-type">Decoupled</span>(<span class="hljs-type">UInt</span>(<span class="hljs-number">256.</span><span class="hljs-type">W</span>)))  <span class="hljs-comment">// 256-bit 描述符</span>
+
+    <span class="hljs-comment">// TCM 端口 (连接到 TCM Controller Port D)</span>
+    <span class="hljs-keyword">val</span> tcm_read = <span class="hljs-type">Decoupled</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">Bundle</span> {
+        <span class="hljs-keyword">val</span> addr = <span class="hljs-type">UInt</span>(<span class="hljs-type">TCMAddrWidth</span>.<span class="hljs-type">W</span>)
+    })
+    <span class="hljs-keyword">val</span> tcm_read_data = <span class="hljs-type">Input</span>(<span class="hljs-type">UInt</span>(<span class="hljs-type">TCMDataWidthBits</span>.<span class="hljs-type">W</span>))
+    <span class="hljs-keyword">val</span> tcm_write = <span class="hljs-type">Decoupled</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">Bundle</span> {
+        <span class="hljs-keyword">val</span> addr = <span class="hljs-type">UInt</span>(<span class="hljs-type">TCMAddrWidth</span>.<span class="hljs-type">W</span>)
+        <span class="hljs-keyword">val</span> data = <span class="hljs-type">UInt</span>(<span class="hljs-type">TCMDataWidthBits</span>.<span class="hljs-type">W</span>)
+        <span class="hljs-keyword">val</span> strb = <span class="hljs-type">UInt</span>((<span class="hljs-type">TCMDataWidthBits</span> / <span class="hljs-number">8</span>).<span class="hljs-type">W</span>)
+    })
+
+    <span class="hljs-comment">// TileLink 端口 (独立连接到 LLC)</span>
+    <span class="hljs-keyword">val</span> tilelink = <span class="hljs-keyword">new</span> <span class="hljs-type">TLClientPort</span>
+
+    <span class="hljs-comment">// 状态查询</span>
+    <span class="hljs-keyword">val</span> status = <span class="hljs-type">Output</span>(<span class="hljs-type">UInt</span>(<span class="hljs-number">8.</span><span class="hljs-type">W</span>))  <span class="hljs-comment">// queue_depth[3:0], busy[4], error[5:7]</span>
+    <span class="hljs-keyword">val</span> completion_irq = <span class="hljs-type">Output</span>(<span class="hljs-type">Bool</span>())  <span class="hljs-comment">// 搬运完成中断</span>
+}
+</div></code></pre>
+<p><strong>软件使用流程：</strong></p>
+<pre class="hljs"><code><div><span class="hljs-comment">// 1. 构造搬运描述符 (DRAM → TCM)</span>
+<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">tma_desc</span> <span class="hljs-title">desc</span> =</span> {
+    .src_addr   = dram_matrix_addr,     <span class="hljs-comment">// DRAM 物理地址</span>
+    .dst_addr   = tcm_offset_0,         <span class="hljs-comment">// TCM 偏移</span>
+    .byte_count = <span class="hljs-number">128</span> * <span class="hljs-number">64</span>,             <span class="hljs-comment">// 128×64 INT8 矩阵 = 8KB</span>
+    .config     = TMA_LOAD | TMA_IRQ_EN,
+    .shape      = {.width = <span class="hljs-number">64</span>, .height = <span class="hljs-number">128</span>}
+};
+
+<span class="hljs-comment">// 2. 提交描述符 (一条 RoCC 指令，立即返回)</span>
+submit_tma_desc(&amp;desc);   <span class="hljs-comment">// non-blocking，TMA 在后台搬运</span>
+
+<span class="hljs-comment">// 3. CPU 继续做其他工作...</span>
+<span class="hljs-comment">// 4. 检查完成或等待中断</span>
+<span class="hljs-keyword">while</span> (!tma_done()) { <span class="hljs-comment">/* yield or do other work */</span> }
+<span class="hljs-comment">// 5. 现在 TCM 中已有数据，CUTE 可以直接从 TCM 读取 (1 cycle)</span>
+</div></code></pre>
+<h3 id="35-一致性协议">3.5 一致性协议</h3>
+<h4 id="351-一致性层次">3.5.1 一致性层次</h4>
+<pre class="hljs"><code><div>                    ┌──────────────┐
+                    │  DRAM        │
+                    └──────┬───────┘
+                           │
+                    ┌──────▼───────┐
+                    │ System L2    │  ← TileLink Manager
+                    │ (LLC, 512KB) │
+                    └──────┬───────┘
+                           │ TileLink (Coherence)
+              ┌────────────┼────────────┐
+              │            │            │
+       ┌──────▼──────┐    │     ┌──────▼──────┐
+       │ Private L2  │    │     │ Private L2  │
+       │ (Tile 0)    │    │     │ (Tile 1)    │
+       │ + TCM       │    │     │ + TCM       │
+       └─────────────┘    │     └─────────────┘
+</div></code></pre>
+<h4 id="352-tcm-一致性语义">3.5.2 TCM 一致性语义</h4>
+<p>TCM Banks 是<strong>独立的物理 SRAM</strong>，不直接参与 TileLink 缓存一致性协议。TCM 的数据进出通过 <strong>TMA 的独立 TileLink 端口</strong>进行，保证一致性：</p>
+<ul>
+<li><strong>TCM ↔ DRAM (via TMA)</strong>：TMA 拥有独立 TileLink Client 端口连接 LLC。Load 时 TMA 发起 AcquireBlock 从 LLC/DRAM 获取数据；Store 时 TMA 发起 ReleaseData 将脏数据写回 LLC/DRAM。所有操作遵循 TileLink 一致性协议，确保 TCM 数据与系统一致</li>
+<li><strong>TCM ↔ CUTE/RVV (直连)</strong>：TCM Banks 与 CUTE/RVV 之间的直连路径不经过 TileLink。这些是 Tile 内部的数据交换，由软件通过 fence.m 保证时序</li>
+<li><strong>TCM 内部一致性</strong>：TCM 是 CUTE 和 RVV 的共享暂存，由软件/固件保证访问顺序（fence.m 同步）</li>
+<li><strong>TMA 与 L2 Controller 端口独立</strong>：TMA 的 TileLink 端口与 Private L2 Controller 的 TileLink 端口是两个独立的 TileLink Client，两者在片上互连上互不干扰。TMA 的大量数据搬运不会阻塞 CPU/RVV 的正常缓存访问</li>
+</ul>
+<h4 id="353-cache-部分的一致性">3.5.3 Cache 部分的一致性</h4>
+<p>Cache 部分通过 TileLink 协议与 System L2 保持一致性：</p>
+<ul>
+<li>使用 <strong>TileLink Client</strong> 接口连接到片上互连</li>
+<li>支持的 TileLink 消息类型：
+<ul>
+<li><strong>Acquire/Release</strong>：正常缓存读写</li>
+<li><strong>Probe</strong>：响应系统 L2 的无效化请求</li>
+<li><strong>Grant</strong>：数据授权</li>
+</ul>
+</li>
+<li>推荐使用 <strong>TileLink Coherence Protocol</strong> 中的 MESI 或 MOESI 变体</li>
+</ul>
+<h3 id="36-数据流变化">3.6 数据流变化</h3>
+<h4 id="361-现有数据流-v2">3.6.1 现有数据流 (v2)</h4>
+<pre class="hljs"><code><div>Load Phase:
+  DRAM → System L2 → TileLink → LocalMMU → AML → ASCP
+  DRAM → System L2 → TileLink → LocalMMU → BML → BSCP
+
+Compute Phase:
+  ASCP → ADC → MTE → CDC → CSCP
+
+Store Phase:
+  CSCP → CML → LocalMMU → TileLink → System L2 → DRAM
+</div></code></pre>
+<h4 id="362-新数据流-v4-with-l2--tcm--tma">3.6.2 新数据流 (v4 with L2 + TCM + TMA)</h4>
+<pre class="hljs"><code><div>Load Phase (L2 命中):
+  Private L2 → AML → ASCP              ← 省去 TileLink + System L2 往返
+  Private L2 → BML → BSCP
+
+Load Phase (L2 未命中):
+  DRAM → System L2 → TileLink → Private L2 → AML → ASCP
+
+TCM 预填充 (TMA 后台搬运, 与 Compute 重叠):
+  DRAM → System L2 → TileLink(TMA端口) → TMA → TCM Banks
+  软件提交描述符后立即返回，TMA 在后台自动完成
+  TMA 独立 TileLink 端口，不阻塞 CPU/RVV/CUTE 的正常缓存访问
+
+TCM 回写 (TMA 后台搬运):
+  TCM Banks → TMA → TileLink(TMA端口) → System L2 → DRAM
+
+RVV → CUTE 数据交换 (通过 TCM 直连):
+  VRF → TCM Controller → TCM Banks      ← RVV 写入 (直连, 1 cycle)
+  TCM Banks → TCM Controller → AML → ASCP ← CUTE 读取 (直连, 1 cycle)
+
+CUTE → RVV 数据交换 (通过 TCM 直连):
+  CSCP → CML → TCM Controller → TCM Banks ← CUTE 写入 (直连, 1 cycle)
+  TCM Banks → TCM Controller → VRF          ← RVV 读取 (直连, 1 cycle)
+
+Compute Phase (不变):
+  ASCP → ADC → MTE → CDC → CSCP
+
+Store Phase (写回 L2):
+  CSCP → CML → Private L2               ← 写回 Private L2 而非直接 DRAM
+  Private L2 → (eviction) → System L2 → DRAM
+</div></code></pre>
+<h4 id="363-关键优化场景">3.6.3 关键优化场景</h4>
+<p><strong>场景 1：K 维迭代的跨轮复用</strong></p>
+<pre class="hljs"><code><div>现有: K=0: DRAM→ASCP[BSCP] → Compute → K=1: DRAM→ASCP[BSCP] → Compute → ...
+新:   K=0: DRAM→Private L2→ASCP[BSCP] → Compute → K=1: Private L2→ASCP[BSCP] → ...
+                                         ↑ L2 命中，无需访问 DRAM
+</div></code></pre>
+<p><strong>场景 2：CPU 预处理 → CUTE 计算</strong></p>
+<pre class="hljs"><code><div>现有: CPU 计算(ROCC) → Store to DRAM → CUTE Load from DRAM
+新:   CPU 计算(ROCC) → Write to Private L2 → CUTE Load from Private L2 (L2 hit)
+</div></code></pre>
+<p><strong>场景 3：RVV element-wise → CUTE matmul</strong></p>
+<pre class="hljs"><code><div>现有: RVV(vadd/vmul) → Store to DRAM → CUTE Load from DRAM → Compute
+新:   RVV(vadd/vmul) → Write to TCM (1 cycle) → CUTE Load from TCM (1 cycle!) → Compute
+</div></code></pre>
+<p><strong>场景 4：TMA 后台预取与计算重叠 (关键新场景)</strong></p>
+<pre class="hljs"><code><div>时间线:
+  t0: CPU 提交 TMA 描述符 (DRAM→TCM, A 矩阵)       ← 1 cycle, 立即返回
+  t1: CPU 提交 TMA 描述符 (DRAM→TCM, B 矩阵)       ← 排队等待
+  t2: CPU 继续其他工作 (配置 CSR, 启动其他任务...)
+  ...
+  t_N: TMA 完成搬运 → 置完成标志
+  t_N+1: CUTE 直接从 TCM 读取 (1 cycle!) → Compute
+
+对比无 TMA:
+  无 TMA: CUTE 等待 AML Load (DRAM→ASCP) → 40~100 cycles 空闲等待
+  有 TMA: CUTE 从 TCM 读取 → 1 cycle，搬运在后台已完成
+</div></code></pre>
+<p><strong>场景 5：TMA 流水线化多轮搬运</strong></p>
+<pre class="hljs"><code><div>TMA 描述符队列:
+  [desc0] DRAM addr0 → TCM offset0 (8KB, A 矩阵)    ← 正在搬运
+  [desc1] DRAM addr1 → TCM offset1 (8KB, B 矩阵)    ← 排队
+  [desc2] DRAM addr2 → TCM offset2 (64KB, C 初始值)  ← 排队
+
+TMA 逐条执行，CPU 只提交一次，后续搬运完全硬件自动完成
+可与 CUTE 计算当前 tile 的同时预取下一个 tile 的数据
+</div></code></pre>
+<h3 id="37-参数化配置">3.7 参数化配置</h3>
+<h4 id="371-cuteparams-扩展">3.7.1 CuteParams 扩展</h4>
+<pre class="hljs"><code><div><span class="hljs-keyword">case</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">CuteParams</span>(<span class="hljs-params">
+    <span class="hljs-comment">// ... 现有参数保持不变 ...</span>
+
+    <span class="hljs-comment">// === 新增：私有 L2 + TCM + TMA 参数 ===</span>
+    val <span class="hljs-type">EnablePrivateL2</span>: <span class="hljs-type">Boolean</span> = false,              <span class="hljs-comment">// 是否启用私有 L2</span>
+    val <span class="hljs-type">PrivateL2Params</span>: <span class="hljs-type">Option</span>[<span class="hljs-type">CuteL2TCMParams</span>] = <span class="hljs-type">None</span>, <span class="hljs-comment">// L2/TCM/TMA 参数</span>
+</span>) </span>{
+    <span class="hljs-comment">// ... 现有 require 保持不变 ...</span>
+
+    <span class="hljs-comment">// TCM 容量推导 (基于 Bank 分配)</span>
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">tcmSizeBytes</span> </span>= <span class="hljs-type">PrivateL2Params</span>.map(_.<span class="hljs-type">TCMSizeKB</span> * <span class="hljs-number">1024</span>).getOrElse(<span class="hljs-number">0</span>)
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">tcmAddrWidth</span> </span>= log2Ceil(tcmSizeBytes)
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">privateL2CacheSizeBytes</span> </span>= <span class="hljs-type">PrivateL2Params</span>.map(_.<span class="hljs-type">CacheSizeKB</span> * <span class="hljs-number">1024</span>).getOrElse(<span class="hljs-number">0</span>)
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">tcmAggBandwidthBits</span> </span>= <span class="hljs-type">PrivateL2Params</span>.map(_.<span class="hljs-type">L2NBanks</span> * _.<span class="hljs-type">TCMDataWidthBits</span>).getOrElse(<span class="hljs-number">0</span>)
+}
+</div></code></pre>
+<h4 id="372-预设配置">3.7.2 预设配置</h4>
+<pre class="hljs"><code><div><span class="hljs-class"><span class="hljs-keyword">object</span> <span class="hljs-title">CuteParams</span> </span>{
+    <span class="hljs-comment">// ... 现有配置保持不变 ...</span>
+
+    <span class="hljs-comment">// 带私有 L2 + TCM + TMA 的配置 (4Tops, 128SCP)</span>
+    <span class="hljs-comment">// 总计 8 Bank: 4 TCM + 4 Cache, 每 Bank 32KB</span>
+    <span class="hljs-comment">// TCM = 128KB (直连 CUTE), Cache = 128KB (Set-associative)</span>
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">CUTE_4Tops_128SCP_L2TCM</span> </span>= <span class="hljs-type">CUTE_4Tops_128SCP</span>.copy(
+        <span class="hljs-type">EnablePrivateL2</span> = <span class="hljs-literal">true</span>,
+        <span class="hljs-type">PrivateL2Params</span> = <span class="hljs-type">Some</span>(<span class="hljs-type">CuteL2TCMParams</span>(
+            <span class="hljs-type">L2NBanks</span> = <span class="hljs-number">8</span>,
+            <span class="hljs-type">TCMBanks</span> = <span class="hljs-number">4</span>,
+            <span class="hljs-type">L2NWays</span> = <span class="hljs-number">4</span>,
+            <span class="hljs-type">L2LineSizeBytes</span> = <span class="hljs-number">64</span>,
+            <span class="hljs-type">TCMDataWidthBits</span> = <span class="hljs-number">512</span>,
+            <span class="hljs-type">BankSizeKB</span> = <span class="hljs-number">32</span>,
+            <span class="hljs-type">TMAEnable</span> = <span class="hljs-literal">true</span>,
+            <span class="hljs-type">TMADescriptorQueueDepth</span> = <span class="hljs-number">4</span>,
+            <span class="hljs-type">TMAFIFODepth</span> = <span class="hljs-number">8</span>,
+            <span class="hljs-type">TMASourceMaxNum</span> = <span class="hljs-number">8</span>,
+        ))
+    )
+
+    <span class="hljs-comment">// 带私有 L2 + TCM + TMA 的配置 (8Tops, 256SCP)</span>
+    <span class="hljs-comment">// 总计 16 Bank: 8 TCM + 8 Cache, 每 Bank 64KB</span>
+    <span class="hljs-comment">// TCM = 512KB (直连 CUTE), Cache = 512KB (Set-associative)</span>
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">CUTE_8Tops_256SCP_L2TCM</span> </span>= <span class="hljs-type">CUTE_8Tops_256SCP</span>.copy(
+        <span class="hljs-type">EnablePrivateL2</span> = <span class="hljs-literal">true</span>,
+        <span class="hljs-type">PrivateL2Params</span> = <span class="hljs-type">Some</span>(<span class="hljs-type">CuteL2TCMParams</span>(
+            <span class="hljs-type">L2NBanks</span> = <span class="hljs-number">16</span>,
+            <span class="hljs-type">TCMBanks</span> = <span class="hljs-number">8</span>,
+            <span class="hljs-type">L2NWays</span> = <span class="hljs-number">8</span>,
+            <span class="hljs-type">L2LineSizeBytes</span> = <span class="hljs-number">64</span>,
+            <span class="hljs-type">TCMDataWidthBits</span> = <span class="hljs-number">512</span>,
+            <span class="hljs-type">BankSizeKB</span> = <span class="hljs-number">64</span>,
+            <span class="hljs-type">TMAEnable</span> = <span class="hljs-literal">true</span>,
+            <span class="hljs-type">TMADescriptorQueueDepth</span> = <span class="hljs-number">8</span>,
+            <span class="hljs-type">TMAFIFODepth</span> = <span class="hljs-number">16</span>,
+            <span class="hljs-type">TMASourceMaxNum</span> = <span class="hljs-number">16</span>,
+        ))
+    )
+}
+</div></code></pre>
+<hr>
+<h2 id="4-扩展二ame-矩阵扩展指令集兼容">4. 扩展二：AME 矩阵扩展指令集兼容</h2>
+<blockquote>
+<p>本节基于 AME 提案文档 <code>docs/riscv_matrix_extension_proposal.pdf</code> (v0.6.0) 设计。
+AME 定义了 <strong>tr0-3</strong>（Tile Register，输入矩阵）和 <strong>acc0-3</strong>（Accumulator Register，累加器）两类寄存器。</p>
+</blockquote>
+<h3 id="41-指令集概述">4.1 指令集概述</h3>
+<p>AME (Accelerator Matrix Extension) 是基于 RISC-V Matrix Extension 的修改版提案 (v0.6.0)，针对 CUTE 的硬件特性进行适配。</p>
+<h4 id="411-ame-寄存器模型">4.1.1 AME 寄存器模型</h4>
+<p>AME 提案定义了两类矩阵寄存器：</p>
+<table>
+<thead>
+<tr>
+<th>寄存器</th>
+<th>数量</th>
+<th>用途</th>
+<th>逻辑结构</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>tr0~tr3</strong></td>
+<td>4 个</td>
+<td>Tile Register，输入矩阵 (A/B)</td>
+<td>ROWNUM 行 × TRLEN bits/row，共 TLEN bits</td>
+</tr>
+<tr>
+<td><strong>acc0~acc3</strong></td>
+<td>4 个</td>
+<td>Accumulator Register，累加输出 (C/D)</td>
+<td>ROWNUM 行 × ARLEN bits/row，共 ALEN bits</td>
+</tr>
+</tbody>
+</table>
+<p><strong>关键参数定义：</strong></p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>含义</th>
+<th>约束</th>
+<th>CUTE 默认值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ELEN</code></td>
+<td>最大元素宽度 (bit)</td>
+<td>≥8, 2 的幂</td>
+<td>32 (FP32)</td>
+</tr>
+<tr>
+<td><code>TLEN</code></td>
+<td>每个 tr 的总位宽</td>
+<td>2 的幂, ≤2³²</td>
+<td>65536 (8KB)</td>
+</tr>
+<tr>
+<td><code>TRLEN</code></td>
+<td>每个 tr 每行的位宽</td>
+<td>2 的幂, ≤2¹⁶</td>
+<td>512 (64B)</td>
+</tr>
+<tr>
+<td><code>ROWNUM</code></td>
+<td>tr 的行数 = TLEN / TRLEN</td>
+<td>ROWNUM = TLEN / TRLEN</td>
+<td>128</td>
+</tr>
+<tr>
+<td><code>ARLEN</code></td>
+<td>每个 acc 每行的位宽 = ROWNUM × ELEN</td>
+<td>ARLEN = ROWNUM × ELEN</td>
+<td>4096 (512B)</td>
+</tr>
+<tr>
+<td><code>ALEN</code></td>
+<td>每个 acc 的总位宽 = ARLEN × ROWNUM</td>
+<td>ALEN = ARLEN × ROWNUM</td>
+<td>524288 (64KB)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="412-与标准-risc-v-matrix-extension-的差异">4.1.2 与标准 RISC-V Matrix Extension 的差异</h4>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>RISC-V Matrix Extension</th>
+<th>AME (CUTE 适配)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tile Register</td>
+<td>逻辑 tile register</td>
+<td><strong>tr0-3</strong> 映射到 ASCP/BSCP</td>
+</tr>
+<tr>
+<td>Accumulator</td>
+<td>逻辑 accumulator</td>
+<td><strong>acc0-3</strong> 映射到 CSCP</td>
+</tr>
+<tr>
+<td>Tile 尺寸</td>
+<td>运行时可配 (cfgcsr)</td>
+<td>编译时固定 (Tensor_M, Tensor_N, Tensor_K)</td>
+</tr>
+<tr>
+<td>矩阵乘法操作</td>
+<td>madd, sub, add 等</td>
+<td>madd, sub, add + CUTE 特有操作</td>
+</tr>
+<tr>
+<td>数据搬运</td>
+<td>Load/Store tile (memory)</td>
+<td>Load/Store tile (memory) + TCM (CUTE↔RVV)</td>
+</tr>
+<tr>
+<td>累加</td>
+<td>acc 驻留</td>
+<td>CSCP 双缓冲</td>
+</tr>
+<tr>
+<td>配置</td>
+<td>mcfgcsr, cfgctl</td>
+<td>xmcscr + mtilem/mtilek/mtilen + CUTE 扩展 CSR</td>
+</tr>
+<tr>
+<td>Scale Factor</td>
+<td>不支持</td>
+<td>支持 MXFP8/MXFP4 block-scale (CUTE 扩展)</td>
+</tr>
+<tr>
+<td>数据类型</td>
+<td>统一 SEW</td>
+<td>支持 13 种数据类型 (CUTE 扩展)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="413-设计原则">4.1.3 设计原则</h4>
+<ol>
+<li><strong>兼容 AME 提案</strong>：遵循 <code>docs/riscv_matrix_extension_proposal.pdf</code> v0.6.0 定义的 tr0-3/acc0-3 寄存器模型和 CSR 地址空间</li>
+<li><strong>CUTE 硬件约束透明化</strong>：Tile 尺寸、数据类型等通过 CSR 暴露给软件</li>
+<li><strong>保留 YGJK 指令集</strong>：AME 作为编程接口的上层，底层仍可使用 YGJK 微指令</li>
+</ol>
+<h3 id="42-tile-register-与-scratchpad-映射">4.2 Tile Register 与 Scratchpad 映射</h3>
+<h4 id="421-映射关系">4.2.1 映射关系</h4>
+<p>AME 的 <strong>tr0-3</strong> 和 <strong>acc0-3</strong> 映射到 CUTE 的 Scratchpad 系统，利用 CUTE 的双缓冲机制实现计算与加载的重叠：</p>
+<pre class="hljs"><code><div>AME Tile Register / Accumulator → CUTE Scratchpad 映射:
+┌──────────────────────────────────────────────────────────────────┐
+│  tr0  ─→  ASCP[0] (A matrix, bank 0)     [Input A, 双缓冲]     │
+│  tr1  ─→  ASCP[1] (A matrix, bank 1)     [Input A, 双缓冲]     │
+│  tr2  ─→  BSCP[0] (B matrix, bank 0)     [Input B, 双缓冲]     │
+│  tr3  ─→  BSCP[1] (B matrix, bank 1)     [Input B, 双缓冲]     │
+│                                                                  │
+│  acc0 ─→  CSCP[0] (C/D accumulator, bank 0)  [I/O C/D, 双缓冲] │
+│  acc1 ─→  CSCP[1] (C/D accumulator, bank 1)  [I/O C/D, 双缓冲] │
+│  acc2 ─→  CSCP 扩展 / Reserved             [未来扩展]          │
+│  acc3 ─→  CSCP 扩展 / Reserved             [未来扩展]          │
+└──────────────────────────────────────────────────────────────────┘
+
+物理存储容量 (CUTE_8Tops_128SCP 默认参数):
+  ASCP: Tensor_M × ReduceGroupSize × ReduceWidthByte = 128 × 1 × 64 = 8 KB / bank
+  BSCP: Tensor_N × ReduceGroupSize × ReduceWidthByte = 128 × 1 × 64 = 8 KB / bank
+  CSCP: Tensor_M × Tensor_N × ResultWidthByte = 128 × 128 × 4 = 64 KB / bank
+</div></code></pre>
+<p><strong>映射规则：</strong></p>
+<ul>
+<li><strong>tr0, tr1</strong> → ASCP 双缓冲：两个 bank 交替使用，一个用于当前计算，另一个用于后台加载</li>
+<li><strong>tr2, tr3</strong> → BSCP 双缓冲：同上</li>
+<li><strong>acc0, acc1</strong> → CSCP 双缓冲：累加结果驻留在 CSCP 中，整个 K 维度遍历后才写回</li>
+<li><strong>acc2, acc3</strong> → 预留给扩展用途（如额外的累加缓冲或 Scale Factor 存储）</li>
+</ul>
+<h4 id="422-双缓冲与流水线重叠">4.2.2 双缓冲与流水线重叠</h4>
+<p>CUTE 的双缓冲机制通过 tr/acc 寄存器的交替使用来表达：</p>
+<pre class="hljs"><code><div>双缓冲循环 (Ping-Pong):
+  Iteration 0: tr0 (ASCP[0]), tr2 (BSCP[0]), acc0 (CSCP[0]) → Compute
+               tr1 (ASCP[1]), tr3 (BSCP[1]) ← 后台 Load (与 Compute 重叠)
+
+  Iteration 1: tr1 (ASCP[1]), tr3 (BSCP[1]), acc1 (CSCP[1]) → Compute
+               tr0 (ASCP[0]), tr2 (BSCP[0]) ← 后台 Load
+
+  Iteration 2: 循环回 Iteration 0
+</div></code></pre>
+<p>软件通过交替指定 tr0/tr1 和 tr2/tr3 即可自然实现双缓冲，无需显式管理 bank 切换。</p>
+<h4 id="423-ame-参数与-cute-参数的对应关系">4.2.3 AME 参数与 CUTE 参数的对应关系</h4>
+<p>以 CUTE_8Tops_128SCP 配置为例：</p>
+<pre class="hljs"><code><div><span class="hljs-comment">// CUTE 编译时参数</span>
+<span class="hljs-type">Tensor_M</span> = <span class="hljs-number">128</span>, <span class="hljs-type">Tensor_N</span> = <span class="hljs-number">128</span>, <span class="hljs-type">Tensor_K</span> = <span class="hljs-number">64</span>
+<span class="hljs-type">ReduceWidthByte</span> = <span class="hljs-number">64</span>, <span class="hljs-type">ResultWidthByte</span> = <span class="hljs-number">4</span>
+<span class="hljs-type">Matrix_M</span> = <span class="hljs-number">4</span>, <span class="hljs-type">Matrix_N</span> = <span class="hljs-number">4</span>
+
+<span class="hljs-comment">// AME 参数 (通过 CSR 暴露给软件)</span>
+<span class="hljs-type">ELEN</span>   = <span class="hljs-type">ResultWidth</span> = <span class="hljs-number">32</span>                          <span class="hljs-comment">// 最大元素宽度 (FP32)</span>
+<span class="hljs-type">TRLEN</span>  = <span class="hljs-type">ReduceWidth</span> = <span class="hljs-number">512</span>                         <span class="hljs-comment">// 每行位宽 (匹配硬件 reduce 宽度)</span>
+<span class="hljs-type">ROWNUM</span> = <span class="hljs-type">Tensor_M</span> = <span class="hljs-number">128</span>                            <span class="hljs-comment">// 行数 = A 矩阵行数</span>
+<span class="hljs-type">TLEN</span>   = <span class="hljs-type">ROWNUM</span> × <span class="hljs-type">TRLEN</span> = <span class="hljs-number">128</span> × <span class="hljs-number">512</span> = <span class="hljs-number">65536</span> bits  <span class="hljs-comment">// 每个 tr 总位宽 = 8 KB</span>
+<span class="hljs-type">ARLEN</span>  = <span class="hljs-type">Tensor_N</span> × <span class="hljs-type">ResultWidth</span> = <span class="hljs-number">128</span> × <span class="hljs-number">32</span> = <span class="hljs-number">4096</span> <span class="hljs-comment">// 每个 acc 每行位宽</span>
+<span class="hljs-type">ALEN</span>   = <span class="hljs-type">ROWNUM</span> × <span class="hljs-type">ARLEN</span> = <span class="hljs-number">128</span> × <span class="hljs-number">4096</span> = <span class="hljs-number">524288</span> bits <span class="hljs-comment">// 每个 acc 总位宽 = 64 KB</span>
+</div></code></pre>
+<p><strong>tr 寄存器 (Tile Register) 的逻辑视图：</strong></p>
+<ul>
+<li>每个 tr 寄存器组织为 ROWNUM (128) 行，每行 TRLEN (512 bits = 64 bytes)</li>
+<li>对于 A 矩阵 (tr0/tr1)：每行存储 Tensor_K / (ReduceWidth / ELEN) 个 reduce vector</li>
+<li>对于 B 矩阵 (tr2/tr3)：每行存储 Tensor_K / (ReduceWidth / ELEN) 个 reduce vector</li>
+</ul>
+<p><strong>acc 寄存器 (Accumulator) 的逻辑视图：</strong></p>
+<ul>
+<li>每个 acc 寄存器组织为 ROWNUM (128) 行，每行 ARLEN (4096 bits = 512 bytes)</li>
+<li>每行存储 Tensor_N (128) 个 FP32 累加元素</li>
+<li>总容量 = ALEN = 64 KB，与 CSCP 物理大小一致</li>
+</ul>
+<h3 id="43-指令编码">4.3 指令编码</h3>
+<p>AME 指令采用 RISC-V 标准编码格式。矩阵运算指令使用 R-type 格式，rs1/rs2/rd 字段分别编码输入 Tile Register (tr) 和 Accumulator (acc) 的 ID。</p>
+<h4 id="431-指令格式">4.3.1 指令格式</h4>
+<pre class="hljs"><code><div>矩阵运算指令 (R-type, AME 兼容):
+┌───────┬──────────┬──────────┬───────┬──────────┬───────┐
+│ 31-25 │   24-20  │   19-15  │ 14-12 │   11-7   │  6-0  │
+│funct7 │   rs2    │   rs1    │funct3 │    rd    │opcode │
+└───────┴──────────┴──────────┴───────┴──────────┴───────┘
+  OP      tr_src2    tr_src1    OP      acc_dst    MATMUL
+          (B 矩阵)   (A 矩阵)            (C/D 累加器)
+
+CUTE 扩展指令 (R-type, custom):
+┌───────┬──────────┬──────────┬───────┬──────────┬───────┐
+│ 31-25 │   24-20  │   19-15  │ 14-12 │   11-7   │  6-0  │
+│funct7 │   rs2    │   rs1    │funct3 │    rd    │opcode │
+└───────┴──────────┴──────────┴───────┴──────────┴───────┘
+  CUTE     TCM/      imm/     CUTE     TCM/      AME_EXT
+  ext      Scale     cfg               acc
+</div></code></pre>
+<p><strong>字段说明：</strong></p>
+<ul>
+<li><code>rd [4:0]</code>：目标 acc 寄存器 ID (acc0=00000, acc1=00001, acc2=00010, acc3=00011)</li>
+<li><code>rs1 [4:0]</code>：源 tr 寄存器 ID (tr0=00000, tr1=00001, tr2=00010, tr3=00011)</li>
+<li><code>rs2 [4:0]</code>：源 tr 寄存器 ID (tr0=00000, tr1=00001, tr2=00010, tr3=00011)</li>
+<li><code>funct3</code>：操作码子字段，区分 madd/msub/mul 等</li>
+<li><code>funct7</code>：扩展操作码，CUTE 特有操作使用非零值</li>
+</ul>
+<h4 id="432-指令集">4.3.2 指令集</h4>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>助记符</th>
+<th>操作</th>
+<th>编码字段</th>
+<th>对应 CUTE 微操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>矩阵运算</strong></td>
+<td><code>mmadd</code></td>
+<td>acc += tr × tr</td>
+<td>rd=acc, rs1=tr_A, rs2=tr_B, funct3=000</td>
+<td>Load A/B/C → Compute → Store C</td>
+</tr>
+<tr>
+<td></td>
+<td><code>mmsub</code></td>
+<td>acc -= tr × tr</td>
+<td>rd=acc, rs1=tr_A, rs2=tr_B, funct3=001</td>
+<td>Load A/B/C → Neg Compute → Store C</td>
+</tr>
+<tr>
+<td></td>
+<td><code>mmul</code></td>
+<td>acc = tr × tr (C=0)</td>
+<td>rd=acc, rs1=tr_A, rs2=tr_B, funct3=010</td>
+<td>Clear C → Load A/B → Compute → Store C</td>
+</tr>
+<tr>
+<td></td>
+<td><code>mmadd.u</code></td>
+<td>无符号 madd</td>
+<td>funct3=011</td>
+<td>同 mmadd，输入视为无符号</td>
+</tr>
+<tr>
+<td><strong>数据搬运</strong></td>
+<td><code>mmload.tr</code></td>
+<td>Memory → tr</td>
+<td>rs1=tr, rs2=base_reg</td>
+<td>AML/BML Load 到 ASCP/BSCP</td>
+</tr>
+<tr>
+<td></td>
+<td><code>mmload.acc</code></td>
+<td>Memory → acc</td>
+<td>rd=acc, rs2=base_reg</td>
+<td>CML Load 到 CSCP</td>
+</tr>
+<tr>
+<td></td>
+<td><code>mmstore.acc</code></td>
+<td>acc → Memory</td>
+<td>rd=acc, rs2=base_reg</td>
+<td>CML Store</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tcmput</code></td>
+<td>acc → TCM</td>
+<td>rd=acc, funct7=0000001</td>
+<td>CSCP → TCM Controller</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tcmget</code></td>
+<td>TCM → tr</td>
+<td>rs1=tr, funct7=0000010</td>
+<td>TCM Controller → ASCP/BSCP</td>
+</tr>
+<tr>
+<td><strong>配置</strong></td>
+<td><code>csrrw</code></td>
+<td>设置 CSR</td>
+<td>标准 CSR 指令</td>
+<td>写 xmcscr / mtilem 等</td>
+</tr>
+<tr>
+<td></td>
+<td><code>scaleload</code></td>
+<td>加载 scale factor</td>
+<td>funct7=0000100</td>
+<td>ASL/BSL Load</td>
+</tr>
+<tr>
+<td><strong>同步</strong></td>
+<td><code>fence.m</code></td>
+<td>矩阵操作同步</td>
+<td>标准 fence</td>
+<td>等待 ComputeGo</td>
+</tr>
+<tr>
+<td><strong>CUTE 特有</strong></td>
+<td><code>cute.exop</code></td>
+<td>启动 AfterOps</td>
+<td>funct7=0001000</td>
+<td>AfterOps 配置与启动</td>
+</tr>
+<tr>
+<td></td>
+<td><code>cute.vstart</code></td>
+<td>启动 Vector 流水</td>
+<td>funct7=0001001</td>
+<td>VectorStreamInterface</td>
+</tr>
+</tbody>
+</table>
+<h4 id="433-核心指令编码示例">4.3.3 核心指令编码示例</h4>
+<pre class="hljs"><code><div>AMEMADD (acc += tr_A × tr_B):
+  // acc1 += tr0 × tr2  (D[CSCP[1]] += A[ASCP[0]] × B[BSCP[0]])
+  funct7 = 0000000          // 标准 madd
+  rs2    = 00010             // tr2 (B 矩阵)
+  rs1    = 00000             // tr0 (A 矩阵)
+  funct3 = 000               // matmul add
+  rd     = 00001             // acc1 (C/D 累加器)
+  opcode = 0111011           // 0x3B (AME matmul opcode, custom-0)
+
+AMEMSUB (acc -= tr_A × tr_B):
+  // acc0 -= tr1 × tr3
+  funct7 = 0000000
+  rs2    = 00011             // tr3
+  rs1    = 00001             // tr1
+  funct3 = 001               // matmul sub
+  rd     = 00000             // acc0
+  opcode = 0111011
+
+AMEMMUL (acc = tr_A × tr_B, clear C):
+  // acc0 = tr0 × tr2
+  funct7 = 0000000
+  rs2    = 00010             // tr2
+  rs1    = 00000             // tr0
+  funct3 = 010               // matmul (zero C)
+  rd     = 00000             // acc0
+  opcode = 0111011
+
+MMLOAD.TR (Memory → tr):
+  // 从内存加载到 tr0 (ASCP[0])
+  funct7 = 0000001           // load
+  rs2    = x1                // base address register
+  rs1    = 00000             // tr0
+  funct3 = 000               // load tile
+  rd     = 00000             // unused
+  opcode = 0111011
+
+MMSTORE.ACC (acc → Memory):
+  // 将 acc0 (CSCP[0]) 存回内存
+  funct7 = 0000010           // store
+  rs2    = x2                // base address register
+  rs1    = 00000             // unused
+  funct3 = 000               // store tile
+  rd     = 00000             // acc0
+  opcode = 0111011
+
+TCMPUT (acc → TCM):
+  // 将 acc0 结果放入 TCM 供 RVV 使用
+  funct7 = 0000001           // CUTE 扩展: tcmput
+  rs2    = 00000             // TCM target offset
+  rs1    = 00000             // unused
+  funct3 = 011               // tcmput
+  rd     = 00000             // acc0 (source)
+  opcode = 1110111           // 0x77 (custom-3, AME_EXT)
+
+TCMGET (TCM → tr):
+  // 从 TCM 加载数据到 tr0 (ASCP[0])
+  funct7 = 0000010           // CUTE 扩展: tcmget
+  rs2    = 00000             // unused
+  rs1    = 00000             // TCM source offset
+  funct3 = 100               // tcmget
+  rd     = 00000             // tr0 (destination)
+  opcode = 1110111           // 0x77 (AME_EXT)
+</div></code></pre>
+<h3 id="44-指令语义与-cute-微指令映射">4.4 指令语义与 CUTE 微指令映射</h3>
+<h4 id="441-amemadd-指令流程">4.4.1 AMEMADD 指令流程</h4>
+<p><code>amemadd acc1, tr0, tr2</code> (acc1 += tr0 × tr2) 的执行过程：</p>
+<pre class="hljs"><code><div>Step 1: AME Decoder 解析指令
+  - rd=00001 → acc1 → CSCP[1]
+  - rs1=00000 → tr0 → ASCP[0]
+  - rs2=00010 → tr2 → BSCP[0]
+  - funct3=000 → matmul add
+
+Step 2: 配置 TaskController
+  - A source = ASCP[0], B source = BSCP[0], C/D = CSCP[1]
+  - 数据类型 = 当前 xmcscr 配置
+  - 如果 A/B 数据不在 ASCP/BSCP 中，发起 Load
+
+Step 3: 数据加载 (如果需要)
+  - tr0 内存地址 → AML Load 到 ASCP[0]
+  - tr2 内存地址 → BML Load 到 BSCP[0]
+  - acc1 初始值 → CML Load 到 CSCP[1] (仅 K=0 第一轮)
+
+Step 4: 等待 Load 完成
+
+Step 5: 启动 Compute
+  - TaskController → ADataController, BDataController, CDataController
+  - MTE 开始矩阵乘法: D = A × B + C
+
+Step 6: 等待 Compute 完成 (fence.m)
+
+Step 7: 结果驻留在 CSCP[1] (acc1)，可供后续 AMEMADD 或 MMSTORE 使用
+</div></code></pre>
+<h4 id="442-双缓冲示例连续矩阵乘法">4.4.2 双缓冲示例：连续矩阵乘法</h4>
+<pre class="hljs"><code><div># 假设要计算 D = A × B，其中 A 是 256×128, B 是 128×256
+# 分块为两个 128×128 矩阵乘法
+
+# 第一轮: 使用 tr0/tr2/acc0 (bank 0)
+mmload.tr  tr0, (x0)        # 加载 A[0:128, :] 到 ASCP[0]
+mmload.tr  tr2, (x1)        # 加载 B[:, 0:128] 到 BSCP[0]
+ammadd     acc0, tr0, tr2   # acc0 += tr0 × tr2
+
+# 第二轮: 使用 tr1/tr3/acc1 (bank 1)，与第一轮的 Store 重叠
+mmload.tr  tr1, (x2)        # 加载 A[128:256, :] 到 ASCP[1]  ← 后台加载
+mmload.tr  tr3, (x3)        # 加载 B[:, 128:256] 到 BSCP[1]  ← 后台加载
+mmstore.acc acc0, (x4)      # 存储 D[0:128, 0:128]            ← 后台存储
+ammadd     acc1, tr1, tr3   # acc1 += tr1 × tr3               ← 计算不等待
+
+fence.m                       # 等待所有操作完成
+mmstore.acc acc1, (x5)      # 存储 D[128:256, 128:256]
+</div></code></pre>
+<h4 id="443-tcm-数据交换流程">4.4.3 TCM 数据交换流程</h4>
+<pre class="hljs"><code><div># RVV 计算 element-wise 操作后，通过 TCM 传给 CUTE
+vadd.vv    v0, v1, v2            # RVV 向量加法
+# 将向量结果写入 TCM (通过 CUTE 扩展路径)
+tcmput     acc0, tcm_offset_0    # acc0 (CSCP[0]) → TCM region
+
+# CUTE 直接从 TCM 读取，无需经过内存
+tcmget     tr0, tcm_offset_0     # TCM → tr0 (ASCP[0], 1~2 cycles!)
+ammadd     acc1, tr0, tr2        # 矩阵乘法
+mmstore.acc acc1, result_addr    # 结果写回内存
+</div></code></pre>
+<h3 id="45-配置寄存器-csr">4.5 配置寄存器 (CSR)</h3>
+<h4 id="451-csr-地址映射">4.5.1 CSR 地址映射</h4>
+<p>AME 遵循提案文档的 CSR 地址空间，同时新增 CUTE 特有的扩展 CSR：</p>
+<table>
+<thead>
+<tr>
+<th>CSR 地址</th>
+<th>名称</th>
+<th>位宽</th>
+<th>访问权限</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>0x802</strong></td>
+<td><code>xmcscr</code></td>
+<td>64</td>
+<td>R/W</td>
+<td>矩阵控制与状态寄存器 (AME 提案)</td>
+</tr>
+<tr>
+<td><strong>0x803</strong></td>
+<td><code>mtilem</code></td>
+<td>64</td>
+<td>R/W</td>
+<td>Tile M 维度 = Tensor_M</td>
+</tr>
+<tr>
+<td><strong>0x804</strong></td>
+<td><code>mtilen</code></td>
+<td>64</td>
+<td>R/W</td>
+<td>Tile N 维度 = Tensor_N</td>
+</tr>
+<tr>
+<td><strong>0x805</strong></td>
+<td><code>mtilek</code></td>
+<td>64</td>
+<td>R/W</td>
+<td>Tile K 维度 = Tensor_K</td>
+</tr>
+<tr>
+<td><strong>0x806</strong></td>
+<td><code>mdatatype</code></td>
+<td>64</td>
+<td>R/W</td>
+<td>数据类型配置 (CUTE 扩展)</td>
+</tr>
+<tr>
+<td><strong>0x807</strong></td>
+<td><code>mscalecfg</code></td>
+<td>64</td>
+<td>R/W</td>
+<td>Scale factor 配置 (CUTE 扩展)</td>
+</tr>
+<tr>
+<td><strong>0x808</strong></td>
+<td><code>mtcmcfg</code></td>
+<td>64</td>
+<td>R/W</td>
+<td>TCM 映射配置 (CUTE 扩展)</td>
+</tr>
+<tr>
+<td><strong>0x809</strong></td>
+<td><code>mcuteext</code></td>
+<td>64</td>
+<td>R/W</td>
+<td>CUTE 扩展控制</td>
+</tr>
+<tr>
+<td><strong>0xCC0</strong></td>
+<td><code>xmisr</code></td>
+<td>64</td>
+<td>R</td>
+<td>实现信息与特性支持 (AME 提案)</td>
+</tr>
+<tr>
+<td><strong>0xCC1</strong></td>
+<td><code>xtlenb</code></td>
+<td>64</td>
+<td>R</td>
+<td>TLEN 字节数 = TLEN/8 (AME 提案)</td>
+</tr>
+<tr>
+<td><strong>0xCC2</strong></td>
+<td><code>xtrlenb</code></td>
+<td>64</td>
+<td>R</td>
+<td>TRLEN 字节数 = TRLEN/8 (AME 提案)</td>
+</tr>
+<tr>
+<td><strong>0xCC3</strong></td>
+<td><code>xalenb</code></td>
+<td>64</td>
+<td>R</td>
+<td>ALEN 字节数 = ALEN/8 (AME 提案)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="452-xmcscr--矩阵控制与状态寄存器-ame-提案-0x802">4.5.2 xmcscr — 矩阵控制与状态寄存器 (AME 提案 0x802)</h4>
+<pre class="hljs"><code><div>xmcscr (0x802):
+┌─────────────────────────────────────────────────────────────────┐
+│ Bit 63    - xmsaten: Saturation enable (CUTE 扩展)              │
+│ Bit 62:61 - xmfrm: Float rounding mode (CUTE 扩展)             │
+│ Bit 60:59 - xmxrm: Fixed-point rounding mode                   │
+│ Bit 58    - xmsat: Saturation occurred flag                     │
+│ Bit 57:52 - xmfflags: Float exception flags (CUTE 扩展)        │
+│ Bit 51:48 - CUTE operation mode                                 │
+│            0000 = Normal matmul                                 │
+│            0001 = Block-scaled matmul (MXFP8/MXFP4)             │
+│            0010 = Symmetric quantized matmul                    │
+│ Bit 47:40 - Data type encoding                                  │
+│            高 4 位: Output type (FP32/FP16/BF16/INT32)          │
+│            低 4 位: Input type (INT8/FP8/FP16/BF16/FP32/FP4)   │
+│ Bit 39:32 - Reserved                                           │
+│ Bit 31:0  - 指令状态 (busy, load_done, compute_done 等)        │
+└─────────────────────────────────────────────────────────────────┘
+</div></code></pre>
+<h4 id="453-mtilem--mtilen--mtilek--tile-维度配置">4.5.3 mtilem / mtilen / mtilek — Tile 维度配置</h4>
+<pre class="hljs"><code><div>mtilem (0x803):  // 编译时固定，运行时只读
+┌──────────────────────────────────────────────────────────────┐
+│ Bit 63:16 - Reserved                                         │
+│ Bit 15:0  - M 维度 = Tensor_M (例: 128)                     │
+└──────────────────────────────────────────────────────────────┘
+
+mtilen (0x804):
+┌──────────────────────────────────────────────────────────────┐
+│ Bit 63:16 - Reserved                                         │
+│ Bit 15:0  - N 维度 = Tensor_N (例: 128)                     │
+└──────────────────────────────────────────────────────────────┘
+
+mtilek (0x805):
+┌──────────────────────────────────────────────────────────────┐
+│ Bit 63:16 - Reserved                                         │
+│ Bit 15:0  - K 维度 = Tensor_K (例: 64)                      │
+└──────────────────────────────────────────────────────────────┘
+</div></code></pre>
+<h4 id="454-xmisr--实现信息与特性支持-ame-提案-0xcc0">4.5.4 xmisr — 实现信息与特性支持 (AME 提案 0xCC0)</h4>
+<pre class="hljs"><code><div>xmisr (0xCC0):
+┌─────────────────────────────────────────────────────────────────┐
+│ Bit 63:48 - 实现版本号 (例: 0x0001 = v0.1)                    │
+│ Bit 47:32 - NTR: Number of Tile Registers (4 = tr0-3)         │
+│ Bit 31:16 - NACC: Number of Accumulators (4 = acc0-3)         │
+│ Bit 15:0  - 特性支持位图                                       │
+│   Bit 0  - mmi4i32   (INT4×INT4→INT32 matmul, optional)        │
+│   Bit 1  - mmi8i32   (INT8×INT8→INT32 matmul, compulsory)     │
+│   Bit 2  - mmf16f16  (FP16×FP16→FP16 matmul, compulsory)      │
+│   Bit 3  - mmf32f32  (FP32×FP32→FP32 matmul, optional)        │
+│   Bit 4  - mmf8f16   (FP8×FP8→FP16 matmul, compulsory)        │
+│   Bit 5  - mmf8bf16  (FP8×FP8→BF16 matmul, compulsory)        │
+│   Bit 6  - mmf16f32  (FP16×FP16→FP32 matmul, compulsory)      │
+│   Bit 7  - mmbf16f32 (BF16×BF16→FP32 matmul, compulsory)      │
+│   Bit 8  - mmf8f32   (FP8×FP8→FP32 matmul, compulsory)        │
+│   Bit 9  - mmf32f64  (FP32×FP32→FP64 matmul, optional)        │
+│   Bit 10 - mmscale   (Block-scaled matmul, CUTE 扩展)          │
+│   Bit 11 - mmtcm     (TCM data exchange, CUTE 扩展)            │
+└─────────────────────────────────────────────────────────────────┘
+</div></code></pre>
+<h4 id="455-xtlenb--xtrlenb--xalenb--寄存器大小查询-ame-提案">4.5.5 xtlenb / xtrlenb / xalenb — 寄存器大小查询 (AME 提案)</h4>
+<pre class="hljs"><code><div>xtlenb (0xCC1):  // 每个 tr 的字节数
+┌──────────────────────────────────────────────────────────────┐
+│ 值 = TLEN / 8 = 8192 (例: CUTE_8Tops_128SCP)               │
+└──────────────────────────────────────────────────────────────┘
+
+xtrlenb (0xCC2): // 每个 tr 每行的字节数
+┌──────────────────────────────────────────────────────────────┐
+│ 值 = TRLEN / 8 = 64 (例: CUTE_8Tops_128SCP)                │
+└──────────────────────────────────────────────────────────────┘
+
+xalenb (0xCC3):  // 每个 acc 的字节数
+┌──────────────────────────────────────────────────────────────┐
+│ 值 = ALEN / 8 = 65536 (例: CUTE_8Tops_128SCP)              │
+└──────────────────────────────────────────────────────────────┘
+</div></code></pre>
+<h4 id="456-mdatatype--数据类型配置-cute-扩展-0x806">4.5.6 mdatatype — 数据类型配置 (CUTE 扩展 0x806)</h4>
+<pre class="hljs"><code><div>mdatatype (0x806):
+┌──────────────────────────────────────────────────────┐
+│ Bit 63:16 - Reserved                                 │
+│ Bit 15:12 - Output Type (累加类型)                    │
+│   0000 = INT32  |  0001 = FP16  |  0010 = BF16      │
+│   0011 = FP32  |  0100 = FP64                        │
+│ Bit 11:8  - Input B Type                             │
+│   0000 = INT8   |  0001 = UINT8 |  0010 = FP16      │
+│   0011 = BF16  |  0100 = TF32  |  0101 = FP8E4M3   │
+│   0110 = FP8E5M2 | 0111 = MXFP8 |  1000 = MXFP4    │
+│   1001 = NVFP4  |  1010 = FP4                        │
+│ Bit 7:4   - Input A Type (同上编码)                   │
+│ Bit 3:0   - Operation Mode                           │
+│   0000 = Normal matmul                               │
+│   0001 = Block-scaled matmul                         │
+│   0010 = Symmetric quantized matmul                  │
+│   0011 = Transposed matmul (B^T)                     │
+└──────────────────────────────────────────────────────┘
+</div></code></pre>
+<h4 id="457-mtcmcfg--tcm-映射配置-cute-扩展-0x808">4.5.7 mtcmcfg — TCM 映射配置 (CUTE 扩展 0x808)</h4>
+<pre class="hljs"><code><div>mtcmcfg (0x808):
+┌──────────────────────────────────────────────────────┐
+│ Bit 63    - TCM Enable                               │
+│ Bit 62:56 - TCM region ID                            │
+│ Bit 55:48 - Active TCM tile count                    │
+│ Bit 47:32 - TCM element stride (bytes)               │
+│ Bit 31:16 - TCM row stride (bytes)                   │
+│ Bit 15:0  - TCM base address (within TCM region)     │
+└──────────────────────────────────────────────────────┘
+</div></code></pre>
+<h3 id="46-与现有-ygjk-指令的关系">4.6 与现有 YGJK 指令的关系</h3>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>YGJK</th>
+<th>AME</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>指令来源</td>
+<td>自定义 RoCC 指令</td>
+<td>AME 提案编码 + CUTE 扩展</td>
+</tr>
+<tr>
+<td>编程模型</td>
+<td>指令流 + 微指令配置</td>
+<td>tr/acc 寄存器 + CSR 配置</td>
+</tr>
+<tr>
+<td>寄存器抽象</td>
+<td>直接操作 SCP 地址</td>
+<td>tr0-3 (输入) + acc0-3 (累加器)</td>
+</tr>
+<tr>
+<td>底层执行</td>
+<td>TaskController + MTE</td>
+<td>相同的 TaskController + MTE</td>
+</tr>
+<tr>
+<td>软件支持</td>
+<td>自定义汇编/C wrapper</td>
+<td>可复用 RISC-V matrix toolchain</td>
+</tr>
+<tr>
+<td>迁移策略</td>
+<td>保留，不废弃</td>
+<td>AME 指令最终翻译为 YGJK 微指令</td>
+</tr>
+</tbody>
+</table>
+<p><strong>迁移路径</strong>：AME 指令由 CPU 译码后，通过 RoCC 接口传递给 CUTE 的 AMEDecoder，翻译为 tr→SCP 地址映射，最终生成与 YGJK 指令相同的微操作序列。</p>
+<pre class="hljs"><code><div>软件层:   AME asm / C intrinsics  (使用 tr0-3, acc0-3)
+            ↓
+译码层:   CPU Pipeline (AME Decoder)
+          - tr id → ASCP/BSCP bank 选择
+          - acc id → CSCP bank 选择
+            ↓
+RoCC 层:  RoCC Interface → TaskController
+          - 与 YGJK 微指令格式完全一致
+            ↓
+执行层:   Load → Compute → Store (硬件不变)
+</div></code></pre>
+<p><strong>关键映射关系：</strong></p>
+<table>
+<thead>
+<tr>
+<th>AME 指令</th>
+<th>YGJK 微指令</th>
+<th>tr/acc → SCP 映射</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ammadd acc0, tr0, tr2</code></td>
+<td>YGJK Load(A)+Load(B)+Compute+Store(C)</td>
+<td>tr0→ASCP[0], tr2→BSCP[0], acc0→CSCP[0]</td>
+</tr>
+<tr>
+<td><code>ammadd acc1, tr1, tr3</code></td>
+<td>YGJK Load(A)+Load(B)+Compute+Store(C)</td>
+<td>tr1→ASCP[1], tr3→BSCP[1], acc1→CSCP[1]</td>
+</tr>
+<tr>
+<td><code>mmload.tr tr0, (addr)</code></td>
+<td>YGJK AML Load</td>
+<td>tr0→ASCP[0]</td>
+</tr>
+<tr>
+<td><code>mmstore.acc acc0, (addr)</code></td>
+<td>YGJK CML Store</td>
+<td>acc0→CSCP[0]</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="5-系统集成方案">5. 系统集成方案</h2>
+<h3 id="51-chipyard-配置">5.1 Chipyard 配置</h3>
+<pre class="hljs"><code><div><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">CUTE4TopsSCP128L2TCMConfig</span> <span class="hljs-keyword">extends</span> <span class="hljs-title">Config</span>(<span class="hljs-params">
+  new cute.<span class="hljs-type">WithCuteCoustomParams</span>(<span class="hljs-type">CoustomCuteParam</span> = <span class="hljs-type">CuteParams</span>.<span class="hljs-type">CUTE_4Tops_128SCP_L2TCM</span></span>) <span class="hljs-title">++</span></span>
+  <span class="hljs-keyword">new</span> cute.<span class="hljs-type">WithCUTE</span>(<span class="hljs-type">Seq</span>(<span class="hljs-number">0</span>)) ++
+  <span class="hljs-keyword">new</span> cute.<span class="hljs-type">WithPrivateL2</span> ++                         <span class="hljs-comment">// 新增：Tile 内私有 L2</span>
+  <span class="hljs-keyword">new</span> freechips.rocketchip.subsystem.<span class="hljs-type">WithNBitMemoryBus</span>(<span class="hljs-number">512</span>) ++
+  <span class="hljs-keyword">new</span> freechips.rocketchip.subsystem.<span class="hljs-type">WithCacheHash</span> ++
+  <span class="hljs-keyword">new</span> freechips.rocketchip.subsystem.<span class="hljs-type">WithNBanks</span>(<span class="hljs-number">4</span>) ++
+  <span class="hljs-keyword">new</span> freechips.rocketchip.subsystem.<span class="hljs-type">WithInclusiveCache</span>(capacityKB=<span class="hljs-number">512</span>, outerLatencyCycles=<span class="hljs-number">40</span>) ++
+  <span class="hljs-keyword">new</span> chipyard.config.<span class="hljs-type">WithSystemBusWidth</span>(<span class="hljs-number">512</span>) ++
+  <span class="hljs-keyword">new</span> saturn.shuttle.<span class="hljs-type">WithShuttleVectorUnit</span>(vLen = <span class="hljs-number">512</span>, dLen = <span class="hljs-number">512</span>, <span class="hljs-type">VectorParams</span>.<span class="hljs-type">CUTErefParams</span>, mLen = <span class="hljs-type">Option</span>(<span class="hljs-number">512</span>)) ++
+  <span class="hljs-keyword">new</span> shuttle.common.<span class="hljs-type">WithShuttleTileBeatBytes</span>(<span class="hljs-number">64</span>) ++
+  <span class="hljs-keyword">new</span> shuttle.common.<span class="hljs-type">WithNShuttleCores</span>(<span class="hljs-number">1</span>) ++
+  <span class="hljs-keyword">new</span> freechips.rocketchip.subsystem.<span class="hljs-type">WithoutTLMonitors</span> ++
+  <span class="hljs-keyword">new</span> chipyard.config.<span class="hljs-type">AbstractConfig</span>)
+</div></code></pre>
+<h3 id="52-顶层模块变化">5.2 顶层模块变化</h3>
+<pre class="hljs"><code><div>CUTETop (新增接口):
+  - l2_io: PrivateL2IO        // L2 Cache 控制接口
+  - tcm_io: TCMControllerIO    // TCM 访问接口
+  - tma_io: TMAIO             // TMA 描述符提交与状态查询
+  - rvv_tcm_io: RVVTCMIO       // RVV ↔ TCM 接口 (连接到 Vector Unit)
+
+模块新增:
+  - PrivateL2: PrivateL2Cache module
+  - TCMCtrl: TCMController module
+  - TMA: TensorMemoryAccelerator module
+  - AMEDecoder: AME 指令译码模块 (可选，也可在 CPU pipeline 中实现)
+</div></code></pre>
+<h3 id="53-cutetop-修改后架构">5.3 CUTETop 修改后架构</h3>
+<pre class="hljs"><code><div><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">CUTEV2TopWithL2TCM</span>(<span class="hljs-params"></span>)(<span class="hljs-params">implicit p: <span class="hljs-type">Parameters</span></span>) <span class="hljs-keyword">extends</span> <span class="hljs-title">CuteModule</span> </span>{
+    <span class="hljs-keyword">val</span> io = <span class="hljs-type">IO</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">CUTETopIO</span>)
+
+    <span class="hljs-comment">// === 现有模块 (不变) ===</span>
+    <span class="hljs-keyword">val</span> <span class="hljs-type">ASpad</span> = <span class="hljs-type">Seq</span>.tabulate(<span class="hljs-number">2</span>)(i =&gt; <span class="hljs-type">Module</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">AScratchpad</span>(i)))
+    <span class="hljs-keyword">val</span> <span class="hljs-type">ADC</span> = <span class="hljs-type">Module</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">ADataController</span>)
+    <span class="hljs-keyword">val</span> <span class="hljs-type">AML</span> = <span class="hljs-type">Module</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">AMemoryLoader</span>)
+    <span class="hljs-comment">// ... B, C, Scale 同 ...</span>
+
+    <span class="hljs-keyword">val</span> <span class="hljs-type">TaskCtrl</span> = <span class="hljs-type">Module</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">TaskController</span>)
+    <span class="hljs-keyword">val</span> <span class="hljs-type">MTE</span> = <span class="hljs-type">Module</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">MatrixTE</span>)
+
+    <span class="hljs-comment">// === 新增模块 ===</span>
+    <span class="hljs-keyword">val</span> <span class="hljs-type">PrivateL2</span> = <span class="hljs-type">Module</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">PrivateL2Cache</span>)
+    <span class="hljs-keyword">val</span> <span class="hljs-type">TCMCtrl</span> = <span class="hljs-type">Module</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">TCMController</span>)
+    <span class="hljs-keyword">val</span> <span class="hljs-type">TMA</span> = <span class="hljs-type">Module</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">TensorMemoryAccelerator</span>)
+
+    <span class="hljs-comment">// === TCM Banks 直连 (不经过 L2 Controller) ===</span>
+    <span class="hljs-comment">// CUTE ↔ TCM 数据交换 (Port A, 直连, 1 cycle)</span>
+    <span class="hljs-type">TCMCtrl</span>.io.cute_write &lt;&gt; <span class="hljs-type">TaskCtrl</span>.io.tcm_write_req
+    <span class="hljs-type">TCMCtrl</span>.io.cute_read &lt;&gt; <span class="hljs-type">TaskCtrl</span>.io.tcm_read_req
+    <span class="hljs-type">TaskCtrl</span>.io.tcm_read_data &lt;&gt; <span class="hljs-type">TCMCtrl</span>.io.cute_read_data
+
+    <span class="hljs-comment">// RVV ↔ TCM 数据交换 (Port B, 直连, 1 cycle)</span>
+    <span class="hljs-type">TCMCtrl</span>.io.rvv_write &lt;&gt; io.rvv_tcm_io.write
+    <span class="hljs-type">TCMCtrl</span>.io.rvv_read &lt;&gt; io.rvv_tcm_io.read
+
+    <span class="hljs-comment">// === TMA ↔ TCM (Port D, TMA 后台搬运) ===</span>
+    <span class="hljs-type">TMA</span>.io.tcm_write &lt;&gt; <span class="hljs-type">TCMCtrl</span>.io.tma_write
+    <span class="hljs-type">TMA</span>.io.tcm_read &lt;&gt; <span class="hljs-type">TCMCtrl</span>.io.tma_read
+    <span class="hljs-type">TMA</span>.io.tcm_read_data &lt;&gt; <span class="hljs-type">TCMCtrl</span>.io.tma_read_data
+
+    <span class="hljs-comment">// === TMA 描述符接口 (CPU 通过 RoCC 提交) ===</span>
+    <span class="hljs-type">TMA</span>.io.descriptor &lt;&gt; <span class="hljs-type">TaskCtrl</span>.io.tma_descriptor
+    <span class="hljs-type">TMA</span>.io.status &lt;&gt; <span class="hljs-type">TaskCtrl</span>.io.tma_status
+    <span class="hljs-type">TMA</span>.io.completion_irq &lt;&gt; io.tma_irq
+
+    <span class="hljs-comment">// === Cache Banks 访问 (经过 L2 Controller) ===</span>
+    <span class="hljs-type">AML</span>.io.<span class="hljs-type">PrivateL2IO</span> &lt;&gt; <span class="hljs-type">PrivateL2</span>.io.cute_port
+    <span class="hljs-type">AML</span>.io.<span class="hljs-type">LocalMMUIO</span> &lt;&gt; <span class="hljs-type">MMU</span>.io.<span class="hljs-type">ALocalMMUIO</span>
+
+    <span class="hljs-comment">// RVV 聚合路径 (Port C, 跨全部 Bank)</span>
+    io.rvv_tcm_io.aggregate &lt;&gt; <span class="hljs-type">TCMCtrl</span>.io.aggregate_port
+    <span class="hljs-type">PrivateL2</span>.io.rvv_aggregate &lt;&gt; io.rvv_tcm_io.aggregate_cache
+
+    <span class="hljs-comment">// === TileLink 端口 (两个独立 Client) ===</span>
+    <span class="hljs-type">PrivateL2</span>.io.tilelink &lt;&gt; io.mmu2llc              <span class="hljs-comment">// L2 Cache ↔ LLC</span>
+    <span class="hljs-type">TMA</span>.io.tilelink &lt;&gt; io.tma_tilelink                <span class="hljs-comment">// TMA ↔ LLC (独立端口)</span>
+}
+</div></code></pre>
+<hr>
+<h2 id="6-性能分析">6. 性能分析</h2>
+<h3 id="61-延迟对比">6.1 延迟对比</h3>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>现有 (v2)</th>
+<th>新设计 (L2 hit)</th>
+<th>新设计 (TCM 直连)</th>
+<th>新设计 (TMA 后台)</th>
+<th>加速比</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ASCP 加载 (K&gt;0 复用)</td>
+<td>40~100 cycles (DRAM)</td>
+<td>5~15 cycles (L2)</td>
+<td>N/A</td>
+<td>TCM 已预取, 1 cycle 读</td>
+<td>4~100x</td>
+</tr>
+<tr>
+<td>RVV→CUTE 数据传递</td>
+<td>~200 cycles (Store+Load)</td>
+<td>~10 cycles (L2)</td>
+<td>1 cycle (TCM 直连)</td>
+<td>N/A</td>
+<td>10~200x</td>
+</tr>
+<tr>
+<td>CUTE→RVV 数据传递</td>
+<td>~200 cycles (Store+Load)</td>
+<td>~10 cycles (L2)</td>
+<td>1 cycle (TCM 直连)</td>
+<td>N/A</td>
+<td>10~200x</td>
+</tr>
+<tr>
+<td>K 维跨轮复用</td>
+<td>每轮 DRAM load</td>
+<td>L2 hit</td>
+<td>N/A</td>
+<td>TCM 预取完成, 即用</td>
+<td>3~100x</td>
+</tr>
+<tr>
+<td>CPU 预处理结果传递</td>
+<td>Store to DRAM + Reload</td>
+<td>L2 hit</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>3~10x</td>
+</tr>
+<tr>
+<td><strong>TMA 后台搬运 (8KB)</strong></td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+<td><strong>后台完成, 0 cycle 等待</strong></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="62-带宽对比">6.2 带宽对比</h3>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>现有 (v2)</th>
+<th>新设计</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CUTE 峰值内存带宽需求</td>
+<td>2 × outsideDataWidth</td>
+<td>0.3~0.5 × outsideDataWidth</td>
+<td>L2 命中 + TCM 预取减少外部带宽</td>
+</tr>
+<tr>
+<td>TCM 直连带宽</td>
+<td>N/A</td>
+<td>TCMBanks × 512 bits/cycle</td>
+<td>CUTE↔RVV 专用低延迟路径 (例: 4×512=2048 bit/cycle)</td>
+</tr>
+<tr>
+<td>RVV 聚合带宽</td>
+<td>N/A</td>
+<td>L2NBanks × 512 bits/cycle</td>
+<td>跨全部 Bank 聚合 (例: 8×512=4096 bit/cycle)</td>
+</tr>
+<tr>
+<td>Cache Banks 带宽</td>
+<td>N/A</td>
+<td>CacheNBanks × 512 bits/cycle</td>
+<td>CPU/RVV/CUTE 正常缓存访问</td>
+</tr>
+<tr>
+<td><strong>TMA 搬运带宽</strong></td>
+<td><strong>N/A</strong></td>
+<td><strong>512 bits/cycle (独立 TileLink)</strong></td>
+<td><strong>TMA 独立 TileLink 端口, 不与 L2 Cache 竞争</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="63-面积估算">6.3 面积估算</h3>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>面积估算 (relative)</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L2 Tag Store (仅 Cache Banks)</td>
+<td>~1.0x CSCP</td>
+<td>仅覆盖 Cache Banks, TCM Banks 无 Tag</td>
+</tr>
+<tr>
+<td>TCM Banks SRAM</td>
+<td>~0.5x total SCP</td>
+<td>独立 SRAM 实例, 无额外控制逻辑</td>
+</tr>
+<tr>
+<td>Cache Banks SRAM</td>
+<td>~2.0x total SCP</td>
+<td>标准 set-associative cache data array</td>
+</tr>
+<tr>
+<td>TCM Controller</td>
+<td>~0.1x total SCP</td>
+<td>多端口仲裁 + 直连 Mux</td>
+</tr>
+<tr>
+<td>TMA (Tensor Memory Accelerator)</td>
+<td>~0.15x total SCP</td>
+<td>描述符队列 + 数据 FIFO + TileLink Client + 控制状态机</td>
+</tr>
+<tr>
+<td>AME Decoder</td>
+<td>~0.05x TaskCtrl</td>
+<td>指令译码逻辑</td>
+</tr>
+<tr>
+<td><strong>总计</strong></td>
+<td><strong>~1.5~2x 现有 CUTE 面积</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="7-实现计划">7. 实现计划</h2>
+<h3 id="phase-1-基础架构-private-l2--tcm--tma">Phase 1: 基础架构 (Private L2 + TCM + TMA)</h3>
+<table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>内容</th>
+<th>依赖</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1.1</td>
+<td><code>CuteL2TCMParams</code> 参数定义与 <code>CuteParams</code> 集成（含 Bank 分区 + TMA 参数）</td>
+<td>无</td>
+</tr>
+<tr>
+<td>1.2</td>
+<td><code>PrivateL2Cache</code> 模块实现 (仅管理 Cache Banks, TileLink Client)</td>
+<td>1.1</td>
+</tr>
+<tr>
+<td>1.3</td>
+<td><code>TCMController</code> 模块实现 (直连 TCM Banks, 多端口仲裁, 聚合通路, Port D 给 TMA)</td>
+<td>1.1</td>
+</tr>
+<tr>
+<td>1.4</td>
+<td><code>TensorMemoryAccelerator</code> (TMA) 模块实现：描述符队列, TileLink Client, 数据 FIFO, 状态机</td>
+<td>1.1</td>
+</tr>
+<tr>
+<td>1.5</td>
+<td><code>AMemoryLoader</code> / <code>BMemoryLoader</code> 修改：优先 Cache Banks，miss 回退 TileLink</td>
+<td>1.2</td>
+</tr>
+<tr>
+<td>1.6</td>
+<td><code>CUTETop</code> 集成 L2 + TCM + TMA 模块，TMA 独立 TileLink 端口连接 LLC</td>
+<td>1.2, 1.3, 1.4</td>
+</tr>
+<tr>
+<td>1.7</td>
+<td>Chipyard <code>WithPrivateL2</code> Config Mixin</td>
+<td>1.6</td>
+</tr>
+<tr>
+<td>1.8</td>
+<td>RTL 仿真验证：L2 hit/miss, TCM 直连, TMA 后台搬运行为正确</td>
+<td>1.7</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phase-2-ame-指令集">Phase 2: AME 指令集</h3>
+<table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>内容</th>
+<th>依赖</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.1</td>
+<td>AME CSR 定义 (<code>mcfgcsr</code>, <code>mdatatype</code>, <code>mtcmcfg</code> 等)</td>
+<td>无</td>
+</tr>
+<tr>
+<td>2.2</td>
+<td><code>AMEDecoder</code> 实现：tile register → SCP 地址翻译</td>
+<td>2.1</td>
+</tr>
+<tr>
+<td>2.3</td>
+<td><code>TaskController</code> 修改：接收 AME 指令，生成微操作</td>
+<td>2.2</td>
+</tr>
+<tr>
+<td>2.4</td>
+<td><code>tcmput</code> / <code>tcmget</code> 指令实现：TCM ↔ SCP 数据搬运 (CUTE/RVV 直连)</td>
+<td>Phase 1</td>
+</tr>
+<tr>
+<td>2.4b</td>
+<td><code>tma.submit</code> 指令实现：通过 RoCC 提交 TMA 搬运描述符</td>
+<td>Phase 1</td>
+</tr>
+<tr>
+<td>2.5</td>
+<td><code>amemadd</code> / <code>amestore</code> 等核心指令实现</td>
+<td>2.3</td>
+</tr>
+<tr>
+<td>2.6</td>
+<td>AME 汇编宏 / C intrinsic 头文件</td>
+<td>2.5</td>
+</tr>
+<tr>
+<td>2.7</td>
+<td>端到端测试：矩阵乘法 kernel 用 AME 指令编写</td>
+<td>2.5, 2.6</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phase-3-性能优化">Phase 3: 性能优化</h3>
+<table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>内容</th>
+<th>依赖</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3.1</td>
+<td>TMA 多描述符流水线：多条搬运描述符连续提交、流水执行</td>
+<td>Phase 1</td>
+</tr>
+<tr>
+<td>3.2</td>
+<td>TMA 与 Compute 双缓冲：TMA 预取下一 tile 数据的同时 CUTE 计算当前 tile</td>
+<td>Phase 1</td>
+</tr>
+<tr>
+<td>3.3</td>
+<td>RVV ↔ TCM 低延迟路径优化</td>
+<td>Phase 1</td>
+</tr>
+<tr>
+<td>3.4</td>
+<td>TMA 智能 prefetch：根据 TaskController 的 YGJK/AME 指令序列自动生成 TMA 描述符</td>
+<td>Phase 2</td>
+</tr>
+<tr>
+<td>3.5</td>
+<td>Benchmark 对比 (v2 vs v4)</td>
+<td>Phase 1, 2</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="8-风险与开放问题">8. 风险与开放问题</h2>
+<h3 id="81-技术风险">8.1 技术风险</h3>
+<table>
+<thead>
+<tr>
+<th>风险</th>
+<th>严重度</th>
+<th>缓解措施</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L2 Cache Banks 多端口并发冲突</td>
+<td>中</td>
+<td>Bank 交织 + 优先级仲裁</td>
+</tr>
+<tr>
+<td><s>TCM 与 Cache bank 竞争</s></td>
+<td><s>已解决</s></td>
+<td>TCM Banks 与 Cache Banks 物理独立，天然无冲突</td>
+</tr>
+<tr>
+<td>TileLink 带宽瓶颈 (L2 miss 大量时)</td>
+<td>低</td>
+<td>TMA 独立 TileLink 端口，不与 L2 Cache 端口竞争</td>
+</tr>
+<tr>
+<td>面积增加过大</td>
+<td>中</td>
+<td>TCM Bank 数可配置，支持关闭 (TCMBanks=0)，TMA 可独立关闭 (TMAEnable=false)</td>
+</tr>
+<tr>
+<td>TCM 容量不足</td>
+<td>中</td>
+<td>可通过增大 BankSizeKB 或 TCMBanks 调整</td>
+</tr>
+<tr>
+<td>TMA 描述符队列溢出</td>
+<td>低</td>
+<td>软件可通过 CSR 查询队列深度，队列满时 stall CPU 提交</td>
+</tr>
+<tr>
+<td>TMA TileLink 端口与 LLC 的 source ID 竞争</td>
+<td>低</td>
+<td>TMA 有独立的 TMASourceMaxNum 参数</td>
+</tr>
+</tbody>
+</table>
+<h3 id="82-开放问题">8.2 开放问题</h3>
+<ol>
+<li><strong>RVV ↔ TCM 路径</strong>：RVV 的 Vector Unit 需要新增专用 TCM 端口还是复用 Vector Load/Store？</li>
+<li><strong>AME 指令在 CPU pipeline 中的译码位置</strong>：是在 CPU frontend 还是 RoCC 端？</li>
+<li><strong>TMA 搬运与 CUTE 计算的同步机制</strong>：TMA 完成标志是查询 CSR 还是中断？软件如何保证 TCM 数据就绪后 CUTE 才开始读取？</li>
+<li><strong>TMA 自动预取</strong>：TMA 能否根据 TaskController 的 YGJK/AME 指令序列自动生成搬运描述符，实现零软件开销的预取？</li>
+<li><strong>多 CUTE Tile 场景</strong>：多个 CUTE 实例如何共享/竞争 Private L2 和 TMA？(本阶段不处理)</li>
+<li><strong>Bank 分配比例的灵活性</strong>：当前采用静态分配 (编译时固定 TCMBanks)，是否需要运行时可配？</li>
+</ol>
+<hr>
+<h2 id="附录-a-术语表">附录 A: 术语表</h2>
+<table>
+<thead>
+<tr>
+<th>术语</th>
+<th>全称</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SCP</td>
+<td>Scratchpad</td>
+<td>CUTE 内部暂存存储</td>
+</tr>
+<tr>
+<td>ASCP</td>
+<td>A Scratchpad</td>
+<td>A 矩阵输入暂存</td>
+</tr>
+<tr>
+<td>BSCP</td>
+<td>B Scratchpad</td>
+<td>B 矩阵输入暂存</td>
+</tr>
+<tr>
+<td>CSCP</td>
+<td>C Scratchpad</td>
+<td>C 矩阵/累加值暂存</td>
+</tr>
+<tr>
+<td>TCM</td>
+<td>Tightly Coupled Memory</td>
+<td>紧耦合存储器，由独立 TCM Banks 组成，直连 CUTE</td>
+</tr>
+<tr>
+<td>TCM Banks</td>
+<td>TCM 专用 Bank</td>
+<td>Bank 0 ~ N_tcm-1，物理独立 SRAM，无 Tag，直连 CUTE/RVV</td>
+</tr>
+<tr>
+<td>Cache Banks</td>
+<td>缓存 Bank</td>
+<td>Bank N_tcm ~ N_total-1，组成 Set-associative Cache</td>
+</tr>
+<tr>
+<td>MTE</td>
+<td>Matrix Tensor Engine</td>
+<td>矩阵张量引擎</td>
+</tr>
+<tr>
+<td>AME</td>
+<td>Accelerator Matrix Extension</td>
+<td>加速器矩阵扩展指令集</td>
+</tr>
+<tr>
+<td>tr0-3</td>
+<td>Tile Register</td>
+<td>AME 输入矩阵寄存器，映射到 ASCP/BSCP</td>
+</tr>
+<tr>
+<td>acc0-3</td>
+<td>Accumulator Register</td>
+<td>AME 累加器寄存器，映射到 CSCP</td>
+</tr>
+<tr>
+<td>TLEN</td>
+<td>Tile Register 总位宽</td>
+<td>每个 tr 的总位数 (TLEN = ROWNUM × TRLEN)</td>
+</tr>
+<tr>
+<td>TRLEN</td>
+<td>Tile Register 行位宽</td>
+<td>每个 tr 每行的位数</td>
+</tr>
+<tr>
+<td>ROWNUM</td>
+<td>Tile Register 行数</td>
+<td>ROWNUM = TLEN / TRLEN</td>
+</tr>
+<tr>
+<td>ALEN</td>
+<td>Accumulator 总位宽</td>
+<td>每个 acc 的总位数 (ALEN = ROWNUM × ARLEN)</td>
+</tr>
+<tr>
+<td>ARLEN</td>
+<td>Accumulator 行位宽</td>
+<td>每个 acc 每行的位数 (ARLEN = ROWNUM × ELEN)</td>
+</tr>
+<tr>
+<td>ELEN</td>
+<td>Element Length</td>
+<td>最大元素位宽</td>
+</tr>
+<tr>
+<td>AML/BML/CML</td>
+<td>A/B/C Memory Loader</td>
+<td>A/B/C 存储加载器</td>
+</tr>
+<tr>
+<td>ADC/BDC/CDC</td>
+<td>A/B/C Data Controller</td>
+<td>A/B/C 数据控制器</td>
+</tr>
+<tr>
+<td>RVV</td>
+<td>RISC-V Vector Extension</td>
+<td>RISC-V 向量扩展</td>
+</tr>
+<tr>
+<td>ROCC</td>
+<td>Rocket Custom Coprocessor</td>
+<td>RISC-V 自定义协处理器接口</td>
+</tr>
+<tr>
+<td>LLC</td>
+<td>Last Level Cache</td>
+<td>末级缓存</td>
+</tr>
+<tr>
+<td>TMA</td>
+<td>Tensor Memory Accelerator</td>
+<td>张量存储加速器，后台搬运引擎</td>
+</tr>
+<tr>
+<td>TMADescriptor</td>
+<td>TMA 描述符</td>
+<td>软件下发给 TMA 的搬运描述指令 (256-bit)</td>
+</tr>
+<tr>
+<td>PE</td>
+<td>Processing Element</td>
+<td>处理单元</td>
+</tr>
+</tbody>
+</table>
+<h2 id="附录-b-参考资料">附录 B: 参考资料</h2>
+<ul>
+<li>RISC-V Matrix Extension v1.0 Specification</li>
+<li>CUTE Architecture Overview (<code>doc/design-doc/docs/overview/architecture-overview.md</code>)</li>
+<li>CUTE Parameters (<code>src/main/scala/CUTEParameters.scala</code>)</li>
+<li>CUTE Top Module (<code>src/main/scala/CUTETOP.scala</code>)</li>
+<li>Chipyard Configuration (<code>chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala</code>)</li>
+<li>AME Proposal (<code>docs/riscv_matrix_extension_proposal.pdf</code>)</li>
+</ul>
+
+</body>
+</html>

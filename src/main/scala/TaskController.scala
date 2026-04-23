@@ -105,6 +105,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.AML_MicroTask_Config.Convolution_Current_OW_Index := 0.U
     io.AML_MicroTask_Config.Convolution_Current_KH_Index := 0.U
     io.AML_MicroTask_Config.Convolution_Current_KW_Index := 0.U
+    io.AML_MicroTask_Config.isconv := true.B
     io.AML_MicroTask_Config.Conherent := false.B
     io.AML_MicroTask_Config.MicroTaskValid := false.B
     io.AML_MicroTask_Config.MicroTaskEndReady := false.B
@@ -338,7 +339,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                     matmul_inst.conv_oh_max := 1.U
                     matmul_inst.conv_ow_max := MacroInst_Reg.asTypeOf(new MacroInst).Application_M
                     matmul_inst.conv_ow_per_add := Tensor_M.U
-                }
+                }//矩阵乘转卷积，输入通道为K，输入图为1*M，卷积核大小为1*1*K，输出通道为N,输出的是C矩阵的每一列
                 MacroInst_FIFO(MacroInst_FIFO_Head) := Mux(is_matmul_inst, matmul_inst.asUInt, MacroInst_Reg)
                 MacroInst_FIFO_Valid(MacroInst_FIFO_Head) := true.B
                 MacroInst_FIFO_Decode_Finish(MacroInst_FIFO_Head) := false.B
@@ -635,7 +636,12 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             Current_Tile_KH_Index := 0.U
             Current_Tile_KW_Index := 0.U
             Decode_Tensor_K_iter_Add := ((Tensor_K * 8).U / PEDataType.AdataBitWidth(Decoding_MacroInst.element_type))
+            //Tensor_k 默认配置为64，每个元素8bit(64*8bit = 512bit位宽)，该参数默认为64
             Current_Tile_Tensor_K_Iter := 0.U
+            //为什么需要两个参数来记录？硬件的 Tensor_K = 64 是按 8bit 元素定义的，但如果实际数据是 16bit（FP16），
+            //一个周期内硬件能处理的元素数量就减半了。所以需要区分两个计数器：
+            //Current_Tile_Tensor_K_Iter  →  按"Tensor核次数"计数（每次 +1）
+            //Current_Tile_K_Iter         →  按"字节偏移"计数（每次 + Decode_Tensor_K_iter_Add）
             Decoding_MarcoInst_Going := true.B
 
             if (YJPDebugEnable)
@@ -649,13 +655,13 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             val Have_Store_Micro_Inst   = WireInit(false.B)//由宏指令拆解出来的微指令，只在暂存器切换时才发射Store指令
             val Current_ScaratchpadTensor_M = WireInit(Tensor_M.U)
             val Current_ScaratchpadTensor_N = WireInit(Tensor_N.U)
-            val Current_ScaratchpadTensor_K = WireInit(ReduceGroupSize.U)       // 这个K指的是一个Tensor_K里有几个ReduceWidth长度
+            val Current_ScaratchpadTensor_K = WireInit(ReduceGroupSize.U)       
+            // 这个K指的是一个Tensor_K里有几个ReduceWidth长度
 
             val Can_Issue_Load_Micro_Inst = !Load_MicroInst_FIFO_Full
             val Can_Issue_Compute_Micro_Inst = !Compute_MicroInst_FIFO_Full
             val Can_Issue_Store_Micro_Inst = !Store_MicroInst_FIFO_Full
-            
-            //                                                                                                        VVVVVVV 其实这个给紧了，不过store毕竟很少，所以不会有问题
+                                                                                                                   //VVVVVVV 其实这个给紧了，不过store毕竟很少，所以不会有问题
             val Can_Decode_More_Micro_Inst = Can_Issue_Load_Micro_Inst && Can_Issue_Compute_Micro_Inst && Can_Issue_Store_Micro_Inst
 
             val LoadMicroInst_Have_A_work = WireInit(true.B)//由宏指令拆解出的微指令，每个微指令都有AB的Load任务
@@ -810,6 +816,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             Load_MicroInst.IsTranspose := Decoding_MacroInst.transpose_result
 
             Load_MicroInst.ApplicationTensor_A.ApplicationTensor_A_BaseVaddr := Decoding_MacroInst.ApplicationTensor_A_BaseVaddr + Current_Tile_Tensor_K_Iter*(ReduceWidthByte*ReduceGroupSize).U  //TODO:初始地址需要改！因为当前的K移动了！
+            Load_MicroInst.ApplicationTensor_A.BlockTensor_A_BaseVaddr := Load_MicroInst.ApplicationTensor_A.ApplicationTensor_A_BaseVaddr
+            //fix BlockTensor_A_BaseVaddr
             Load_MicroInst.ApplicationTensor_A.ApplicationTensor_A_Stride_M := Decoding_MacroInst.ApplicationTensor_A_Stride
             // Load_MicroInst.ApplicationTensor_A.BlockTensor_A_BaseVaddr := Decoding_MacroInst.ApplicationTensor_A_BaseVaddr + Current_Tile_Tensor_K_Iter*(ReduceWidthByte*ReduceGroupSize).U
             Load_MicroInst.ApplicationTensor_A.Convolution_OH_DIM_Length := Decoding_MacroInst.conv_oh_max
@@ -1342,7 +1350,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                 Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FINISH_HEAD) := true.B
                 Compute_Micro_Inst_Issue_State_Reg := issue_state_idle
 
-                Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FINISH_HEAD) := true.B
+                //Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FINISH_HEAD) := true.B
             
                 when(Compute_MicroInst.Have_Store_Micro_Inst === false.B)
                 {

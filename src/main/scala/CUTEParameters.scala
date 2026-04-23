@@ -1535,7 +1535,7 @@ class CDCMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
 
 class ApplicationTensor_A_Info()(implicit p: Parameters) extends CuteBundle{
     val ApplicationTensor_A_BaseVaddr   = (UInt(MMUAddrWidth.W))
-    // val BlockTensor_A_BaseVaddr         = (UInt(MMUAddrWidth.W))//可能没有了
+    val BlockTensor_A_BaseVaddr         = (UInt(MMUAddrWidth.W))//可能没有了
     val ApplicationTensor_A_Stride_M    = (UInt(MMUAddrWidth.W))//下一个M需要增加多少的地址偏移量
     val Convolution_OH_DIM_Length       = (UInt(log2Ceil(ConvolutionDIM_Max).W))
     val Convolution_OW_DIM_Length       = (UInt(log2Ceil(ConvolutionDIM_Max).W))
@@ -1555,7 +1555,6 @@ class ApplicationScale_A_Info()(implicit p: Parameters) extends CuteBundle{
 class AMLMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
 
     val ApplicationTensor_A = new ApplicationTensor_A_Info
-
     val ScaratchpadTensor_M                 = (UInt(ScaratchpadMaxTensorDimBitSize.W))
     val ScaratchpadTensor_K                 = (UInt(ScaratchpadMaxTensorDimBitSize.W))
 
@@ -1571,6 +1570,7 @@ class AMLMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
     val MicroTaskValid                      = (Bool())       //当前任务的配置信息有效
     val MicroTaskEndValid                        = Flipped(Bool())//已完成当前任务
     val MicroTaskEndReady                   = (Bool())       //已知晓当前任务完成
+    val isconv                              = (Bool())
 }
 
 class ASLMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
