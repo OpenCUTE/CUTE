@@ -323,12 +323,14 @@ build(Test.code, HWConfig):
 
 ### 3.1 Test Pass 定义
 
-一个 test 的最小语义：
+一个 test 的最小语义由 `cutetest/**/project.yaml` 描述。也就是说，Test 的第一抽象不是 `configs/tests/*.yaml`，而是 code project 自己的 `project.yaml`：
 
 ```yaml
 version: 1
-name: matmul_i8_128_base
+id: tensor.matmul
+name: matmul
 kind: tensor_test
+version_name: v0.3
 
 target:
   hwconfigs:
@@ -339,14 +341,21 @@ target:
     trace_func_level: tensor_store
 
 code:
-  source: cutetest/templates/matmul.c.j2
+  entry: src/main.c
+  build: make
   runtime_lib: runtime_v1
   op_lib: tensor_op_v1
-  params:
-    M: 128
-    N: 128
-    K: 128
-    dtype: i8i8i32
+  variants:
+    - name: i8_128
+      M: 128
+      N: 128
+      K: 128
+      dtype: i8i8i32
+    - name: fp16_128
+      M: 128
+      N: 128
+      K: 128
+      dtype: fp16fp16fp32
 
 golden:
   level: tensor_op
@@ -466,43 +475,131 @@ RUN_OK / TRACE_OK / FUNC_MODEL_NOT_READY
 
 这可以避免“代码跑了但无法验证”的测试被误判为 pass。
 
-### 3.5 Test 目录建议
+### 3.5 Test 与 cutetest/project.yaml
+
+`cutetest` 是 Test 的主工作区。每一个可维护的 Test/code project 都应有自己的 `project.yaml`：
 
 ```text
-configs/tests/
-├── base/
-│   ├── rocc_hello.yaml
-│   ├── query_counters.yaml
-│   └── trace_smoke.yaml
-├── tensor/
-│   ├── matmul_i8_128.yaml
-│   ├── matmul_fp16_128.yaml
-│   ├── datatype_mxfp8.yaml
-│   └── conv_k1_s1.yaml
-├── layer/
-│   ├── resnet50_conv_layer.yaml
-│   ├── bert_attention.yaml
-│   └── llama_ffn.yaml
-├── fuse_layer/
-│   ├── llama_ffn_fused.yaml
-│   └── attention_qkv_fused.yaml
-├── soc_opt/
-│   ├── llama_ffn_shuttle512_dram48.yaml
-│   └── gemm_k_sweep_dram64.yaml
-└── model/
-    ├── resnet50.yaml
-    ├── bert.yaml
-    └── llama3_1b.yaml
+cutetest/.../<project>/project.yaml = Test spec + code project metadata
+cutetest/.../<project>/src/         = Test.code 实现
+cutetest/.../<project>/golden/      = golden 或 golden generator
+cutetest/.../<project>/data/        = 输入数据或数据生成脚本
 ```
+
+也就是说，一个可运行 Test 不再拆成 `configs/tests/*.yaml + cutetest project` 两个真相源，而是由 code project 自己描述：
+
+```text
+Test
+└── code_project: cutetest/<level-or-lib>/<project-name>/
+    ├── project.yaml        # Test 的主描述：target/code/golden/trace requirement
+    ├── src/
+    ├── include/
+    ├── data/
+    ├── golden/
+    └── build_rules/
+```
+
+`project.yaml` 是测试的“身份证/规格书”，同时贴着代码放，方便人手工维护。Runner 扫描 `cutetest/**/project.yaml`，选择匹配 `HWConfig` 的 project 和 variant，再进入该 project 构建。
+
+示例：
+
+```yaml
+id: tensor.matmul
+name: matmul
+version: 0.3
+kind: tensor_test
+
+target:
+  required_capability:
+    datatypes: [i8i8i32]
+    tensor_ops: [matmul]
+    trace_func_level: tensor_op
+
+code:
+  entry: src/main.c
+  build: make
+  variants:
+    - name: i8_128
+      dtype: i8i8i32
+      M: 128
+      N: 128
+      K: 128
+    - name: fp16_128
+      dtype: fp16fp16fp32
+      M: 128
+      N: 128
+      K: 128
+
+golden:
+  level: tensor_op
+  source: python_reference
+```
+
+一个 code project 可以包含多个 variant，它们共同属于同一个 Test project：
+
+```text
+cutetest/tensor_ops/matmul/
+├── project.yaml
+├── src/main.c
+└── variants:
+    ├── i8_128
+    ├── fp16_128
+    └── k_sweep
+```
+
+第一阶段建议采用“一 project 一个主 Test，project 内多个 variants”。这比维护大量 `configs/tests/*.yaml` 更容易人工管理。后续如果确实需要细分，也应优先在 `project.yaml` 里组织，而不是重新引入一堆分散 test yaml。
+
+Test 的版本迭代不只是代码变更，也包括 target 和 trace 能力的扩展：
+
+```text
+Test.version =
+  Test.target coverage
+  + Test.code maturity
+  + Test.golden level
+  + required Trace.func level
+```
+
+例如同一个 `matmul_i8_128` test 可以这样成熟：
+
+```text
+v0.1: 只支持一个 HWConfig，只检查 RUN_OK
+v0.2: 支持 F0_event，能验证 task/inst 顺序
+v0.3: 支持 F1_store/F2_tensor_op，能重建 D tensor 并比较 golden
+v0.4: 扩展更多 HWConfig target
+v0.5: 支持 perf filter/profile，但 correctness pass 仍由 Trace.func 决定
+```
+
+因此，`cutetest` 不是单纯“测试文件堆放目录”，而是 `Test project workspace`。它里面的 project 会随着 `project.yaml` 一起迭代，并逐层沉淀出 runtime lib、tensor op lib、layer op lib、fuse layer op lib、opt op lib。
 
 ```text
 cutetest/
 ├── runtime/
+│   └── cute_runtime/
+│       ├── project.yaml
+│       ├── include/
+│       ├── src/
+│       └── tests/
 ├── tensor_ops/
+│   └── matmul/
+│       ├── project.yaml
+│       ├── src/
+│       ├── include/
+│       ├── data/
+│       ├── golden/
+│       └── build_rules/
 ├── layer_ops/
+│   └── llama_ffn/
+│       ├── project.yaml
+│       ├── src/
+│       ├── include/
+│       ├── data/
+│       └── golden/
 ├── fuse_layer_ops/
+│   └── llama_ffn_fused/
 ├── opt_ops/
+│   └── shuttle512_dram48/
 ├── model_tests/
+│   └── llama3_1b/
 ├── templates/
 └── legacy/
 ```
@@ -578,7 +675,7 @@ Artifact = 负责“这一次到底跑了什么、产生了什么证据”的结
 Runner 不定义测试语义，也不定义硬件语义；它只做编排：
 
 ```text
-给定 HWConfig + Test + Trace.filter
+给定 HWConfig + cutetest project + variant + Trace.filter
   -> 检查 target 是否匹配
   -> 准备 HWConfig.generated_headers
   -> 编译 Test.code
@@ -668,7 +765,7 @@ build/cute-runs/<run-id>/
 │       ├── cute_config.h.generated
 │       └── cute_layout.h.generated
 ├── test/
-│   ├── test.resolved.yaml
+│   ├── project.resolved.yaml
 │   ├── target_match.json
 │   ├── code/
 │   │   ├── test.c
@@ -706,7 +803,7 @@ build/cute-runs/<run-id>/
 第一阶段可先用 scripts，成熟后转为 `tools/cutecli`：
 
 ```text
-scripts/cute-run.py --hw configs/hwconfigs/cute2tops_scp64_dramsim32.yaml --test configs/tests/tensor/matmul_i8_128.yaml
+scripts/cute-run.py --hw configs/hwconfigs/cute2tops_scp64_dramsim32.yaml --project cutetest/tensor_ops/matmul --variant i8_128
 scripts/cute-verify.py --artifact build/cute-runs/<run-id>
 scripts/cute-perf.py --artifact build/cute-runs/<run-id>
 scripts/cute-suite.py --suite configs/suites/smoke.yaml
@@ -724,13 +821,6 @@ CUTE/
 │   ├── hwconfigs/
 │   │   ├── cute2tops_scp64_dramsim32.yaml
 │   │   └── schemas/hwconfig.schema.json
-│   ├── tests/
-│   │   ├── base/
-│   │   ├── tensor/
-│   │   ├── layer/
-│   │   ├── fuse_layer/
-│   │   ├── soc_opt/
-│   │   └── model/
 │   ├── trace_filters/
 │   │   ├── func_store_tensor.yaml
 │   │   ├── perf_task_stage.yaml
@@ -741,7 +831,7 @@ CUTE/
 │   │   ├── perf_sweep.yaml
 │   │   └── model.yaml
 │   └── schemas/
-│       ├── test.schema.json
+│       ├── project.schema.json
 │       ├── suite.schema.json
 │       └── trace_filter.schema.json
 ├── cutetest/
@@ -807,9 +897,9 @@ CUTE/
 原则：
 
 - `configs/hwconfigs` 承载 `HWConfig`。
-- `configs/tests` 承载 `Test`。
+- `cutetest/**/project.yaml` 承载 `Test`。
 - `configs/trace_filters` 承载可复用 `Trace.filter`。
-- `cutetest` 承载 `Test.code` 和由 test 沉淀出的软件库。
+- `cutetest` 承载 `Test.code`、Test metadata 和由 test 沉淀出的软件库。
 - `trace/python/func` 与 `trace/python/perf` 分开演进。
 - `build/cute-runs` 承载三者组合后的事实快照。
 
@@ -824,10 +914,10 @@ CUTE/
 任务：
 
 - 定义 `hwconfig.schema.json`。
-- 定义 `test.schema.json`，明确 `target/code/golden`。
+- 定义 `project.schema.json`，明确 cutetest project 的 `target/code/golden`。
 - 定义 `trace_filter.schema.json`。
 - 定义 `trace/format_spec.md`。
-- 写一个 base test、一个 tensor test 的 manifest。
+- 写一个 base test、一个 tensor test 的 `project.yaml`。
 
 验收：
 
@@ -953,9 +1043,9 @@ configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
 configs/schemas/hwconfig.schema.json
 
 # Test
-configs/tests/base/rocc_hello.yaml
-configs/tests/tensor/matmul_i8_128.yaml
-configs/schemas/test.schema.json
+cutetest/runtime/cute_runtime/project.yaml
+cutetest/tensor_ops/matmul/project.yaml
+configs/schemas/project.schema.json
 
 # Trace
 trace/format_spec.md
@@ -965,8 +1055,8 @@ configs/trace_filters/perf_task_stage.yaml
 configs/schemas/trace_filter.schema.json
 
 # Runtime/Test code
-cutetest/runtime/cute_runtime.h
-cutetest/runtime/cute_runtime.c
+cutetest/runtime/cute_runtime/include/cute_runtime.h
+cutetest/runtime/cute_runtime/src/cute_runtime.c
 cutetest/templates/base_rocc_hello.c.j2
 cutetest/templates/tensor_matmul.c.j2
 
