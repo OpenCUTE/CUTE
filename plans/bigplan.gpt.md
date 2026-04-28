@@ -1,1507 +1,1085 @@
-# CUTE 软件测试框架完全重构 Big Plan
+# CUTE 软件测试框架重构 Big Plan
 
-> 目标：把 CUTE 的软件测试、trace 系统级正确性验证、trace top-down 性能分析、CONFIG 驱动流程重新规划成一套结构化工程系统。  
-> 本计划面向后续细化讨论：先定义总体架构、边界、数据模型、迁移路线和验收标准，再逐块落地。
+> 核心目标：围绕 `HWConfig / Test / Trace` 三个一级抽象，重构 CUTE 的软件测试、trace-based verify、trace-based profile、CONFIG-driven flow。  
+> 本计划用于继续讨论和细化，不是一次性全部实现的任务清单。
 
 ---
 
-## 0. 核心判断
+## 0. 总体抽象：HWConfig / Test / Trace
 
-当前 CUTE 已经具备几个重要基础：
-
-- `src/main/scala/util/HeaderGenerator.scala` 已经能从 Chipyard Config 反射提取真实 `CuteParams`，生成 `datatype.h.generated`、`validation.h.generated`、`instruction.h.generated`。
-- `cutetest/` 已经沉淀大量 GEMM、datatype、ResNet50、BERT、LLaMA 测试程序和 benchmark 数据。
-- `scripts/build-test.sh`、`scripts/generate-headers.sh`、`scripts/run-simulator-test.sh` 已经形成最小可用的编译与仿真入口。
-- `verify/` 目前为空，适合作为新验证框架的承载目录。
-- 现有测试更多是文件级、脚本级、人工结果级组织，缺少一个结构化的“测试任务描述”和“运行结果协议”。
-
-因此这次重构的关键不是单纯多写脚本，而是建立一个稳定的中间层：
+当前框架的核心对象应从原来的“配置、软件、日志”重新组织为三个一等抽象：
 
 ```text
-CONFIG + SOFTWARE + Inputs + TracePolicy
-  -> Run Job
-  -> Run Artifact + TRACE
-  -> Verify/Profile/Regression Report
+HWConfig -> 定义测试运行在哪个具体硬件/SoC/仿真环境上
+Test     -> 定义要测试什么、支持哪些 HWConfig、代码是什么、golden 是什么
+Trace    -> 定义如何观察一次运行，并用功能模型/性能模型解释它
 ```
 
-以后无论是跑一个 matmul correctness、扫一组硬件 CONFIG、做 LLaMA layer 性能归因，还是比较 nofuse/notcm/fuse，都应该由同一套 job schema 驱动。
-
-### 0.1 三大核心对象：CONFIG / SOFTWARE / TRACE
-
-整个重构可以先抽象成三个一等对象：
+三者关系：
 
 ```text
-CONFIG   -> 固化一个具体 CUTE 硬件实体
-SOFTWARE -> 面向这个实体生成/选择可运行的软件语义
-TRACE    -> 把一次运行变成可验证、可分析的事实记录
+RunArtifact = run(Test.code, HWConfig)
+
+ObservedTrace = Trace.filter(RunArtifact.raw_trace)
+
+FunctionalPass =
+  Trace.func(ObservedTrace, HWConfig, Test) == Test.golden(level)
+
+PerformanceProfile =
+  Trace.perf(ObservedTrace, HWConfig, Test)
+
+TestPass =
+  HWConfig in Test.target
+  AND build/run succeeds
+  AND FunctionalPass
 ```
 
-这三个对象分别回答不同问题：
+也就是说，一个 test 不是“能编译、能跑完”就 pass。一个 test pass 必须满足：
 
-| 对象 | 核心职责 | 回答的问题 |
+1. 当前 `HWConfig` 在 `Test.target` 的支持范围内。
+2. `Test.code` 能在该 `HWConfig` 上构建并运行。
+3. 在某个 `Trace.filter` 下得到的 trace，经过 `Trace.func` 功能模型解释后，与 `Test.golden` 对齐。
+
+性能分析不决定 correctness pass，但它使用同一个 run artifact 和同一份 filtered trace：
+
+```text
+Correctness path: Trace.filter -> Trace.func -> Test.golden
+Performance path: Trace.filter -> Trace.perf -> profile/report
+```
+
+`Trace.func` 和 `Trace.perf` 是两条基本独立的设计路线：它们共享 trace 格式、filter、artifact，但模型目标不同。`Trace.func` 追求功能等价；`Trace.perf` 追求瓶颈解释。
+
+---
+
+## 1. 三个一级对象的二级抽象
+
+### 1.1 HWConfig
+
+`HWConfig` 定义一个完整运行目标，不只是 CUTE 参数。
+
+```text
+HWConfig
+├── CUTE
+│   ├── tensor tile 参数
+│   ├── matrix/PE/reduce 参数
+│   ├── datatype / FPE / scale 参数
+│   ├── instruction field / funct 定义
+│   ├── memory loader / scratchpad / MMU 参数
+│   └── trace capability 开关
+└── SOC
+    ├── Chipyard Config
+    ├── core config: Rocket / BOOM / Shuttle / core count
+    ├── bus config: sysbus / membus / cache / L2 width
+    ├── DRAMSim config
+    ├── simulator config: Verilator / VCS / FPGA
+    └── platform config: baremetal / workload loader / max cycles
+```
+
+`HWConfig` 的职责：
+
+- 固定一台具体 CUTE 硬件实体。
+- 固定它所在的 SoC、内存、总线、仿真环境。
+- 导出软件可见的 capability。
+- 决定哪些 `Test.target` 可以匹配它。
+- 为 `Trace.func` 和 `Trace.perf` 提供解释上下文。
+
+### 1.2 Test
+
+`Test` 是测试实体，包含目标范围、代码和 golden。
+
+```text
+Test
+├── target
+│   ├── 支持哪些 HWConfig
+│   ├── 需要哪些 CUTE capability
+│   ├── 需要哪些 SOC capability
+│   ├── 是否允许 DRAMSim preset sweep
+│   └── 是否允许 simulator / FPGA / multi-core 变体
+├── code
+│   ├── C source
+│   ├── template source
+│   ├── runtime lib dependency
+│   ├── tensor op lib dependency
+│   ├── layer op lib dependency
+│   ├── fuse layer op lib dependency
+│   └── opt op lib dependency
+└── golden
+    ├── level
+    ├── source: python / C reference / existing checker / external
+    ├── compare rule: exact / tolerance / semantic
+    └── required Trace.func level
+```
+
+`Test` 的职责：
+
+- 定义“测什么”。
+- 声明“在哪些 HWConfig 上可测”。
+- 携带或生成实质代码。
+- 定义 golden 的语义层级。
+- 声明需要 `Trace.func` 支持到哪一级，才能判断 pass。
+
+### 1.3 Trace
+
+`Trace` 是观察和解释运行事实的实体。
+
+```text
+Trace
+├── raw trace
+│   ├── RTL printf
+│   ├── structured CUTE_TRACE
+│   ├── UART/debug log
+│   ├── memory/store trace
+│   └── counter snapshot
+├── filter
+│   ├── event filter
+│   ├── module filter
+│   ├── task/layer/tile filter
+│   ├── time window filter
+│   └── trace level filter
+├── func model
+│   ├── event order model
+│   ├── tensor reconstruction model
+│   ├── operator functional model
+│   ├── layer functional model
+│   └── fused/model semantic model
+└── perf model
+    ├── task timeline model
+    ├── stage breakdown model
+    ├── memory bandwidth model
+    ├── utilization model
+    ├── stall/bottleneck model
+    └── regression/baseline model
+```
+
+`Trace` 的职责：
+
+- 从 run artifact 中提取事实。
+- 用 filter 控制观察范围。
+- 用 func model 支撑 correctness。
+- 用 perf model 支撑 profile。
+- 让 verify 和 profile 使用同一份事实，但保持两条建模路线独立。
+
+---
+
+## 2. HWConfig 规划
+
+本章推进 `HWConfig` 抽象，使它成为硬件、SoC、内存、仿真环境和软件 capability 的统一入口。
+
+### 2.1 HWConfig 不等于 CUTE Config
+
+当前已有 `HeaderGenerator` 能从 Chipyard Config 提取 `CuteParams`，这只覆盖了 `HWConfig.CUTE` 的一部分。新的 `HWConfig` 还必须包含 SoC 层配置。
+
+建议区分：
+
+| 层级 | 示例 | 作用 |
 |---|---|---|
-| `CONFIG` | 决定硬件实体。把可参数化的 CUTE 固定成一个具体实现，包括 tensor tile、数据宽度、指令字段、buffer、MMU、FPE、scale layout、支持能力边界 | 这台 CUTE 到底长什么样，能跑什么 |
-| `SOFTWARE` | 决定软件语义。依据 `CONFIG` 生成/选择 tensor runtime、算子实现、NN layer 测试、向量融合算子、golden 策略、合法性检查 | 针对这台 CUTE，应该怎么发指令、怎么布局 tensor、哪些 case 合法、golden 长什么样 |
-| `TRACE` | 决定事实记录。把 `SOFTWARE` 在某个 `CONFIG` 上的一次实际执行记录下来，供 verify 和 profile 使用 | 实际发生了什么，输出是什么，时间花在哪里，瓶颈在哪里 |
+| `HWConfig.CUTE` | `Tensor_M/N/K`、`ReduceWidthByte`、FPE、scale layout、instruction field | 决定 CUTE 本体 capability |
+| `HWConfig.SOC.Chipyard` | `chipyard.CUTE2TopsSCP64Config` | 决定 SoC 集成形态 |
+| `HWConfig.SOC.Core` | Rocket / BOOM / Shuttle / core count | 决定 host 侧行为和软件运行环境 |
+| `HWConfig.SOC.BusMem` | sysbus/membus/cache/L2 width | 决定访存路径和性能解释 |
+| `HWConfig.SOC.DRAMSim` | `dramsim2_ini_32GB_per_s` | 决定 memory profile |
+| `HWConfig.SOC.Sim` | Verilator binary、max cycles、wave/trace mode | 决定 run policy |
 
-因此真正的运行单元不是单独的 C 文件，也不是单独的硬件配置，而是：
+### 2.2 HWConfig Manifest
 
-```text
-Run = CONFIG + SOFTWARE + Inputs + TracePolicy
-```
-
-在这个基础上派生出：
-
-```text
-Verify     = Run Artifact + GoldenPolicy + TRACE
-Profile    = Run Artifact + PerfModel + TRACE
-Regression = Many Runs + BaselinePolicy
-```
-
-这个模型也解释了为什么需要更好的 config 机制：`CONFIG` 不只影响硬件生成，它还决定 `SOFTWARE` 能否生成、测试是否合法、golden 如何计算、trace 如何解释。  
-同样，`TRACE` 也不只是 debug log；它是 `SOFTWARE on CONFIG` 的可复盘证据，是 verify 和 profile 的共同事实层。
-
-### 0.2 本 Plan 的阅读地图
-
-后续章节可以按“三大对象如何逐步成熟、如何相互联合”来理解：
-
-| 章节 | 主要推进对象 | 建立的联合关系 | 最终服务的目标 |
-|---|---|---|---|
-| `2. Config 机制重构` | `CONFIG` | `CONFIG -> generated headers -> SOFTWARE capability boundary` | 固化硬件实体，并让软件知道这台硬件能跑什么 |
-| `7. Test Line` | `SOFTWARE` | `SOFTWARE depends on CONFIG` | 依据硬件配置生成 tensor runtime、算子、NN layer、融合算子测试 |
-| `4. Trace Layer` | `TRACE` | `TRACE records SOFTWARE on CONFIG` | 把一次执行变成 verify/profile 都能复用的事实层 |
-| `3. Runner & Artifact` | 三者的组合器 | `CONFIG + SOFTWARE + TRACE policy -> Run Artifact` | 让每次实验可复现、可归档、可比较 |
-| `5. Verify Line` | `SOFTWARE + TRACE` | `GoldenPolicy(SOFTWARE, CONFIG) + Actual(TRACE)` | 判断输出是否正确，并定位 mismatch |
-| `6. Perf Line` | `TRACE + CONFIG` | `PerfModel(CONFIG) + Timeline(TRACE)` | 判断性能瓶颈、利用率、带宽、stall 来源 |
-| `8. 目录与模块建议` | 三者的物理落点 | 把抽象映射到目录边界 | 降低工程混乱度，知道文件该放哪里 |
-| `9. 分阶段实施路线` | 三者的成熟路线 | 从 schema 到最小闭环，再到 suite/regression | 分阶段达成完整测试框架 |
-
-也可以把目标分成三层：
+建议新增：
 
 ```text
-第一层：对象自洽
-  CONFIG 自洽：硬件参数、指令、layout、capability 有唯一来源
-  SOFTWARE 自洽：runtime、算子、测试、golden 都能依据 CONFIG 生成或选择
-  TRACE 自洽：事件格式、parser、index、artifact 都稳定
-
-第二层：对象联合
-  CONFIG + SOFTWARE：知道哪些测试可生成、可编译、可运行
-  SOFTWARE + TRACE：知道实际输出能否与 golden 对齐
-  CONFIG + TRACE：知道性能事件如何解释、瓶颈如何归因
-
-第三层：系统闭环
-  CONFIG + SOFTWARE + TRACE
-    -> reproducible Run Artifact
-    -> correctness Verify
-    -> top-down Profile
-    -> regression Suite
+configs/hwconfigs/
+├── cute2tops_scp64_dramsim32.yaml
+├── cute4tops_scp128_dramsim48.yaml
+├── cute4tops_shuttle512_dramsim48.yaml
+└── schemas/hwconfig.schema.json
 ```
 
----
-
-## 1. 总体架构
-
-本章把三大对象放进一个工程流水线里：`CONFIG` 和 `SOFTWARE` 在 runner 中被组合成一次 run，run 产生 `TRACE` 和 artifact，随后 verify/profile/regression 复用同一个 artifact。
-
-### 1.1 四层工程模型
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│ Layer A: Config & Manifest                                      │
-│ - CONFIG: Chipyard/Chisel Config + generated headers             │
-│ - SOFTWARE manifest: test case / suite / sweep / golden policy   │
-│ - TracePolicy: trace level / event set / perf policy             │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────┐
-│ Layer B: Runner & Artifact                                      │
-│ - 组合 CONFIG + SOFTWARE + Inputs + TracePolicy                  │
-│ - 编译: generated headers、C test binary、simulator               │
-│ - 运行: Verilator + DRAMSim + workload                           │
-│ - Artifact: config/software/trace/build/run snapshots            │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────┐
-│ Layer C: Trace & Event Model                                    │
-│ - TRACE: cycle/module/event/task/tile/addr/data                  │
-│ - Parser: raw log -> structured trace                            │
-│ - Index: task timeline、memory transaction、store tensor          │
-│ - Export: jsonl/csv/html summary                                 │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────┐
-│ Layer D: Verify & Perf                                          │
-│ - Verify: SOFTWARE golden + TRACE actual                         │
-│ - Perf: CONFIG perf model + TRACE timeline                       │
-│ - Regression: many Run Artifacts + baseline policy               │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### 1.2 三条主线
-
-1. **Test Line**
-   - 负责“生成什么测试、编译什么 binary、跑在哪个硬件 CONFIG 上”。
-   - 产物是可复现的 run artifact，而不是散落的 `.riscv` 和 `.log`。
-
-2. **Verify Line**
-   - 负责“跑出来的行为是否正确”。
-   - 以 trace 为主要输入，从 store 事件或 memory writeback 事件中重建输出 tensor。
-   - golden 可以来自 CPU reference、已有 `.h` 数据、Python/numpy、或测试自带 checker。
-
-3. **Perf Line**
-   - 负责“为什么快/慢，瓶颈在哪里”。
-   - 以 trace 和性能计数器为输入，做 top-down 分析。
-   - 输出结构化指标和可读报告，而不是只看 `rdcycle` 或日志片段。
-
----
-
-## 2. Config 机制重构
-
-本章主要推进 `CONFIG` 抽象：把“可参数化 CUTE”固定成一个可命名、可生成 header、可校验 capability 的具体硬件实体。它的阶段性目标是让 `SOFTWARE` 不再猜硬件参数，而是从 `CONFIG` 派生自己的合法边界。
-
-### 2.1 两类 Config 必须分清
-
-这里建议明确区分：
-
-| 类型 | 说明 | 现状 | 重构目标 |
-|---|---|---|---|
-| Hardware Config | Chipyard/Chisel 的硬件配置，如 `chipyard.CUTE2TopsSCP64Config` | 已存在 | 继续作为硬件参数唯一真相源 |
-| Test Config | 测试任务、输入规模、数据类型、golden、trace、perf policy | 目前分散在 C 文件名、Makefile、脚本里 | 新增 YAML/TOML manifest |
-
-不要把所有东西都塞进 Chisel Config。硬件结构参数属于 Hardware Config；测试矩阵、模型层、DRAM 带宽、是否采 trace、比较容差属于 Test Config。
-
-### 2.2 Hardware Config 规划
-
-保留现有生成链路：
-
-```text
-Chipyard Config class
-  -> HeaderGenerator.extractParamsFromConfig
-  -> cutetest/include/*.generated
-```
-
-需要增强生成产物：
-
-- `datatype.h.generated`
-  - 保留数据类型 ID、位宽、名称。
-  - 增加 A/B/C/D element byte width 查询，避免测试端手算 stride。
-
-- `validation.h.generated`
-  - 保留 `CUTE_TENSOR_M/N/K`、`CUTE_MATRIX_M/N`、MMU、FPE、buffer 等。
-  - 增加 config fingerprint，例如 `CUTE_CONFIG_FINGERPRINT`，用于 run artifact 检查“binary 是否和当前 header/config 匹配”。
-
-- `instruction.h.generated`
-  - 作为上层 C API 的唯一 funct 来源。
-  - 手写 helper 只保留底层 inline asm 和少量兼容 wrapper，不再维护 funct 号。
-
-- 新增 `cute_config.h.generated`
-  - `CUTE_HW_CONFIG_NAME`
-  - `CUTE_HW_CONFIG_SHORT_NAME`
-  - `CUTE_HEADER_GENERATED_AT`
-  - `CUTE_HEADER_GENERATOR_VERSION`
-  - `CUTE_PARAM_*` 摘要
-
-- 新增 `cute_layout.h.generated`
-  - tile 相关派生常量。
-  - 标准 stride/layout helper。
-  - tensor 对齐、block size、scale layout 的查询宏。
-
-### 2.3 Test Manifest 规划
-
-建议在 `configs/` 或 `cutetest/configs/` 下建立声明式配置：
-
-```text
-configs/
-├── hardware/
-│   ├── cute2tops_scp64.yaml
-│   ├── cute4tops_scp128.yaml
-│   └── cute4tops_shuttle512.yaml
-├── tests/
-│   ├── matmul_i8_basic.yaml
-│   ├── datatype_mxfp8_sweep.yaml
-│   ├── resnet50_conv_layers.yaml
-│   └── llama3_1b_layers.yaml
-├── suites/
-│   ├── smoke.yaml
-│   ├── nightly.yaml
-│   ├── correctness_full.yaml
-│   └── perf_sweep.yaml
-└── schemas/
-    ├── hardware.schema.json
-    ├── test.schema.json
-    └── suite.schema.json
-```
-
-一个测试 config 的建议结构：
+示例：
 
 ```yaml
 version: 1
-name: matmul_i8_128
-kind: op_test
-tags: [smoke, correctness, matmul, int8]
+name: cute2tops_scp64_dramsim32
 
-hardware:
+cute:
   chipyard_config: chipyard.CUTE2TopsSCP64Config
-  generated_headers: cutetest/include
-  simulator: auto
+  generated_headers:
+    output_dir: build/hwconfigs/cute2tops_scp64_dramsim32/generated_headers
+    mode: generate_from_hwconfig
+    fingerprint: auto
+  trace_capability:
+    structured_trace: true
+    d_store_data: true
+    mem_req_rsp: true
+    perf_counter_snapshot: true
+
+soc:
+  core: rocket
+  core_count: 1
+  sysbus_width: 64
+  membus_width: 64
   dramsim:
     enabled: true
     preset: dramsim2_ini_32GB_per_s
+  simulator:
+    backend: verilator
+    binary: auto
+    max_cycles: 800000000
 
-build:
-  source: cutetest/templates/matmul.c.j2
-  output: build/cutetests/matmul_i8_128/matmul_i8_128.riscv
-  cflags: [-O3]
-  headers:
-    generated: true
-    data: auto
-
-op:
-  type: matmul
-  dtype: CUTEDataTypeI8I8I32
-  M: 128
-  N: 128
-  K: 128
-  bias: zero
-  transpose: false
-  layout:
-    A: row_major
-    B: row_major
-    D: row_major
-
-golden:
-  source: cpu_reference
-  compare:
-    mode: exact
-    max_mismatch: 0
-
-trace:
-  enabled: true
-  level: store
-  events: [TASK_BEGIN, TASK_END, D_STORE]
-
-perf:
-  enabled: true
-  metrics: [total_cycles, tops, compute_util, bandwidth, stall_breakdown]
-  thresholds:
-    max_cycles: null
+capability:
+  datatypes: [i8i8i32, fp16fp16fp32, mxfp8e4m3, nvfp4]
+  tensor_ops: [matmul]
+  layer_ops: []
+  fused_ops: []
 ```
 
-### 2.4 Suite Manifest 规划
+### 2.3 Generated Headers 与 Capability 导出
 
-suite 不应该复制测试细节，只负责组合、参数 sweep、并发和报告：
+现有生成链路保留：
+
+```text
+Chipyard Config
+  -> HeaderGenerator.extractParamsFromConfig
+  -> HWConfig.generated_headers/*.generated
+```
+
+需要增强为：
+
+```text
+HWConfig
+  -> generated C headers under this HWConfig
+  -> generated capability json
+  -> generated software constraints
+```
+
+建议生成：
+
+```text
+build/hwconfigs/<hwconfig-name>/
+├── hwconfig.resolved.yaml
+├── cute_params.json
+├── capability.json
+├── header_fingerprint.txt
+└── generated_headers/
+    ├── datatype.h.generated
+    ├── validation.h.generated
+    ├── instruction.h.generated
+    ├── cute_config.h.generated
+    └── cute_layout.h.generated
+```
+
+`generated_headers` 应被视为 `HWConfig` 的固化产物，而不是 `Test` 或 `cutetest/runtime` 的全局状态。`Test.code` 编译时只通过 include path 引用当前匹配 `HWConfig` 的 generated headers：
+
+```text
+build(Test.code, HWConfig):
+  -I cutetest/include
+  -I build/hwconfigs/<hwconfig-name>/generated_headers
+```
+
+这样可以避免“用 A 配置生成的 header 编译，却在 B 配置 simulator 上运行”的隐式错配。`cutetest/include` 只放稳定 runtime wrapper 和手写公共头；`.generated` 文件默认不再作为全局共享输入。
+
+`capability.json` 要服务 `Test.target` 匹配：
+
+```json
+{
+  "hwconfig": "cute2tops_scp64_dramsim32",
+  "cute": {
+    "tensor_m": 64,
+    "tensor_n": 64,
+    "tensor_k": 64,
+    "datatypes": ["i8i8i32", "fp16fp16fp32"],
+    "trace_events": ["TASK", "D_STORE_DATA", "MEM_REQ_RSP"]
+  },
+  "soc": {
+    "core": "rocket",
+    "dramsim_preset": "dramsim2_ini_32GB_per_s",
+    "sysbus_width": 64,
+    "membus_width": 64
+  }
+}
+```
+
+### 2.4 HWConfig 成熟标准
+
+短期：
+
+- 能从一个 `HWConfig` manifest 生成 C headers。
+- 能保存 resolved config 和 fingerprint。
+- 能判断一个 test target 是否支持该 HWConfig。
+
+中期：
+
+- 能表达 CUTE + SoC + DRAMSim + simulator 的组合。
+- 能支持多 HWConfig sweep。
+- 能为 trace perf model 提供理论峰值、bus width、memory preset 等上下文。
+
+长期：
+
+- 新增硬件配置后，不需要手改 C 测试常量。
+- `HWConfig` 成为 test target、build、run、verify、perf 的共同入口。
+
+---
+
+## 3. Test 规划
+
+本章推进 `Test` 抽象。Test 不是单个 C 文件，而是 `target + code + golden` 的组合。Test 层级越高，依赖的 runtime/lib 越多，target 范围越窄。
+
+### 3.1 Test Pass 定义
+
+一个 test 的最小语义：
 
 ```yaml
 version: 1
-name: perf_sweep_gemm_k
-description: Sweep GEMM K dimension under multiple DRAM bandwidth presets.
+name: matmul_i8_128_base
+kind: tensor_test
 
-matrix:
-  hardware.chipyard_config:
-    - chipyard.CUTE2TopsSCP64Config
-    - chipyard.CUTE4TopsSCP128Config
-  hardware.dramsim.preset:
-    - dramsim2_ini_16GB_per_s
-    - dramsim2_ini_32GB_per_s
-    - dramsim2_ini_64GB_per_s
-  op.K:
-    - 512
-    - 1024
-    - 2048
-    - 4096
+target:
+  hwconfigs:
+    include_tags: [cute_tensor_v1]
+  required_capability:
+    datatypes: [i8i8i32]
+    tensor_ops: [matmul]
+    trace_func_level: tensor_store
 
-base_test: configs/tests/matmul_i8_template.yaml
-report:
-  compare_by: [hardware.chipyard_config, hardware.dramsim.preset, op.K]
-  output: reports/perf_sweep_gemm_k
+code:
+  source: cutetest/templates/matmul.c.j2
+  runtime_lib: runtime_v1
+  op_lib: tensor_op_v1
+  params:
+    M: 128
+    N: 128
+    K: 128
+    dtype: i8i8i32
+
+golden:
+  level: tensor_op
+  source: python_reference
+  compare:
+    mode: exact
 ```
 
-### 2.5 Config 校验原则
-
-每次 run 前必须校验：
-
-- `chipyard_config` 是否能被 `HeaderGenerator` 加载。
-- manifest 中的 `M/N/K/dtype/layout` 是否能被当前 `validation.h.generated` 支持。
-- binary 编译时使用的 header fingerprint 是否等于 run 时硬件 config fingerprint。
-- trace event level 是否被当前 RTL trace 开关支持。
-- golden compare mode 是否适配 dtype，比如整数 exact，浮点 tolerance。
-
----
-
-## 3. Runner 与 Artifact 系统
-
-本章推进三大对象的第一次联合：把 `CONFIG + SOFTWARE + Inputs + TracePolicy` 编排成一次可复现 run，并把该 run 的所有证据保存成 artifact。Runner 不应该吞掉对象边界；它只负责把对象组合、执行、归档。
-
-### 3.1 统一 CLI
-
-建议新增 Python CLI，先放在 `tools/cutecli/` 或 `scripts/cute.py`，成熟后再包成命令：
+Pass 规则：
 
 ```text
-cute config generate --hw chipyard.CUTE2TopsSCP64Config
-cute test build configs/tests/matmul_i8_128.yaml
-cute test run configs/tests/matmul_i8_128.yaml
-cute suite run configs/suites/smoke.yaml
-cute verify artifacts/<run-id>
-cute perf artifacts/<run-id>
-cute report open artifacts/<run-id>
+HWConfig matches Test.target
+AND build(Test.code, HWConfig) succeeds
+AND run(Test.code, HWConfig) succeeds
+AND Trace.func(Trace.filter(raw_trace), HWConfig, Test) == Test.golden
 ```
 
-第一阶段可以只实现：
+### 3.2 Test 层级和 Lib 成长路线
+
+Test 不只是验证用例，它会沉淀软件库。建议按以下路线演进：
 
 ```text
-scripts/cute-run.py --config configs/tests/matmul_i8_128.yaml
-scripts/cute-verify.py --artifact build/cute-runs/<run-id>
-scripts/cute-perf.py --artifact build/cute-runs/<run-id>
+BaseTest
+  -> runtime lib
+
+TensorTest
+  -> tensor config wrapper
+  -> tensor op lib
+
+LayerTest
+  -> vector task composition
+  -> layer op lib
+
+FuseLayerTest
+  -> fused layer scheduling
+  -> fuse_layer op lib
+
+SOCOptTest
+  -> soc-specific optimization
+  -> opt_op_lib
+
+ModelTest
+  -> model-level validation/profile
 ```
 
-### 3.2 Run Artifact 目录规范
+对应关系：
 
-每次运行生成独立目录，避免覆盖日志：
+| Test 层级 | 目标 | 产出的软件库 | target 范围 |
+|---|---|---|---|
+| `BaseTest` | 验证最基础 RoCC/CUTE 通信、query、启动、结束、trace 基础事件 | `runtime lib` | 最宽，几乎所有 HWConfig |
+| `TensorTest` | 验证 tensor config、layout、stride、matmul/conv 等基础 tensor op | `tensor op lib` | 需要支持对应 tensor capability |
+| `LayerTest` | 验证 NN layer 由 tensor op + vector task 组合的语义 | `layer op lib` | 需要支持 tensor op、vector task、layer 所需 dtype/layout |
+| `FuseLayerTest` | 验证多 layer 或 layer 内融合、减少中间读写 | `fuse_layer op lib` | 更窄，依赖融合路径和 trace.func 支持 |
+| `SOCOptTest` | 针对特定 SoC、DRAM、core、bus 做足量优化 | `opt_op_lib` | 很窄，通常绑定少数 HWConfig |
+| `ModelTest` | 验证完整模型或模型片段的 correctness/profile | model runner / benchmark | 最窄，通常绑定特定 HWConfig 族 |
+
+这个结构的关键点：
+
+- `BaseTest` 先稳定，才能沉淀可靠 runtime lib。
+- `TensorTest` 不应该直接绕过 runtime lib，而是在 runtime 上包装 tensor config。
+- `LayerTest` 不能只是更大的 C 文件，而应该复用 tensor op lib 并叠加 vector task。
+- `FuseLayerTest` 是新的语义层，不应该和普通 layer test 混在一起。
+- `SOCOptTest` 的 target 本来就很窄，不应该强行要求所有 HWConfig 都支持。
+- `ModelTest` 应尽量复用下层 lib，而不是复制所有实现。
+
+### 3.3 Target 范围逐层变窄
+
+从下到上，test 的 target 服务范围不断变小：
 
 ```text
-build/cute-runs/
-└── 20260428-153012-matmul_i8_128-cute2tops_scp64/
-    ├── manifest.resolved.yaml
-    ├── hw_config.snapshot.json
-    ├── headers/
-    │   ├── datatype.h.generated
-    │   ├── validation.h.generated
-    │   └── instruction.h.generated
-    ├── build/
-    │   ├── test.c
-    │   ├── test.riscv
-    │   └── test.dump
-    ├── run/
-    │   ├── simulator.cmd.txt
-    │   ├── uart.log
-    │   ├── debug.out
-    │   └── raw.log
-    ├── trace/
-    │   ├── cute.trace.jsonl
-    │   ├── cute.trace.raw
-    │   └── cute.trace.index.json
-    ├── verify/
-    │   ├── golden.npy
-    │   ├── actual.npy
-    │   ├── mismatch.csv
-    │   └── verify.json
-    ├── perf/
-    │   ├── perf.json
-    │   ├── topdown.md
-    │   └── timeline.csv
-    └── report.md
+BaseTest target:
+  all HWConfig with minimal CUTE runtime capability
+
+TensorTest target:
+  HWConfig with required tensor shape/datatype/layout capability
+
+LayerTest target:
+  HWConfig with required tensor op + vector task + memory capacity
+
+FuseLayerTest target:
+  HWConfig with required fusion capability + trace.func support
+
+SOCOptTest target:
+  specific SOC/core/bus/dram family
+
+ModelTest target:
+  specific model + specific HWConfig family + enough memory/perf capability
 ```
 
-### 3.3 Runner 状态机
+这会反过来指导 suite 设计：
 
-每个 test job 按如下状态推进：
+- smoke suite 应以 `BaseTest + 少量 TensorTest` 为主，target 宽。
+- correctness suite 可以覆盖更多 Tensor/Layer/Fuse。
+- perf suite 应明确绑定 HWConfig family。
+- model suite 本来就应该窄，不要追求所有硬件都跑。
 
-```text
-RESOLVE_CONFIG
-  -> GENERATE_HEADERS
-  -> BUILD_TEST
-  -> BUILD_OR_SELECT_SIMULATOR
-  -> RUN_SIMULATOR
-  -> EXTRACT_TRACE
-  -> VERIFY
-  -> PERF_ANALYZE
-  -> REPORT
-```
+### 3.4 Golden Level 与 Trace.func Level
 
-任何阶段失败都要输出机器可读状态：
+`Test.golden.level` 必须对应 `Trace.func` 已经完成的功能模型层级。
 
-```json
-{
-  "status": "failed",
-  "stage": "VERIFY",
-  "reason": "mismatch",
-  "summary": {
-    "mismatch": 12,
-    "first_mismatch": {"row": 0, "col": 7, "actual": 16, "expected": 15}
-  }
-}
-```
+建议定义：
 
-### 3.4 与现有脚本兼容
-
-短期不要删除现有脚本，而是让新 CLI 调用它们：
-
-- `scripts/generate-headers.sh`
-- `scripts/build-test.sh` 中的 Makefile 逻辑可以逐步拆分。
-- `scripts/run-simulator-test.sh`
-- `scripts/build-simulator.sh`
-- `scripts/build-verilog.sh`
-
-中期再把硬编码批量 build 改成 manifest 驱动。
-
----
-
-## 4. Trace Layer 规划
-
-本章主要推进 `TRACE` 抽象：定义“事实记录”的格式、事件、parser、index 与导出方式。它的目标不是多打印日志，而是让 `SOFTWARE on CONFIG` 的实际行为能被 verify 和 profile 共同复用。
-
-### 4.1 Trace 设计原则
-
-trace 要服务两个目标：
-
-1. **Correctness reconstruction**
-   - 能从 trace 中复原关键输出数据或至少定位输出写回。
-   - 能把每个 D store 映射回 task/tile/tensor 坐标。
-
-2. **Performance attribution**
-   - 能把总周期拆到 task、stage、module、tile、stall 原因。
-   - 能关联 memory request/response、compute start/end、store start/end。
-
-因此 trace 不能只是字符串 printf。建议使用“人可读 + 机器可解析”的 key-value 格式。
-
-### 4.2 推荐 Trace 格式
-
-原始 RTL printf：
-
-```text
-[CUTE_TRACE cycle=12345 module=CML inst=0 event=D_STORE task=7 tile_m=1 tile_n=2 addr=0x80004000 bytes=64 data=0x...]
-```
-
-解析后 JSONL：
-
-```json
-{"cycle":12345,"module":"CML","inst":0,"event":"D_STORE","task":7,"tile_m":1,"tile_n":2,"addr":"0x80004000","bytes":64,"data":"0x..."}
-```
-
-### 4.3 Event Taxonomy
-
-建议先定义最小但足够有用的事件集合：
-
-| 层级 | Event | 说明 |
+| Golden Level | 需要的 Trace.func 能力 | 适用 Test |
 |---|---|---|
-| Task | `TASK_BEGIN` | 宏任务开始，记录 M/N/K/dtype/bias/layout |
-| Task | `TASK_END` | 宏任务结束，记录总周期和状态 |
-| Inst | `INST_DECODE` | RoCC/CUTE 指令被解析 |
-| Inst | `INST_ISSUE` | 指令进入内部队列或 microtask |
-| Inst | `INST_DONE` | 指令完成 |
-| Tile | `TILE_BEGIN` | tile 级计算开始 |
-| Tile | `TILE_END` | tile 级计算结束 |
-| Load | `A_LOAD_BEGIN` / `A_LOAD_END` | A tensor load |
-| Load | `B_LOAD_BEGIN` / `B_LOAD_END` | B tensor load |
-| Load | `C_LOAD_BEGIN` / `C_LOAD_END` | C/bias load |
-| Compute | `COMPUTE_BEGIN` / `COMPUTE_END` | TE/PE 计算阶段 |
-| Store | `D_STORE_BEGIN` / `D_STORE_DATA` / `D_STORE_END` | 输出写回 |
-| Memory | `MEM_REQ` / `MEM_RSP` | MMU/TileLink/DRAM 事务 |
-| Stall | `STALL_BEGIN` / `STALL_END` | 显式 stall 原因 |
-| Counter | `COUNTER_SNAPSHOT` | 计数器快照 |
+| `event` | 检查 task/inst/order 是否符合预期 | BaseTest |
+| `store_tensor` | 从 D_STORE_DATA 重建 tensor | TensorTest |
+| `tensor_op` | 将 trace 重建为 tensor op 输出并比较 golden | TensorTest |
+| `layer` | 解释 vector task + tensor op 组合后的 layer 输出 | LayerTest |
+| `fused_layer` | 解释融合 layer 的中间消除和最终输出 | FuseLayerTest |
+| `model` | 解释完整模型或模型片段输出 | ModelTest |
 
-### 4.4 必须带的公共字段
-
-所有事件必须尽量带：
-
-- `cycle`
-- `module`
-- `event`
-- `task_id`
-- `config_id` 或 `run_id`
-- `core_id`，如果多核/多 RoCC
-- `cute_id`，如果多个 CUTE 实例
-
-与 tensor 相关的事件带：
-
-- `tensor`: A/B/C/D/scaleA/scaleB
-- `tile_m/tile_n/tile_k`
-- `global_m/global_n/global_k`，如果能算出全局坐标
-- `addr`
-- `bytes`
-- `dtype`
-- `layout`
-
-与性能相关的事件带：
-
-- `stage`
-- `reason`
-- `queue_depth`
-- `valid/ready`
-- `req_id/source/sink`
-
-### 4.5 RTL 插桩位置
-
-第一阶段建议只插关键路径，避免一下子污染所有模块：
-
-| 模块 | 第一阶段事件 |
-|---|---|
-| `CUTE2YGJK` / top wrapper | `TASK_BEGIN`、`TASK_END`、query counter |
-| `TaskController` | `INST_DECODE`、`INST_ISSUE`、`INST_DONE` |
-| `MatrixTE` | `TILE_BEGIN`、`COMPUTE_BEGIN`、`COMPUTE_END`、`TILE_END` |
-| `AMemoryLoader` / `BMemoryLoader` / `CMemoryLoader` | load/store begin/end、`D_STORE_DATA` |
-| `LocalMMU` | `MEM_REQ`、`MEM_RSP` |
-
-插桩需要受参数控制：
-
-- `TraceDisable`: 默认关闭。
-- `TraceLevelBasic`: task/inst/counter。
-- `TraceLevelPerf`: task/stage/tile/memory。
-- `TraceLevelVerify`: 包含 D store 数据。
-- `TraceLevelDebug`: 更细 valid/ready 和内部状态。
-
-### 4.6 Trace Parser
-
-新增：
+如果某个 test 的 golden level 高于当前 `Trace.func` 支持级别，它不能标记为 full pass，只能标记为：
 
 ```text
-trace/
-├── format_spec.md
-├── python/
-│   ├── cute_trace.py
-│   ├── cute_trace_index.py
-│   ├── cute_trace_extract.py
-│   └── cute_trace_legacy.py
-└── scripts/
-    ├── trace-filter.py
-    ├── trace-to-jsonl.py
-    └── trace-stats.py
+RUN_OK / TRACE_OK / FUNC_MODEL_NOT_READY
 ```
 
-parser 要支持：
+这可以避免“代码跑了但无法验证”的测试被误判为 pass。
 
-- 新格式 `[CUTE_TRACE ...]`。
-- 旧格式 printf 的兼容提取，例如 `CML_Store_trace.out`、`vpu_Store_trace.out`。
-- 大日志流式解析，避免一次性读入超大 log。
-- 输出 JSONL 和索引。
-
----
-
-## 5. Verify Line 规划
-
-本章推进 `SOFTWARE + TRACE` 的联合：`SOFTWARE` 给出语义和 golden policy，`TRACE` 给出实际执行结果，verify 负责把两者对齐并判断 correctness。`CONFIG` 在这里提供 dtype、layout、tile、stride、capability 等解释上下文。
-
-### 5.1 Verify 的职责
-
-verify 不负责“怎么编译/怎么跑”，只负责：
-
-- 读 manifest 和 artifact。
-- 生成或加载 golden。
-- 从 trace/log/memory dump 中提取 actual。
-- 做数值比较。
-- 输出结构化结果。
-
-### 5.2 Verify 目录结构
+### 3.5 Test 目录建议
 
 ```text
-verify/
-├── README.md
-├── python/
-│   ├── cute_verify_config.py
-│   ├── cute_golden.py
-│   ├── cute_compare.py
-│   ├── cute_reconstruct.py
-│   ├── cute_report.py
-│   └── ops/
-│       ├── matmul.py
-│       ├── conv.py
-│       ├── blockscale.py
-│       └── transformer.py
-├── scripts/
-│   ├── cute-verify.py
-│   └── cute-golden.py
-└── tests/
-    ├── test_compare.py
-    ├── test_reconstruct_d_store.py
-    └── golden_samples/
+configs/tests/
+├── base/
+│   ├── rocc_hello.yaml
+│   ├── query_counters.yaml
+│   └── trace_smoke.yaml
+├── tensor/
+│   ├── matmul_i8_128.yaml
+│   ├── matmul_fp16_128.yaml
+│   ├── datatype_mxfp8.yaml
+│   └── conv_k1_s1.yaml
+├── layer/
+│   ├── resnet50_conv_layer.yaml
+│   ├── bert_attention.yaml
+│   └── llama_ffn.yaml
+├── fuse_layer/
+│   ├── llama_ffn_fused.yaml
+│   └── attention_qkv_fused.yaml
+├── soc_opt/
+│   ├── llama_ffn_shuttle512_dram48.yaml
+│   └── gemm_k_sweep_dram64.yaml
+└── model/
+    ├── resnet50.yaml
+    ├── bert.yaml
+    └── llama3_1b.yaml
 ```
-
-### 5.3 Golden 来源
-
-按优先级支持：
-
-1. **Python/numpy reference**
-   - 适合 matmul、conv、简单 dtype。
-   - 快速迭代，最适合新框架。
-
-2. **已有 C header 数据**
-   - 兼容现有 `matmul_value_*.h`、`conv_*.h`。
-   - 需要 parser 或模板约定，把 expected D 读出来。
-
-3. **C CPU reference**
-   - 对复杂 fused op 更贴近当前测试代码。
-   - 可以编译 native host 程序生成 golden。
-
-4. **外部模型 golden**
-   - BERT/LLaMA/ResNet 的已有 Python checker 或 golden 目录。
-
-### 5.4 Actual 重建
-
-第一阶段用 `D_STORE_DATA` trace 重建 D：
-
-```text
-D_STORE_DATA:
-  task_id
-  addr
-  bytes
-  data
-  tile_m/tile_n
-  row/col optional
-```
-
-reconstruct 负责：
-
-- 根据 manifest 中 D tensor base/stride/layout，把 addr 映射到 row/col。
-- 根据 dtype 解码 bytes。
-- 处理 partial store、padding、transpose。
-- 输出 `actual.npy` 和可读 csv。
-
-### 5.5 Compare 策略
-
-| dtype | 默认比较 |
-|---|---|
-| int8/int32 output | exact |
-| fp16/bf16/fp32 output | abs/rel tolerance |
-| fp8/mxfp/nvfp4 path | reference decode 后 tolerance |
-| transformer end-to-end | top-k / layer output / max error 多指标 |
-
-compare 输出：
-
-```json
-{
-  "passed": false,
-  "total": 16384,
-  "mismatch": 3,
-  "max_abs_err": 2,
-  "max_rel_err": 0.0,
-  "first_mismatch": {
-    "index": [0, 17],
-    "actual": 42,
-    "expected": 40
-  }
-}
-```
-
-### 5.6 Verify 分层
-
-建议建立 4 个 verify 层级：
-
-| 层级 | 名称 | 目标 |
-|---|---|---|
-| V0 | smoke verify | 能启动、能完成、无明显 fatal |
-| V1 | output verify | D tensor 与 golden 比对 |
-| V2 | protocol verify | trace 事件顺序、task 生命周期、memory req/rsp 匹配 |
-| V3 | invariant verify | 模块级不变量：无越界、无非法 dtype、无重复完成、无漏 store |
-
-第一阶段先做 V0/V1，后续逐步扩展 V2/V3。
-
----
-
-## 6. Perf Line 规划：Trace Top-Down 性能分析
-
-本章推进 `CONFIG + TRACE` 的联合：`TRACE` 提供 timeline 和事件事实，`CONFIG` 提供硬件结构、理论峰值、tile 规模和带宽解释上下文，perf analyzer 负责把事实转成 top-down 性能归因。
-
-### 6.1 Top-Down 总思路
-
-性能分析必须从“总时间去哪了”开始，而不是直接盯某个模块。
-
-推荐四级 top-down：
-
-```text
-Level 0: Run summary
-  total_cycles, total_ops, TOPS, bandwidth, pass/fail
-
-Level 1: Task breakdown
-  每个 macro task/layer/operator 的周期、占比、效率
-
-Level 2: Stage breakdown
-  config / load_A / load_B / load_C / compute / store_D / wait / stall
-
-Level 3: Bottleneck attribution
-  memory-bound / compute-bound / store-bound / front-end-bound / sync-bound
-
-Level 4: Module and event detail
-  MMU latency, queue occupancy, loader imbalance, PE utilization, DRAM bw
-```
-
-### 6.2 Perf 指标
-
-最小指标集：
-
-- `total_cycles`
-- `effective_ops`
-- `effective_tops`
-- `compute_cycles`
-- `load_cycles`
-- `store_cycles`
-- `stall_cycles`
-- `compute_utilization`
-- `dram_read_bytes`
-- `dram_write_bytes`
-- `dram_bandwidth`
-- `tile_count`
-- `avg_tile_cycles`
-- `p50/p95 tile_cycles`
-
-进阶指标：
-
-- A/B/C loader overlap ratio。
-- TE busy ratio。
-- PE array utilization。
-- MMU avg/max latency。
-- request queue occupancy。
-- D store drain latency。
-- DRAM bandwidth saturation。
-- fuse vs nofuse overhead。
-- TCM vs notcm memory pressure。
-
-### 6.3 Stage 归因规则
-
-perf analyzer 不能只依赖事件名，需要一套清晰规则：
-
-- `TASK_BEGIN -> TASK_END` 是总 task window。
-- `COMPUTE_BEGIN -> COMPUTE_END` 是 compute busy。
-- `A/B/C_LOAD_BEGIN -> *_END` 是 load window。
-- `D_STORE_BEGIN -> D_STORE_END` 是 store window。
-- 多个 window 重叠时：
-  - 报告 both raw duration 和 critical path duration。
-  - raw duration 用于模块繁忙度。
-  - critical path 用于总周期归因。
-- 没有显式 stage event 时，使用 counter snapshot 或 legacy printf fallback。
-
-### 6.4 Perf 报告格式
-
-每次 run 生成：
-
-- `perf/perf.json`: 机器可读。
-- `perf/topdown.md`: 人可读。
-- `perf/timeline.csv`: 可画图。
-- `perf/timeline.html`: 后续可选。
-
-`topdown.md` 示例结构：
-
-```text
-# Perf Report: matmul_i8_128
-
-## Summary
-- total_cycles: 123456
-- effective_tops: 1.83
-- compute_util: 72.4%
-- bottleneck: memory_load_B
-
-## Task Breakdown
-...
-
-## Stage Breakdown
-...
-
-## Bottleneck Evidence
-...
-
-## Suggestions
-...
-```
-
-### 6.5 性能回归
-
-suite 支持 perf threshold：
-
-```yaml
-perf:
-  thresholds:
-    total_cycles:
-      max_regression_pct: 5
-      baseline: baselines/matmul_i8_128.cute2tops.json
-    compute_util:
-      min: 0.65
-```
-
-如果性能变差：
-
-- correctness 仍可 PASS。
-- perf status 标记为 `REGRESSED`。
-- report 中列出哪个指标越界。
-
----
-
-## 7. Test Line 规划：CONFIG 驱动的软件测试流程
-
-本章主要推进 `SOFTWARE` 抽象：把 C 测试从散落文件升级为可由 `CONFIG` 驱动的 runtime、算子、NN layer、融合算子与 golden 生成体系。它的目标是让“能生成什么软件、能跑什么测试、golden 应该是什么”都受 `CONFIG` 约束。
-
-### 7.1 测试生成方式
-
-现有大量 `.c` 文件可以保留，但新测试建议走模板化：
 
 ```text
 cutetest/
-├── include/
-│   ├── cute_runtime.h
-│   ├── cute_tensor.h
-│   ├── cute_ops.h
-│   ├── cute_perf.h
-│   └── *.generated
+├── runtime/
+├── tensor_ops/
+├── layer_ops/
+├── fuse_layer_ops/
+├── opt_ops/
+├── model_tests/
 ├── templates/
-│   ├── matmul.c.j2
-│   ├── conv.c.j2
-│   ├── datatype.c.j2
-│   └── model_layer.c.j2
-├── generated/
-│   └── <test-name>/test.c
-├── legacy/
-│   └── optional wrappers to existing tests
-└── configs/
+└── legacy/
 ```
-
-第一阶段不强行迁移所有旧测试，只挑 3 个代表：
-
-- GEMM matmul correctness。
-- datatype mxfp/fp8 correctness。
-- LLaMA/ResNet 单层性能。
-
-### 7.2 C Runtime API
-
-新增轻量 C runtime，封装 generated instruction：
-
-```c
-typedef struct {
-    void *data;
-    uint64_t rows;
-    uint64_t cols;
-    uint64_t stride_bytes;
-    uint64_t dtype;
-    uint64_t layout;
-} cute_tensor_t;
-
-typedef struct {
-    cute_tensor_t A;
-    cute_tensor_t B;
-    cute_tensor_t C;
-    cute_tensor_t D;
-    uint64_t M;
-    uint64_t N;
-    uint64_t K;
-    uint64_t bias_mode;
-    uint64_t transpose;
-} cute_matmul_desc_t;
-
-int cute_matmul_submit(const cute_matmul_desc_t *desc);
-int cute_wait_done(uint64_t timeout_cycles);
-void cute_perf_snapshot(cute_perf_t *perf);
-```
-
-原则：
-
-- 上层测试不再直接拼 funct。
-- 上层测试尽量不手算 cfgData bitfield。
-- 所有 bitfield assembly 来自 `instruction.h.generated`。
-- runtime 只做软件描述到 CUTE 指令序列的稳定映射。
-
-### 7.3 Build 流程
-
-新 build 流程：
-
-```text
-resolve manifest
-  -> generate headers for hardware config
-  -> render test.c from template or use existing source
-  -> compile test.riscv
-  -> dump symbols/metadata
-  -> copy all inputs into artifact
-```
-
-### 7.4 Run 流程
-
-新 run 流程：
-
-```text
-select simulator by hardware config
-  -> if missing, build simulator
-  -> run with DRAMSim preset and max-cycles
-  -> capture stdout/stderr/UART/debug log
-  -> extract trace
-  -> generate artifact status
-```
-
-### 7.5 Legacy 测试迁移
-
-迁移不要一口吃掉所有文件，按价值排序：
-
-1. **Smoke**
-   - 一个最小 matmul。
-   - 一个 dtype。
-   - 一个 transformer/resnet layer。
-
-2. **GEMM Sweep**
-   - 把 `gemm_test` 中 K sweep 收敛为 manifest matrix。
-   - 保留已有 `.c`，先由 manifest 指向 source。
-
-3. **Datatype Sweep**
-   - 统一 fp8/mxfp/nvfp4 的 golden 和 compare。
-
-4. **Model Layer**
-   - BERT/LLaMA/ResNet 的 notcm/nofuse/fuse 变体转成 tags 和 manifest matrix。
-
-5. **旧脚本清理**
-   - 当新 runner 覆盖 smoke/nightly/perf 后，旧脚本降级为兼容入口。
 
 ---
 
-## 8. 目录与模块建议
+## 4. Trace 规划（待定，后续专题展开）
 
-这一节的核心不是“必须马上创建所有目录”，而是先建立边界感：哪些目录是**源输入**，哪些是**生成输入**，哪些是**运行产物**，哪些是**分析工具**。建议用下面的组织方式学习和推演。
+本章暂时只确定 `Trace` 的边界，不在本版 plan 中细化设计。Trace 设计会很大，需要后续单独讨论。
 
-从三大对象看，本章是在给抽象找物理落点：`configs/` 承载 `CONFIG` 与 `SOFTWARE manifest`，`cutetest/` 承载 `SOFTWARE` 的 C runtime 和测试源码，`trace/` 承载 `TRACE`，`verify/` 与 `perf/` 承载对象联合后的分析逻辑，`build/cute-runs/` 承载三者组合产生的事实快照。
+当前只保留三个判断：
 
-### 8.1 总体目标结构
+1. `Trace` 是一级抽象，和 `HWConfig`、`Test` 并列。
+2. `Trace` 至少包含 `filter`、`func model`、`perf model` 三个二级抽象。
+3. `Trace.func` 和 `Trace.perf` 是两条基本独立的设计路线：它们共享 raw trace、parser、filter 和 artifact，但不能混成一个 analyzer。
 
-推荐目标结构如下，展开到可以指导实现的层级：
+暂定结构：
+
+```text
+Trace
+├── raw trace
+├── filter          # 待定：如何选择 event/module/task/tile/time/payload
+├── func model      # 待定：如何从 trace 重建功能语义并对齐 Test.golden
+└── perf model      # 待定：如何从 trace 解释性能、瓶颈、利用率
+```
+
+### 4.1 Trace.filter（待定）
+
+待后续专题明确：
+
+- filter 的配置格式。
+- func/perf/debug 是否使用不同 filter。
+- 是否按 event、module、task、layer、tile、cycle window、payload 控制。
+- filter 结果是否保存为独立 artifact。
+
+### 4.2 Trace.func（待定）
+
+待后续专题明确：
+
+- func model 的 level 如何定义。
+- `Test.golden.level` 如何映射到 `Trace.func` 能力。
+- BaseTest/TensorTest/LayerTest/FuseLayerTest/ModelTest 分别需要哪些 functional trace。
+- `D_STORE_DATA` 是否作为 TensorTest 的第一个强制 trace 事件。
+
+### 4.3 Trace.perf（待定）
+
+待后续专题明确：
+
+- perf model 的 level 如何定义。
+- top-down profile 的 stage、memory、utilization、bottleneck 口径。
+- perf trace 与 func trace 是否使用不同 payload 策略。
+- baseline/regression 如何保存和比较。
+
+本版 plan 后续章节如果提到 `Trace.func`、`Trace.perf`、`Trace.filter`，都只表示接口占位，不表示具体 trace schema 已经定稿。
+
+---
+
+## 5. Runner 与 Artifact
+
+Runner 和 Artifact 不是新的一级抽象，它们是工程执行层的两个概念：
+
+```text
+Runner  = 负责“怎么把 HWConfig + Test + TracePolicy 跑起来”的执行编排器
+Artifact = 负责“这一次到底跑了什么、产生了什么证据”的结果快照目录
+```
+
+换句话说：
+
+- `HWConfig / Test / Trace` 是框架的核心对象。
+- `Runner` 是动作流程，类似一个自动化实验员。
+- `Artifact` 是实验记录，类似一次实验的完整证据包。
+
+Runner 不定义测试语义，也不定义硬件语义；它只做编排：
+
+```text
+给定 HWConfig + Test + Trace.filter
+  -> 检查 target 是否匹配
+  -> 准备 HWConfig.generated_headers
+  -> 编译 Test.code
+  -> 选择 simulator
+  -> 运行
+  -> 收集 raw trace/log
+  -> 调用 Trace.filter / Trace.func / Trace.perf
+  -> 保存 Artifact
+```
+
+Artifact 的意义是让一次 run 可复盘、可比较、可 debug：
+
+```text
+没有 Artifact:
+  只知道“刚才好像跑过一个测试”，但不知道用的哪个 config/header/binary/log。
+
+有 Artifact:
+  能准确回答“这个 pass/fail/perf 数字是由哪个 HWConfig、哪个 Test、哪份代码、哪份 trace 得到的”。
+```
+
+因此，Runner 是“执行者”，Artifact 是“证据包”。它们服务三大抽象，但不替代三大抽象。
+
+### 5.1 Runner 状态机
+
+Runner 的状态机可以先理解为一条自动化流水线：
+
+```text
+RESOLVE_HWCONFIG
+  -> RESOLVE_TEST_TARGET
+  -> GENERATE_HEADERS
+  -> BUILD_TEST_CODE
+  -> SELECT_OR_BUILD_SIMULATOR
+  -> RUN
+  -> PARSE_TRACE
+  -> APPLY_TRACE_FILTER
+  -> TRACE_FUNC_VERIFY
+  -> TRACE_PERF_PROFILE
+  -> REPORT
+```
+
+每一步的含义：
+
+| 阶段 | 做什么 | 对应对象 |
+|---|---|---|
+| `RESOLVE_HWCONFIG` | 解析 HWConfig，生成 resolved config、capability、headers | `HWConfig` |
+| `RESOLVE_TEST_TARGET` | 判断 Test.target 是否支持当前 HWConfig | `HWConfig + Test` |
+| `GENERATE_HEADERS` | 生成或复用该 HWConfig 的 generated headers | `HWConfig` |
+| `BUILD_TEST_CODE` | 用该 HWConfig 的 headers 编译 Test.code | `Test + HWConfig` |
+| `SELECT_OR_BUILD_SIMULATOR` | 找到或生成对应 simulator | `HWConfig.SOC` |
+| `RUN` | 运行二进制，产生 raw log/trace | `HWConfig + Test` |
+| `PARSE_TRACE` | 从 raw log/trace 中提取结构化 trace | `Trace` |
+| `APPLY_TRACE_FILTER` | 选择 func/perf/debug 需要的 trace 子集 | `Trace.filter` |
+| `TRACE_FUNC_VERIFY` | 用功能模型对齐 Test.golden | `Trace.func + Test.golden` |
+| `TRACE_PERF_PROFILE` | 用性能模型生成 profile | `Trace.perf + HWConfig` |
+| `REPORT` | 汇总状态、verify、perf、路径 | Artifact |
+
+### 5.2 Run Artifact
+
+一次 run 的 artifact 必须能回答：
+
+- 用了哪个 `HWConfig`。
+- 跑了哪个 `Test`。
+- `Test.target` 为什么匹配这个 `HWConfig`。
+- 实际编译的 code 是什么。
+- raw trace 是什么。
+- filter 后 trace 是什么。
+- `Trace.func` 结果是什么。
+- `Trace.perf` 结果是什么。
+
+Artifact 建议满足两个原则：
+
+1. **不可变**：一个 run-id 目录生成后不再原地覆盖。新的运行产生新的 run-id。
+2. **自解释**：只看 artifact 目录，就能知道这次 run 的输入、过程、输出和判断依据。
+
+建议目录：
+
+```text
+build/cute-runs/<run-id>/
+├── hwconfig/
+│   ├── hwconfig.resolved.yaml
+│   ├── capability.json
+│   ├── header_fingerprint.txt
+│   └── generated_headers/
+│       ├── datatype.h.generated
+│       ├── validation.h.generated
+│       ├── instruction.h.generated
+│       ├── cute_config.h.generated
+│       └── cute_layout.h.generated
+├── test/
+│   ├── test.resolved.yaml
+│   ├── target_match.json
+│   ├── code/
+│   │   ├── test.c
+│   │   ├── test.riscv
+│   │   └── test.dump
+│   └── golden/
+│       ├── golden.npy
+│       └── golden.meta.json
+├── run/
+│   ├── simulator.cmd.txt
+│   ├── uart.log
+│   ├── debug.out
+│   └── raw.log
+├── trace/
+│   ├── raw.trace
+│   ├── events.jsonl
+│   ├── filter.func.yaml
+│   ├── filtered.func.jsonl
+│   ├── filter.perf.yaml
+│   └── filtered.perf.jsonl
+├── func/
+│   ├── actual.npy
+│   ├── mismatch.csv
+│   └── verify.json
+├── perf/
+│   ├── perf.json
+│   ├── topdown.md
+│   └── timeline.csv
+├── status.json
+└── report.md
+```
+
+### 5.3 CLI 建议
+
+第一阶段可先用 scripts，成熟后转为 `tools/cutecli`：
+
+```text
+scripts/cute-run.py --hw configs/hwconfigs/cute2tops_scp64_dramsim32.yaml --test configs/tests/tensor/matmul_i8_128.yaml
+scripts/cute-verify.py --artifact build/cute-runs/<run-id>
+scripts/cute-perf.py --artifact build/cute-runs/<run-id>
+scripts/cute-suite.py --suite configs/suites/smoke.yaml
+```
+
+---
+
+## 6. 目录与模块建议
+
+目录要服务三个对象，而不是按“脚本随手放哪里”组织。
 
 ```text
 CUTE/
 ├── configs/
-│   ├── hardware/                       # 硬件配置别名与元信息，不替代 Chipyard Config
-│   │   ├── cute2tops_scp64.yaml
-│   │   ├── cute4tops_scp128.yaml
-│   │   └── cute4tops_shuttle512.yaml
-│   ├── tests/                          # 单个 test/job 的声明式描述
-│   │   ├── smoke/
-│   │   │   ├── matmul_i8_128.yaml
-│   │   │   ├── datatype_mxfp8_smoke.yaml
-│   │   │   └── llama_layer_smoke.yaml
-│   │   ├── gemm/
-│   │   │   ├── matmul_i8_template.yaml
-│   │   │   ├── matmul_k_sweep.yaml
-│   │   │   └── matmul_multi_config.yaml
-│   │   ├── datatype/
-│   │   │   ├── fp8e4m3.yaml
-│   │   │   ├── mxfp8e4m3.yaml
-│   │   │   ├── nvfp4.yaml
-│   │   │   └── mxfp4.yaml
-│   │   ├── model/
-│   │   │   ├── resnet50_conv_layers.yaml
-│   │   │   ├── bert_layers.yaml
-│   │   │   └── llama3_1b_layers.yaml
-│   │   └── legacy/                      # 指向现有 .c/.riscv 的兼容 manifest
-│   │       ├── existing_gemm_cases.yaml
-│   │       └── existing_transformer_cases.yaml
-│   ├── suites/                         # 多个 test 的组合、矩阵展开、回归集
+│   ├── hwconfigs/
+│   │   ├── cute2tops_scp64_dramsim32.yaml
+│   │   └── schemas/hwconfig.schema.json
+│   ├── tests/
+│   │   ├── base/
+│   │   ├── tensor/
+│   │   ├── layer/
+│   │   ├── fuse_layer/
+│   │   ├── soc_opt/
+│   │   └── model/
+│   ├── trace_filters/
+│   │   ├── func_store_tensor.yaml
+│   │   ├── perf_task_stage.yaml
+│   │   └── perf_memory.yaml
+│   ├── suites/
 │   │   ├── smoke.yaml
 │   │   ├── correctness_full.yaml
 │   │   ├── perf_sweep.yaml
-│   │   ├── nightly.yaml
-│   │   └── ci_fast.yaml
-│   └── schemas/                        # manifest schema 与例子
-│       ├── hardware.schema.json
+│   │   └── model.yaml
+│   └── schemas/
 │       ├── test.schema.json
 │       ├── suite.schema.json
-│       └── examples/
-│           ├── minimal_matmul.yaml
-│           └── perf_sweep.yaml
+│       └── trace_filter.schema.json
 ├── cutetest/
-│   ├── include/                        # C 端公共 runtime 与 generated headers
-│   │   ├── cute.h
-│   │   ├── cute_runtime.h
-│   │   ├── cute_tensor.h
-│   │   ├── cute_ops.h
-│   │   ├── cute_perf.h
+│   ├── include/
 │   │   ├── ygjk.h
 │   │   ├── marcohelper.h
-│   │   ├── datatype.h.generated
-│   │   ├── validation.h.generated
-│   │   ├── instruction.h.generated
-│   │   ├── cute_config.h.generated
-│   │   └── cute_layout.h.generated
-│   ├── runtime/                        # 若 runtime 变复杂，可从 include 拆出实现
-│   │   ├── cute_runtime.c
-│   │   ├── cute_ops_matmul.c
-│   │   ├── cute_ops_conv.c
-│   │   ├── cute_perf.c
-│   │   └── Makefile
-│   ├── templates/                      # 新测试优先从模板生成
-│   │   ├── common/
-│   │   │   ├── test_main.c.j2
-│   │   │   ├── data_section.h.j2
-│   │   │   └── perf_print.c.j2
-│   │   ├── matmul.c.j2
-│   │   ├── conv.c.j2
-│   │   ├── datatype.c.j2
-│   │   └── model_layer.c.j2
-│   ├── generated/                      # manifest 渲染出来的 C 测试源码，可清理重建
-│   │   └── <test-name>/
-│   │       ├── test.c
-│   │       ├── data.h
-│   │       ├── Makefile
-│   │       └── README.generated.md
-│   ├── data/                           # 可复用测试数据，不放 run artifact
-│   │   ├── gemm/
-│   │   ├── conv/
-│   │   ├── datatype/
-│   │   └── model/
-│   ├── legacy/                         # 旧测试的薄包装和迁移记录
-│   │   ├── README.md
-│   │   ├── wrappers/
-│   │   └── migration_map.yaml
-│   ├── gemm_test/                      # 现有目录保留，逐步被 manifest 纳管
-│   ├── datatype_mm_test/
-│   ├── resnet50_test/
-│   └── transformer_test/
+│   │   ├── cute_runtime.h
+│   │   ├── cute_tensor.h
+│   │   └── cute_ops.h
+│   ├── runtime/
+│   ├── tensor_ops/
+│   ├── layer_ops/
+│   ├── fuse_layer_ops/
+│   ├── opt_ops/
+│   ├── model_tests/
+│   ├── templates/
+│   ├── generated/
+│   └── legacy/
 ├── trace/
-│   ├── format_spec.md                  # trace event 与字段规范
-│   ├── events.md                       # event taxonomy，人读版
-│   ├── examples/
-│   │   ├── cute.trace.raw
-│   │   ├── cute.trace.jsonl
-│   │   └── legacy_cml_store.out
+│   ├── format_spec.md
+│   ├── filters.md
 │   ├── python/
-│   │   ├── cute_trace.py               # parser 与 TraceEvent dataclass
-│   │   ├── cute_trace_index.py         # task/tile/memory 索引
-│   │   ├── cute_trace_extract.py       # 从 raw log 提取 trace
-│   │   ├── cute_trace_legacy.py        # 兼容旧 printf / CML_Store_trace
-│   │   ├── cute_trace_schema.py        # 字段校验
-│   │   └── cute_trace_viz.py           # timeline 可视化，后续可选
-│   ├── scripts/
-│   │   ├── trace-to-jsonl.py
-│   │   ├── trace-filter.py
-│   │   ├── trace-stats.py
-│   │   └── trace-timeline.py
+│   │   ├── parser.py
+│   │   ├── filter.py
+│   │   ├── index.py
+│   │   ├── func/
+│   │   │   ├── event_model.py
+│   │   │   ├── tensor_model.py
+│   │   │   ├── layer_model.py
+│   │   │   └── fused_model.py
+│   │   └── perf/
+│   │       ├── timeline.py
+│   │       ├── stage_model.py
+│   │       ├── memory_model.py
+│   │       ├── utilization.py
+│   │       └── bottleneck.py
 │   └── tests/
-│       ├── test_parser.py
-│       ├── test_legacy_parser.py
-│       └── samples/
 ├── verify/
-│   ├── README.md
 │   ├── python/
-│   │   ├── cute_verify_config.py       # 读取 manifest 中的 golden/compare 配置
-│   │   ├── cute_golden.py              # golden 统一入口
-│   │   ├── cute_reconstruct.py         # trace -> actual tensor
-│   │   ├── cute_compare.py             # exact/tolerance/top-k 等比较
-│   │   ├── cute_report.py              # verify.json / mismatch.csv / markdown
-│   │   └── ops/
-│   │       ├── matmul.py
-│   │       ├── conv.py
-│   │       ├── blockscale.py
-│   │       ├── datatype.py
-│   │       ├── resnet50.py
-│   │       ├── bert.py
-│   │       └── llama.py
-│   ├── scripts/
-│   │   ├── cute-verify.py
-│   │   ├── cute-golden.py
-│   │   └── cute-reconstruct.py
+│   │   ├── golden.py
+│   │   ├── compare.py
+│   │   └── report.py
 │   └── tests/
-│       ├── test_compare_exact.py
-│       ├── test_compare_tolerance.py
-│       ├── test_reconstruct_d_store.py
-│       └── golden_samples/
 ├── perf/
-│   ├── README.md
-│   ├── metrics.md                      # 指标定义，避免报告口径漂移
-│   ├── python/
-│   │   ├── cute_perf_analyzer.py       # top-down 主入口
-│   │   ├── cute_stage_model.py         # stage overlap/critical path 规则
-│   │   ├── cute_metrics.py             # TOPS/bw/util/stall 等计算
-│   │   ├── cute_bottleneck.py          # bottleneck 归因
-│   │   ├── cute_perf_report.py         # perf.json/topdown.md
-│   │   └── cute_baseline.py            # regression baseline
-│   ├── scripts/
-│   │   ├── cute-perf.py
-│   │   ├── cute-perf-compare.py
-│   │   └── cute-perf-baseline.py
 │   ├── baselines/
-│   │   ├── gemm/
-│   │   ├── datatype/
-│   │   └── model/
+│   ├── reports/
 │   └── tests/
-│       ├── test_stage_model.py
-│       ├── test_metrics.py
-│       └── samples/
 ├── tools/
-│   └── cutecli/                        # 统一 CLI，编排 config/build/run/verify/perf
-│       ├── pyproject.toml
-│       ├── README.md
-│       ├── cutecli/
-│       │   ├── __init__.py
-│       │   ├── main.py                 # argparse/click/typer 入口
-│       │   ├── config.py               # manifest load/resolve/validate
-│       │   ├── suite.py                # suite matrix expansion
-│       │   ├── artifact.py             # run-id 与 artifact 目录
-│       │   ├── headergen.py            # 调用 HeaderGenerator/generate-headers.sh
-│       │   ├── build.py                # render template + compile C test
-│       │   ├── simulator.py            # simulator discovery/build/select
-│       │   ├── run.py                  # verilator run command
-│       │   ├── trace.py                # 调 trace parser
-│       │   ├── verify.py               # 调 verify line
-│       │   ├── perf.py                 # 调 perf line
-│       │   ├── report.py               # 汇总 report.md
-│       │   └── util/
-│       │       ├── paths.py
-│       │       ├── subprocess.py
-│       │       └── logging.py
-│       └── tests/
+│   └── cutecli/
 ├── build/
-│   ├── cutetests/                      # 编译中间产物，可删除重建
-│   │   └── <test-name>/
-│   │       ├── test.c
-│   │       ├── test.riscv
-│   │       ├── test.dump
-│   │       └── compile.log
-│   ├── cute-runs/                      # 每次运行的不可变 artifact
-│   │   └── <timestamp>-<test>-<hw>/
-│   │       ├── manifest.resolved.yaml
-│   │       ├── hw_config.snapshot.json
-│   │       ├── headers/
-│   │       ├── build/
-│   │       ├── run/
-│   │       ├── trace/
-│   │       ├── verify/
-│   │       ├── perf/
-│   │       ├── status.json
-│   │       └── report.md
-│   └── cute-reports/                   # suite 级聚合报告
-│       └── <suite-run-id>/
-│           ├── suite.resolved.yaml
-│           ├── summary.csv
-│           ├── summary.json
-│           └── report.md
+│   ├── hwconfigs/
+│   │   └── <hwconfig-name>/
+│   │       ├── hwconfig.resolved.yaml
+│   │       ├── capability.json
+│   │       ├── header_fingerprint.txt
+│   │       └── generated_headers/
+│   ├── cutetests/
+│   ├── cute-runs/
+│   └── cute-reports/
 └── plans/
-    ├── bigplan.gpt.md
-    ├── phase0_manifest_schema.md
-    ├── phase1_min_loop.md
-    └── decisions/
-        ├── 0001-manifest-format.md
-        ├── 0002-trace-format.md
-        └── 0003-artifact-layout.md
 ```
 
-### 8.2 源文件、生成文件、运行产物的边界
+原则：
 
-建议强制区分三类文件：
-
-| 类型 | 目录 | 是否提交 | 说明 |
-|---|---|---|---|
-| 人维护源输入 | `configs/`、`cutetest/templates/`、`verify/python/`、`perf/python/`、`trace/python/` | 是 | 这是框架本体 |
-| 可重建生成输入 | `cutetest/generated/`、`cutetest/include/*.generated` | 视情况 | 小规模可提交，频繁变化时只提交样例 |
-| 运行产物 | `build/cutetests/`、`build/cute-runs/`、`build/cute-reports/` | 否 | 必须可由 manifest 复现 |
-
-这个边界很重要：如果一个文件是“实验结果”，它应该进入 `build/cute-runs/<run-id>/`；如果一个文件是“实验定义”，它应该进入 `configs/`。
-
-### 8.3 configs 的组织原则
-
-`configs/` 只描述“要跑什么”，不放大数据、不放 Python 逻辑、不放编译产物。
-
-- `hardware/` 只是给 Chipyard Config 起别名、记录 simulator policy、默认 DRAMSim preset、默认 trace capability。
-- `tests/` 描述单个 job，可被 suite 引用。
-- `suites/` 描述多个 job 的组合和 matrix sweep。
-- `schemas/` 保证 manifest 可校验，避免字段名随手发散。
-
-### 8.4 cutetest 的组织原则
-
-`cutetest/` 是 C 侧测试和 runtime 的地盘。
-
-- `include/` 放 C API、generated header、底层 inline asm。
-- `runtime/` 放复杂的 C 实现；如果 API 都是 header-only，可暂时不建。
-- `templates/` 放新增测试的模板。
-- `generated/` 放由 manifest 渲染出的源码，尽量可删除重建。
-- 旧的 `gemm_test/`、`datatype_mm_test/`、`resnet50_test/`、`transformer_test/` 先保留，不要急着搬空。
-
-### 8.5 trace / verify / perf 的组织原则
-
-三者建议拆开，而不是全塞进一个 `scripts/`：
-
-- `trace/` 只负责“日志如何变成结构化事件”。
-- `verify/` 只负责“actual 是否等于 golden”。
-- `perf/` 只负责“性能指标和瓶颈归因”。
-
-这样后续 FPGA trace、Verilator trace、旧 printf trace 都可以先统一进入 `trace/`，然后 verify/perf 复用同一份 `cute.trace.jsonl`。
-
-### 8.6 tools/cutecli 的组织原则
-
-`tools/cutecli` 是编排层，不应该包含过多业务算法。
-
-- build/run/artifact/suite 这类流程控制放在 `cutecli/`。
-- trace parsing 放 `trace/python/`。
-- golden/compare 放 `verify/python/`。
-- metrics/topdown 放 `perf/python/`。
-
-这样 CLI 只是把各层串起来，以后即使换 CLI 框架，也不会影响核心分析逻辑。
-
-### 8.7 build artifact 的组织原则
-
-`build/cute-runs/<run-id>/` 应该是一次实验的完整快照。理想情况下，把这个目录打包给别人，对方不需要猜测你当时用了哪个 manifest、哪个 header、哪个 binary、哪个日志。
-
-一个 run artifact 至少包含：
-
-- resolved manifest。
-- generated header snapshot。
-- test source/binary/dump。
-- simulator command。
-- raw log 和解析后的 trace。
-- verify.json。
-- perf.json。
-- report.md。
-
-suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子 run 的路径和 summary。
+- `configs/hwconfigs` 承载 `HWConfig`。
+- `configs/tests` 承载 `Test`。
+- `configs/trace_filters` 承载可复用 `Trace.filter`。
+- `cutetest` 承载 `Test.code` 和由 test 沉淀出的软件库。
+- `trace/python/func` 与 `trace/python/perf` 分开演进。
+- `build/cute-runs` 承载三者组合后的事实快照。
 
 ---
 
-## 9. 分阶段实施路线
+## 7. 分阶段实施路线
 
-本章按“三大对象的成熟度”和“对象联合的闭环程度”组织阶段：先让对象可描述，再让对象可组合，再让 trace 结构化，最后形成 suite/regression。
+### Phase 0: 冻结抽象和 schema
 
-### Phase 0: 梳理与冻结接口
-
-目标：先把三大对象如何被描述定死，不急着全量迁移。Phase 0 的核心是对象自洽：`CONFIG` 有 schema 和 header 规划，`SOFTWARE` 有 manifest schema，`TRACE` 有 format spec。
+目标：先让 `HWConfig / Test / Trace` 都可描述。
 
 任务：
 
-- 写 `configs/schemas/test.schema.json` 初版。
-- 写 3 个代表性 manifest：
-  - `matmul_i8_128.yaml`
-  - `datatype_mxfp8_smoke.yaml`
-  - `llama_layer_smoke.yaml`
-- 写 `trace/format_spec.md` 初版。
-- 给 `HeaderGenerator` 增加 `cute_config.h.generated` 规划，但可先不实现。
-- 定义 artifact 目录规范。
+- 定义 `hwconfig.schema.json`。
+- 定义 `test.schema.json`，明确 `target/code/golden`。
+- 定义 `trace_filter.schema.json`。
+- 定义 `trace/format_spec.md`。
+- 写一个 base test、一个 tensor test 的 manifest。
 
 验收：
 
-- 人读 manifest 能清楚知道跑什么、怎么跑、怎么 verify、怎么 perf。
-- manifest 能被 Python loader 解析和校验。
+- 能静态判断 `Test.target` 是否匹配某个 `HWConfig`。
+- 能静态判断某个 test 需要的 `Trace.func level` 是否存在。
 
-### Phase 1: 最小闭环
+### Phase 1: BaseTest -> runtime lib 最小闭环
 
-目标：让三大对象第一次形成最小闭环：一个 manifest 能把 `CONFIG + SOFTWARE + TracePolicy` 跑成 artifact，并完成 trace 提取、verify 和 report。
+目标：用 base test 跑通最小 runtime lib。
 
 任务：
 
-- 新增 `scripts/cute-run.py` 或 `tools/cutecli` 最小 CLI。
-- 调用现有 `generate-headers.sh` 生成 headers。
-- 用现有 Makefile 或简单编译模板生成一个 `.riscv`。
-- 调用现有 `run-simulator-test.sh` 跑仿真。
-- 从 log 中提取已有 store trace 或新增最少量 `D_STORE_DATA`。
-- Python 生成 golden，重建 actual，比对输出 `verify.json`。
-- 生成 `report.md`。
+- 选择一个最小 RoCC/CUTE hello test。
+- 按 HWConfig 生成 headers。
+- 编译 base test。
+- 运行仿真。
+- 生成 raw trace。
+- 用 `Trace.func F0_event` 判断基础事件正确。
 
 验收：
 
-- `matmul_i8_128.yaml` 一条命令得到 PASS/FAIL。
-- artifact 中包含 manifest snapshot、headers、binary、raw log、verify report。
+- BaseTest pass。
+- runtime lib 有最小可用 API。
+- artifact 保存 HWConfig/Test/Trace 三类快照。
 
-### Phase 2: Trace 结构化
+### Phase 2: TensorTest -> tensor op lib
 
-目标：让 `TRACE` 从兼容旧日志过渡到 RTL 结构化事件，使 verify/perf 不再依赖人工 grep。
+目标：在 runtime lib 上包装 Tensor Config，形成 tensor op lib。
 
 任务：
 
-- 在 top/task/cml/mmu/matrixTE 插入第一批 `[CUTE_TRACE ...]`。
-- 增加 Chisel/Config 参数控制 trace level。
-- Parser 支持 JSONL 输出。
-- Perf analyzer 基于 structured trace 做 task/stage summary。
+- 实现 tensor descriptor / tensor config wrapper。
+- 实现 matmul tensor test。
+- 插入或解析 `D_STORE_DATA`。
+- 实现 `Trace.func F1_store/F2_tensor_op`。
+- 生成 tensor-level golden。
 
 验收：
 
-- 同一个 run 可以生成 `cute.trace.jsonl`。
-- trace 中能看到 TASK、INST、COMPUTE、D_STORE、MEM 基本事件。
-- verify 不再依赖人工 grep。
+- TensorTest pass。
+- tensor op lib 可复用。
+- trace 能重建 D tensor。
 
-### Phase 3: Config-driven Test Suite
+### Phase 3: LayerTest -> layer op lib
 
-目标：扩大 `CONFIG + SOFTWARE` 的组合能力，用 suite 替代硬编码批量脚本，让多硬件配置、多 DRAM preset、多 workload 维度都能声明式展开。
+目标：在 tensor op lib 上叠加向量任务，形成 layer op lib。
 
 任务：
 
-- 建立 `configs/suites/smoke.yaml`、`nightly.yaml`、`perf_sweep.yaml`。
-- 支持 manifest matrix expansion。
-- 支持多 DRAMSim preset sweep。
-- 支持多 hardware config sweep。
-- 迁移 `gemm_test/multi_cute_config_test` 和 `diff_core_cute_config_test` 的核心能力。
+- 选择 ResNet conv layer 或 LLaMA FFN 作为样板。
+- 描述 layer test target。
+- 支持 vector task trace。
+- 实现 `Trace.func F3_layer`。
+- 生成 layer-level golden。
 
 验收：
 
-- `smoke` suite 能在合理时间内跑完。
-- perf sweep 自动生成 CSV/Markdown 汇总。
-- 旧脚本中的关键实验能由 suite 表达。
+- LayerTest pass。
+- layer op lib 可复用。
+- target 范围比 TensorTest 更窄，并能被 schema 表达。
 
-### Phase 4: Perf Top-Down 完整化
+### Phase 4: FuseLayerTest -> fuse_layer op lib
 
-目标：强化 `CONFIG + TRACE` 的 profile 联合能力，让性能报告能定位瓶颈，不只是列周期。
+目标：在 layer op lib 上增加层融合语义。
 
 任务：
 
-- 完善 stage overlap 和 critical path 归因。
-- 增加 memory bandwidth、loader imbalance、compute utilization。
-- 增加 fuse/nofuse/notcm 对比报告。
-- 增加 baseline 和 regression 检测。
+- 选择一个融合路径，例如 FFN fused 或 attention QKV fused。
+- 定义 fused layer test。
+- 定义 fused trace filter。
+- 实现 `Trace.func F4_fused_layer`。
+- 输出 fused correctness 和 intermediate invariant。
 
 验收：
 
-- 对 GEMM K sweep 能自动判断 memory-bound 或 compute-bound。
-- 对 LLaMA/ResNet 层能指出主要耗时 stage。
-- perf regression 能单独标红，不影响 correctness PASS。
+- FuseLayerTest pass。
+- fuse_layer op lib 可复用。
+- trace.func 能解释最终输出和必要中间约束。
 
-### Phase 5: 全量迁移与清理
+### Phase 5: SOCOptTest -> opt_op_lib
 
-目标：让 `CONFIG + SOFTWARE + TRACE` 成为默认测试流程，旧测试通过 manifest 或 legacy wrapper 纳入统一体系。
+目标：结合特定 SoC 做足量优化。
 
 任务：
 
-- 逐步把 `cutetest` 中重复 `.c` 迁移到模板 + manifest。
-- 手写 helper 降级为兼容层。
-- 旧 compare 脚本收敛到 verify ops。
-- CI/nightly 使用 suite。
-- 文档更新到 `doc/design-doc/docs/software/`。
+- 选择特定 HWConfig family，如 Shuttle512 + DRAM48。
+- 定义 soc_opt target。
+- 使用 `Trace.perf P2/P3/P4/P5` 做 profile。
+- 形成 opt_op_lib。
 
 验收：
 
-- 新增测试只需要写 manifest 或少量模板。
-- 硬件 Config 改动后，header、test、verify、perf 自动一致。
-- 旧测试仍可通过 legacy wrapper 运行。
+- 能解释优化前后性能差异。
+- perf report 能定位 bottleneck。
+- opt_op_lib 明确绑定目标 HWConfig family。
+
+### Phase 6: ModelTest
+
+目标：用下层 lib 组合完整模型测试。
+
+任务：
+
+- 选择 ResNet/BERT/LLaMA 一个模型或模型片段。
+- 定义 model test target。
+- 使用 layer/fuse/opt lib 组合。
+- 使用 `Trace.func F5_model` 或外部 checker。
+- 使用 `Trace.perf` 做端到端 profile。
+
+验收：
+
+- ModelTest pass 或标记为可运行但 func model 未完成。
+- model report 同时包含 correctness 和 performance。
 
 ---
 
-## 10. 关键风险与处理
+## 8. 第一批落地文件
 
-本章也按三大对象理解风险：有些风险来自单个对象不自洽，比如 `TRACE` 太大；有些风险来自对象联合失败，比如 `CONFIG` 和 `SOFTWARE` 不一致，或者 `SOFTWARE` golden 无法解释 `TRACE` actual。
-
-### 10.1 Trace 数据过大
-
-风险对象：`TRACE`。`D_STORE_DATA` 和 memory event 会让 log 巨大。
-
-处理：
-
-- Trace level 分级。
-- Verify trace 只开 store data。
-- Perf trace 可不开 data payload，只记录 bytes/addr/cycle。
-- 支持按 task/layer/tile filter。
-- 大文件用 streaming parser。
-
-### 10.2 Hardware Config 与 Test Config 不一致
-
-风险对象：`CONFIG + SOFTWARE`。用 A config 生成 header，用 B config 跑 simulator，导致 software 认为自己在适配一台硬件，实际却跑在另一台硬件上。
-
-处理：
-
-- generated header 加 fingerprint。
-- artifact 保存 header snapshot。
-- runner 在 run 前校验 chipyard config 名和 fingerprint。
-- C binary 启动时打印 `CUTE_HW_CONFIG_NAME` 和 fingerprint。
-
-### 10.3 旧测试太多，迁移成本大
-
-风险对象：`SOFTWARE`。全量迁移会拖垮节奏，也会让 runtime、模板、legacy wrapper 同时变动，难以判断问题来自哪里。
-
-处理：
-
-- 先 legacy wrapper。
-- 只迁移高价值代表。
-- manifest 允许 `build.source` 指向已有 `.c`。
-- 模板化只用于新增测试。
-
-### 10.4 Golden 对复杂 fused op 不稳定
-
-风险对象：`SOFTWARE + TRACE`。Transformer fused op 的 golden 与实际软件路径不完全一致，会让 verify 无法判断是软件语义不清、trace 重建错误，还是硬件真的错。
-
-处理：
-
-- 分层 golden：op-level exact、layer-level tolerance、end-to-end semantic。
-- 保留已有 checker 作为 external golden。
-- 对 fused op 先验证关键中间 tensor，再扩展全输出。
-
-### 10.5 RTL 插桩影响性能或时序
-
-风险对象：`CONFIG + TRACE`。printf 太多拖慢仿真，也可能污染综合路径；trace capability 必须成为 config-controlled feature，而不是无条件散落在 RTL 中。
-
-处理：
-
-- trace 只用于仿真 config。
-- Chisel 参数控制生成/不生成 trace printf。
-- 默认关闭。
-- FPGA trace 另走轻量 buffer/event counter，不直接复用海量 printf。
-
----
-
-## 11. 第一批建议落地文件
-
-第一批文件按“三大对象 + 对象联合”组织，尽量少而闭环：
+第一批不要追求全量，只追求抽象闭环。
 
 ```text
-# CONFIG / SOFTWARE manifest
-configs/tests/matmul_i8_128.yaml
-configs/suites/smoke.yaml
+# HWConfig
+configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
+configs/schemas/hwconfig.schema.json
+
+# Test
+configs/tests/base/rocc_hello.yaml
+configs/tests/tensor/matmul_i8_128.yaml
 configs/schemas/test.schema.json
 
-# TRACE object
+# Trace
 trace/format_spec.md
-trace/python/cute_trace.py
+configs/trace_filters/func_event.yaml
+configs/trace_filters/func_store_tensor.yaml
+configs/trace_filters/perf_task_stage.yaml
+configs/schemas/trace_filter.schema.json
 
-# SOFTWARE + TRACE -> Verify
-verify/python/cute_golden.py
-verify/python/cute_compare.py
-verify/python/cute_reconstruct.py
+# Runtime/Test code
+cutetest/runtime/cute_runtime.h
+cutetest/runtime/cute_runtime.c
+cutetest/templates/base_rocc_hello.c.j2
+cutetest/templates/tensor_matmul.c.j2
 
-# Object composition / orchestration
+# Trace implementation
+trace/python/parser.py
+trace/python/filter.py
+trace/python/func/event_model.py
+trace/python/func/tensor_model.py
+trace/python/perf/timeline.py
+
+# Runner
 scripts/cute-run.py
-scripts/cute-verify.py
-scripts/cute-perf.py
-```
-
-`TRACE` 第一批 RTL 插桩位置：
-
-```text
-src/main/scala/CUTE2YGJK.scala
-src/main/scala/TaskController.scala
-src/main/scala/MatrixTE.scala
-src/main/scala/CMemoryLoader.scala
-src/main/scala/LocalMMU.scala
-```
-
-`CONFIG -> SOFTWARE capability` 第一批 HeaderGenerator 增强：
-
-```text
-src/main/scala/util/HeaderGenerator.scala
-  -> cute_config.h.generated
-  -> config fingerprint
-  -> more dtype byte-width helpers
+scripts/cute-suite.py
 ```
 
 ---
 
-## 12. 成功标准
+## 9. 风险与处理
+
+### 9.1 HWConfig 边界不清
+
+风险：CUTE 参数、Chipyard Config、DRAMSim、simulator policy 混在 test 脚本里。
+
+处理：
+
+- 所有硬件/SoC/DRAM/sim 环境先进入 `HWConfig`。
+- `Test` 只能声明 target requirement，不能暗中修改 HWConfig。
+
+### 9.2 Test target 过宽
+
+风险：高层 test 假装支持所有 HWConfig，实际只在一个 SoC 上成立。
+
+处理：
+
+- 每个 test 必须声明 target。
+- target matcher 必须输出 `target_match.json`。
+- 不匹配时标记 `TARGET_UNSUPPORTED`，不是 FAIL。
+
+### 9.3 Trace.func 和 Trace.perf 混淆
+
+风险：为了性能分析加的事件污染 correctness，或者为了 correctness dump 的 data 让 perf trace 爆炸。
+
+处理：
+
+- filter 分 purpose: `func/perf/debug`。
+- func/perf 模型分目录、分报告。
+- payload 默认按 filter purpose 控制。
+
+### 9.4 Golden Level 超过 Trace.func 能力
+
+风险：test 有 golden，但 trace.func 无法重建 actual，导致错误 pass 或错误 fail。
+
+处理：
+
+- `Test.golden.required_trace_func_level` 必填。
+- 当前 func model 不支持时标记 `FUNC_MODEL_NOT_READY`。
+
+### 9.5 高层 lib 过早固化
+
+风险：Base/Tensor 还没稳定，就开始写 fuse/model，导致上层代码复制底层细节。
+
+处理：
+
+- 按 Test 层级沉淀 lib。
+- 每一级至少有一个 pass 的 test 后，再推广该级 lib。
+
+---
+
+## 10. 成功标准
 
 短期成功：
 
-- `CONFIG`：一条命令能按指定 Chipyard Config 生成 headers 和 config fingerprint。
-- `SOFTWARE`：一个 manifest 能生成或选择合法 C 测试，并编译出 `.riscv`。
-- `TRACE`：一次运行能产生可解析 trace 或兼容旧日志的 structured trace。
-- `SOFTWARE + TRACE`：能自动从 trace 重建输出并 PASS/FAIL。
-- `CONFIG + TRACE`：能自动产出基础 perf summary。
+- 一个 `HWConfig` 能生成 headers、capability 和 fingerprint。
+- 一个 `BaseTest` 能匹配 target、编译、运行，并通过 `Trace.func F0_event`。
+- 一个 `TensorTest` 能通过 `Trace.func F1/F2` 重建输出并比较 golden。
+- artifact 能保存 HWConfig/Test/Trace 三者快照。
 
 中期成功：
 
-- `CONFIG + SOFTWARE`：smoke/nightly/perf sweep 都由 suite 驱动，支持多硬件配置和 workload matrix。
-- `CONFIG + SOFTWARE + TRACE`：GEMM/datatype/model layer 三类测试进入统一 artifact/report。
-- `TRACE`：trace parser 成为 verify/perf 的共同事实入口。
-- `SOFTWARE + TRACE` 与 `CONFIG + TRACE`：verify/perf analyzer 可复用同一份 run artifact。
+- runtime lib、tensor op lib、layer op lib 由对应 test 沉淀出来。
+- suite 能按 HWConfig/Test target 做 matrix 展开。
+- `Trace.func` 和 `Trace.perf` 使用同一份 structured trace，但独立演进。
+- perf report 能解释 stage、memory、utilization、bottleneck。
 
 长期成功：
 
-- `CONFIG` 成熟：新增硬件 Config 不需要手改 C 测试常量。
-- `SOFTWARE` 成熟：新增软件测试主要写 manifest 或模板，而不是复制 C 文件。
-- `TRACE` 成熟：trace 能覆盖 verify/profile 所需事实，且支持分级控制。
-- `SOFTWARE + TRACE` 成熟：正确性验证能定位到 task/tile/store/mismatch，而不是靠人眼看日志。
-- `CONFIG + TRACE` 成熟：性能分析能解释瓶颈来源，而不是只记录最终周期。
-- `CONFIG + SOFTWARE + TRACE` 闭环成熟：回归测试能同时管理 correctness、performance、baseline 和 artifact。
+- 新增 HWConfig 不需要手改 C 测试常量。
+- 新增 Test 主要写 target/code/golden manifest，而不是复制旧 C 文件。
+- target 范围从 BaseTest 到 ModelTest 逐级变窄，并能被框架显式理解。
+- correctness、profile、regression 都基于 run artifact 和 trace，而不是人工读日志。
 
 ---
 
-## 13. 下一步细化建议
+## 11. 下一步讨论顺序
 
-建议按下面顺序继续讨论和细化：
+建议继续按下面顺序细化：
 
-1. **先定 CONFIG + SOFTWARE manifest schema**
-   - `hardware/build/op/golden/trace/perf` 字段是否够用。
-   - 是否使用 YAML，还是 TOML/JSON。
-   - 哪些字段属于硬件实体，哪些字段属于软件 workload，哪些字段只是 run policy。
+1. **HWConfig schema**
+   - CUTE 和 SOC 各放哪些字段。
+   - DRAMSim 和 Chipyard Config 如何命名。
+   - capability 如何导出。
 
-2. **再定 TRACE event schema**
-   - 第一批事件名字和字段。
-   - 哪些事件必须在 RTL 里加，哪些可以从现有日志推导。
-   - 哪些字段服务 verify，哪些字段服务 profile。
+2. **Test schema**
+   - `target/code/golden` 的最小字段。
+   - Test 层级命名是否采用 `base/tensor/layer/fuse_layer/soc_opt/model`。
+   - Golden level 与 required Trace.func level 的对应关系。
 
-3. **然后做三对象最小闭环**
-   - 选一个最小 matmul 测试作为样板。
-   - 实现 `CONFIG + SOFTWARE + TracePolicy -> artifact -> verify/perf` 的最小版本。
+3. **Trace schema**
+   - filter 的最小表达能力。
+   - func/perf 的第一批 event。
+   - `D_STORE_DATA` 是否作为 TensorTest 的第一个强制事件。
 
-4. **最后迁移 SOFTWARE legacy**
-   - 不急着重写所有 `.c`。
-   - 先让旧测试能被 manifest 纳管，再逐步模板化。
+4. **最小闭环**
+   - 先做 `BaseTest -> runtime lib`。
+   - 再做 `TensorTest -> tensor op lib`。
+   - 每一级都必须先 pass 一个代表测试，再向上叠。
