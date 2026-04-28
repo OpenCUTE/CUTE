@@ -18,46 +18,122 @@
 因此这次重构的关键不是单纯多写脚本，而是建立一个稳定的中间层：
 
 ```text
-Config/Manifest  ->  Build/Run Job  ->  Trace Artifact  ->  Verify/Perf Report
+CONFIG + SOFTWARE + Inputs + TracePolicy
+  -> Run Job
+  -> Run Artifact + TRACE
+  -> Verify/Profile/Regression Report
 ```
 
 以后无论是跑一个 matmul correctness、扫一组硬件 CONFIG、做 LLaMA layer 性能归因，还是比较 nofuse/notcm/fuse，都应该由同一套 job schema 驱动。
 
+### 0.1 三大核心对象：CONFIG / SOFTWARE / TRACE
+
+整个重构可以先抽象成三个一等对象：
+
+```text
+CONFIG   -> 固化一个具体 CUTE 硬件实体
+SOFTWARE -> 面向这个实体生成/选择可运行的软件语义
+TRACE    -> 把一次运行变成可验证、可分析的事实记录
+```
+
+这三个对象分别回答不同问题：
+
+| 对象 | 核心职责 | 回答的问题 |
+|---|---|---|
+| `CONFIG` | 决定硬件实体。把可参数化的 CUTE 固定成一个具体实现，包括 tensor tile、数据宽度、指令字段、buffer、MMU、FPE、scale layout、支持能力边界 | 这台 CUTE 到底长什么样，能跑什么 |
+| `SOFTWARE` | 决定软件语义。依据 `CONFIG` 生成/选择 tensor runtime、算子实现、NN layer 测试、向量融合算子、golden 策略、合法性检查 | 针对这台 CUTE，应该怎么发指令、怎么布局 tensor、哪些 case 合法、golden 长什么样 |
+| `TRACE` | 决定事实记录。把 `SOFTWARE` 在某个 `CONFIG` 上的一次实际执行记录下来，供 verify 和 profile 使用 | 实际发生了什么，输出是什么，时间花在哪里，瓶颈在哪里 |
+
+因此真正的运行单元不是单独的 C 文件，也不是单独的硬件配置，而是：
+
+```text
+Run = CONFIG + SOFTWARE + Inputs + TracePolicy
+```
+
+在这个基础上派生出：
+
+```text
+Verify     = Run Artifact + GoldenPolicy + TRACE
+Profile    = Run Artifact + PerfModel + TRACE
+Regression = Many Runs + BaselinePolicy
+```
+
+这个模型也解释了为什么需要更好的 config 机制：`CONFIG` 不只影响硬件生成，它还决定 `SOFTWARE` 能否生成、测试是否合法、golden 如何计算、trace 如何解释。  
+同样，`TRACE` 也不只是 debug log；它是 `SOFTWARE on CONFIG` 的可复盘证据，是 verify 和 profile 的共同事实层。
+
+### 0.2 本 Plan 的阅读地图
+
+后续章节可以按“三大对象如何逐步成熟、如何相互联合”来理解：
+
+| 章节 | 主要推进对象 | 建立的联合关系 | 最终服务的目标 |
+|---|---|---|---|
+| `2. Config 机制重构` | `CONFIG` | `CONFIG -> generated headers -> SOFTWARE capability boundary` | 固化硬件实体，并让软件知道这台硬件能跑什么 |
+| `7. Test Line` | `SOFTWARE` | `SOFTWARE depends on CONFIG` | 依据硬件配置生成 tensor runtime、算子、NN layer、融合算子测试 |
+| `4. Trace Layer` | `TRACE` | `TRACE records SOFTWARE on CONFIG` | 把一次执行变成 verify/profile 都能复用的事实层 |
+| `3. Runner & Artifact` | 三者的组合器 | `CONFIG + SOFTWARE + TRACE policy -> Run Artifact` | 让每次实验可复现、可归档、可比较 |
+| `5. Verify Line` | `SOFTWARE + TRACE` | `GoldenPolicy(SOFTWARE, CONFIG) + Actual(TRACE)` | 判断输出是否正确，并定位 mismatch |
+| `6. Perf Line` | `TRACE + CONFIG` | `PerfModel(CONFIG) + Timeline(TRACE)` | 判断性能瓶颈、利用率、带宽、stall 来源 |
+| `8. 目录与模块建议` | 三者的物理落点 | 把抽象映射到目录边界 | 降低工程混乱度，知道文件该放哪里 |
+| `9. 分阶段实施路线` | 三者的成熟路线 | 从 schema 到最小闭环，再到 suite/regression | 分阶段达成完整测试框架 |
+
+也可以把目标分成三层：
+
+```text
+第一层：对象自洽
+  CONFIG 自洽：硬件参数、指令、layout、capability 有唯一来源
+  SOFTWARE 自洽：runtime、算子、测试、golden 都能依据 CONFIG 生成或选择
+  TRACE 自洽：事件格式、parser、index、artifact 都稳定
+
+第二层：对象联合
+  CONFIG + SOFTWARE：知道哪些测试可生成、可编译、可运行
+  SOFTWARE + TRACE：知道实际输出能否与 golden 对齐
+  CONFIG + TRACE：知道性能事件如何解释、瓶颈如何归因
+
+第三层：系统闭环
+  CONFIG + SOFTWARE + TRACE
+    -> reproducible Run Artifact
+    -> correctness Verify
+    -> top-down Profile
+    -> regression Suite
+```
+
 ---
 
 ## 1. 总体架构
+
+本章把三大对象放进一个工程流水线里：`CONFIG` 和 `SOFTWARE` 在 runner 中被组合成一次 run，run 产生 `TRACE` 和 artifact，随后 verify/profile/regression 复用同一个 artifact。
 
 ### 1.1 四层工程模型
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Layer A: Config & Manifest                                      │
-│ - 硬件 Config: Chipyard/Chisel Config + generated headers        │
-│ - 测试 Manifest: YAML/TOML 描述 test case / suite / sweep         │
-│ - Schema 校验: 参数、路径、op 类型、golden、trace、perf policy     │
+│ - CONFIG: Chipyard/Chisel Config + generated headers             │
+│ - SOFTWARE manifest: test case / suite / sweep / golden policy   │
+│ - TracePolicy: trace level / event set / perf policy             │
 └──────────────────────────────┬──────────────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────────────┐
 │ Layer B: Runner & Artifact                                      │
-│ - 统一 CLI: cute-test / cute-run / cute-verify / cute-perf        │
-│ - 编译: C test binary、header、simulator、可选 RTL                │
-│ - 运行: Verilator + DRAMSim + workload + trace options           │
-│ - Artifact: log、trace、binary、config snapshot、report           │
+│ - 组合 CONFIG + SOFTWARE + Inputs + TracePolicy                  │
+│ - 编译: generated headers、C test binary、simulator               │
+│ - 运行: Verilator + DRAMSim + workload                           │
+│ - Artifact: config/software/trace/build/run snapshots            │
 └──────────────────────────────┬──────────────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────────────┐
 │ Layer C: Trace & Event Model                                    │
-│ - 统一 trace schema: cycle/module/event/task/tile/addr/data       │
-│ - Parser: 容忍旧 printf，但优先结构化事件                         │
+│ - TRACE: cycle/module/event/task/tile/addr/data                  │
+│ - Parser: raw log -> structured trace                            │
 │ - Index: task timeline、memory transaction、store tensor          │
 │ - Export: jsonl/csv/html summary                                 │
 └──────────────────────────────┬──────────────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────────────┐
 │ Layer D: Verify & Perf                                          │
-│ - Verify: trace 重建 D tensor + CPU/golden 比对                  │
-│ - Perf: top-down 分析总周期、阶段、模块、tile、微事件             │
-│ - Regression: pass/fail、性能阈值、趋势对比、报告归档             │
+│ - Verify: SOFTWARE golden + TRACE actual                         │
+│ - Perf: CONFIG perf model + TRACE timeline                       │
+│ - Regression: many Run Artifacts + baseline policy               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -80,6 +156,8 @@ Config/Manifest  ->  Build/Run Job  ->  Trace Artifact  ->  Verify/Perf Report
 ---
 
 ## 2. Config 机制重构
+
+本章主要推进 `CONFIG` 抽象：把“可参数化 CUTE”固定成一个可命名、可生成 header、可校验 capability 的具体硬件实体。它的阶段性目标是让 `SOFTWARE` 不再猜硬件参数，而是从 `CONFIG` 派生自己的合法边界。
 
 ### 2.1 两类 Config 必须分清
 
@@ -252,6 +330,8 @@ report:
 
 ## 3. Runner 与 Artifact 系统
 
+本章推进三大对象的第一次联合：把 `CONFIG + SOFTWARE + Inputs + TracePolicy` 编排成一次可复现 run，并把该 run 的所有证据保存成 artifact。Runner 不应该吞掉对象边界；它只负责把对象组合、执行、归档。
+
 ### 3.1 统一 CLI
 
 建议新增 Python CLI，先放在 `tools/cutecli/` 或 `scripts/cute.py`，成熟后再包成命令：
@@ -357,6 +437,8 @@ RESOLVE_CONFIG
 ---
 
 ## 4. Trace Layer 规划
+
+本章主要推进 `TRACE` 抽象：定义“事实记录”的格式、事件、parser、index 与导出方式。它的目标不是多打印日志，而是让 `SOFTWARE on CONFIG` 的实际行为能被 verify 和 profile 共同复用。
 
 ### 4.1 Trace 设计原则
 
@@ -487,6 +569,8 @@ parser 要支持：
 
 ## 5. Verify Line 规划
 
+本章推进 `SOFTWARE + TRACE` 的联合：`SOFTWARE` 给出语义和 golden policy，`TRACE` 给出实际执行结果，verify 负责把两者对齐并判断 correctness。`CONFIG` 在这里提供 dtype、layout、tile、stride、capability 等解释上下文。
+
 ### 5.1 Verify 的职责
 
 verify 不负责“怎么编译/怎么跑”，只负责：
@@ -604,6 +688,8 @@ compare 输出：
 ---
 
 ## 6. Perf Line 规划：Trace Top-Down 性能分析
+
+本章推进 `CONFIG + TRACE` 的联合：`TRACE` 提供 timeline 和事件事实，`CONFIG` 提供硬件结构、理论峰值、tile 规模和带宽解释上下文，perf analyzer 负责把事实转成 top-down 性能归因。
 
 ### 6.1 Top-Down 总思路
 
@@ -730,6 +816,8 @@ perf:
 
 ## 7. Test Line 规划：CONFIG 驱动的软件测试流程
 
+本章主要推进 `SOFTWARE` 抽象：把 C 测试从散落文件升级为可由 `CONFIG` 驱动的 runtime、算子、NN layer、融合算子与 golden 生成体系。它的目标是让“能生成什么软件、能跑什么测试、golden 应该是什么”都受 `CONFIG` 约束。
+
 ### 7.1 测试生成方式
 
 现有大量 `.c` 文件可以保留，但新测试建议走模板化：
@@ -851,6 +939,8 @@ select simulator by hardware config
 ## 8. 目录与模块建议
 
 这一节的核心不是“必须马上创建所有目录”，而是先建立边界感：哪些目录是**源输入**，哪些是**生成输入**，哪些是**运行产物**，哪些是**分析工具**。建议用下面的组织方式学习和推演。
+
+从三大对象看，本章是在给抽象找物理落点：`configs/` 承载 `CONFIG` 与 `SOFTWARE manifest`，`cutetest/` 承载 `SOFTWARE` 的 C runtime 和测试源码，`trace/` 承载 `TRACE`，`verify/` 与 `perf/` 承载对象联合后的分析逻辑，`build/cute-runs/` 承载三者组合产生的事实快照。
 
 ### 8.1 总体目标结构
 
@@ -1146,9 +1236,11 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ## 9. 分阶段实施路线
 
+本章按“三大对象的成熟度”和“对象联合的闭环程度”组织阶段：先让对象可描述，再让对象可组合，再让 trace 结构化，最后形成 suite/regression。
+
 ### Phase 0: 梳理与冻结接口
 
-目标：先把“新系统怎么描述任务”定死，不急着全量迁移。
+目标：先把三大对象如何被描述定死，不急着全量迁移。Phase 0 的核心是对象自洽：`CONFIG` 有 schema 和 header 规划，`SOFTWARE` 有 manifest schema，`TRACE` 有 format spec。
 
 任务：
 
@@ -1168,7 +1260,7 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ### Phase 1: 最小闭环
 
-目标：一个 manifest 能完整跑通 build/run/trace/verify/report。
+目标：让三大对象第一次形成最小闭环：一个 manifest 能把 `CONFIG + SOFTWARE + TracePolicy` 跑成 artifact，并完成 trace 提取、verify 和 report。
 
 任务：
 
@@ -1187,7 +1279,7 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ### Phase 2: Trace 结构化
 
-目标：从“兼容旧日志”过渡到“RTL 结构化 trace”。
+目标：让 `TRACE` 从兼容旧日志过渡到 RTL 结构化事件，使 verify/perf 不再依赖人工 grep。
 
 任务：
 
@@ -1204,7 +1296,7 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ### Phase 3: Config-driven Test Suite
 
-目标：用 suite 替代硬编码批量脚本。
+目标：扩大 `CONFIG + SOFTWARE` 的组合能力，用 suite 替代硬编码批量脚本，让多硬件配置、多 DRAM preset、多 workload 维度都能声明式展开。
 
 任务：
 
@@ -1222,7 +1314,7 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ### Phase 4: Perf Top-Down 完整化
 
-目标：性能报告能定位瓶颈，不只是列周期。
+目标：强化 `CONFIG + TRACE` 的 profile 联合能力，让性能报告能定位瓶颈，不只是列周期。
 
 任务：
 
@@ -1239,7 +1331,7 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ### Phase 5: 全量迁移与清理
 
-目标：新框架成为默认流程。
+目标：让 `CONFIG + SOFTWARE + TRACE` 成为默认测试流程，旧测试通过 manifest 或 legacy wrapper 纳入统一体系。
 
 任务：
 
@@ -1259,9 +1351,11 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ## 10. 关键风险与处理
 
+本章也按三大对象理解风险：有些风险来自单个对象不自洽，比如 `TRACE` 太大；有些风险来自对象联合失败，比如 `CONFIG` 和 `SOFTWARE` 不一致，或者 `SOFTWARE` golden 无法解释 `TRACE` actual。
+
 ### 10.1 Trace 数据过大
 
-风险：`D_STORE_DATA` 和 memory event 会让 log 巨大。
+风险对象：`TRACE`。`D_STORE_DATA` 和 memory event 会让 log 巨大。
 
 处理：
 
@@ -1273,7 +1367,7 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ### 10.2 Hardware Config 与 Test Config 不一致
 
-风险：用 A config 生成 header，用 B config 跑 simulator。
+风险对象：`CONFIG + SOFTWARE`。用 A config 生成 header，用 B config 跑 simulator，导致 software 认为自己在适配一台硬件，实际却跑在另一台硬件上。
 
 处理：
 
@@ -1284,7 +1378,7 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ### 10.3 旧测试太多，迁移成本大
 
-风险：全量迁移会拖垮节奏。
+风险对象：`SOFTWARE`。全量迁移会拖垮节奏，也会让 runtime、模板、legacy wrapper 同时变动，难以判断问题来自哪里。
 
 处理：
 
@@ -1295,7 +1389,7 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ### 10.4 Golden 对复杂 fused op 不稳定
 
-风险：Transformer fused op 的 golden 与实际软件路径不完全一致。
+风险对象：`SOFTWARE + TRACE`。Transformer fused op 的 golden 与实际软件路径不完全一致，会让 verify 无法判断是软件语义不清、trace 重建错误，还是硬件真的错。
 
 处理：
 
@@ -1305,7 +1399,7 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ### 10.5 RTL 插桩影响性能或时序
 
-风险：printf 太多拖慢仿真，也可能污染综合路径。
+风险对象：`CONFIG + TRACE`。printf 太多拖慢仿真，也可能污染综合路径；trace capability 必须成为 config-controlled feature，而不是无条件散落在 RTL 中。
 
 处理：
 
@@ -1318,23 +1412,30 @@ suite artifact 则只做聚合，不复制每个 run 的大文件，只保存子
 
 ## 11. 第一批建议落地文件
 
-第一批尽量少而闭环：
+第一批文件按“三大对象 + 对象联合”组织，尽量少而闭环：
 
 ```text
+# CONFIG / SOFTWARE manifest
 configs/tests/matmul_i8_128.yaml
 configs/suites/smoke.yaml
 configs/schemas/test.schema.json
+
+# TRACE object
 trace/format_spec.md
 trace/python/cute_trace.py
+
+# SOFTWARE + TRACE -> Verify
 verify/python/cute_golden.py
 verify/python/cute_compare.py
 verify/python/cute_reconstruct.py
+
+# Object composition / orchestration
 scripts/cute-run.py
 scripts/cute-verify.py
 scripts/cute-perf.py
 ```
 
-RTL 第一批插桩：
+`TRACE` 第一批 RTL 插桩位置：
 
 ```text
 src/main/scala/CUTE2YGJK.scala
@@ -1344,7 +1445,7 @@ src/main/scala/CMemoryLoader.scala
 src/main/scala/LocalMMU.scala
 ```
 
-HeaderGenerator 第一批增强：
+`CONFIG -> SOFTWARE capability` 第一批 HeaderGenerator 增强：
 
 ```text
 src/main/scala/util/HeaderGenerator.scala
@@ -1359,25 +1460,27 @@ src/main/scala/util/HeaderGenerator.scala
 
 短期成功：
 
-- 一条命令跑一个 manifest。
-- 自动生成 headers。
-- 自动运行仿真。
-- 自动从 trace 重建输出。
-- 自动 PASS/FAIL。
-- 自动产出基础 perf summary。
+- `CONFIG`：一条命令能按指定 Chipyard Config 生成 headers 和 config fingerprint。
+- `SOFTWARE`：一个 manifest 能生成或选择合法 C 测试，并编译出 `.riscv`。
+- `TRACE`：一次运行能产生可解析 trace 或兼容旧日志的 structured trace。
+- `SOFTWARE + TRACE`：能自动从 trace 重建输出并 PASS/FAIL。
+- `CONFIG + TRACE`：能自动产出基础 perf summary。
 
 中期成功：
 
-- smoke/nightly/perf sweep 都由 suite 驱动。
-- GEMM/datatype/model layer 三类测试进入统一 artifact/report。
-- trace parser 和 verify/perf analyzer 可复用。
+- `CONFIG + SOFTWARE`：smoke/nightly/perf sweep 都由 suite 驱动，支持多硬件配置和 workload matrix。
+- `CONFIG + SOFTWARE + TRACE`：GEMM/datatype/model layer 三类测试进入统一 artifact/report。
+- `TRACE`：trace parser 成为 verify/perf 的共同事实入口。
+- `SOFTWARE + TRACE` 与 `CONFIG + TRACE`：verify/perf analyzer 可复用同一份 run artifact。
 
 长期成功：
 
-- 新增硬件 Config 不需要手改 C 测试常量。
-- 新增软件测试主要写 manifest，而不是复制 C 文件。
-- 性能分析能解释瓶颈来源，而不是只记录最终周期。
-- 正确性验证能定位到 task/tile/store/mismatch，而不是靠人眼看日志。
+- `CONFIG` 成熟：新增硬件 Config 不需要手改 C 测试常量。
+- `SOFTWARE` 成熟：新增软件测试主要写 manifest 或模板，而不是复制 C 文件。
+- `TRACE` 成熟：trace 能覆盖 verify/profile 所需事实，且支持分级控制。
+- `SOFTWARE + TRACE` 成熟：正确性验证能定位到 task/tile/store/mismatch，而不是靠人眼看日志。
+- `CONFIG + TRACE` 成熟：性能分析能解释瓶颈来源，而不是只记录最终周期。
+- `CONFIG + SOFTWARE + TRACE` 闭环成熟：回归测试能同时管理 correctness、performance、baseline 和 artifact。
 
 ---
 
@@ -1385,18 +1488,20 @@ src/main/scala/util/HeaderGenerator.scala
 
 建议按下面顺序继续讨论和细化：
 
-1. **先定 manifest schema**
+1. **先定 CONFIG + SOFTWARE manifest schema**
    - `hardware/build/op/golden/trace/perf` 字段是否够用。
    - 是否使用 YAML，还是 TOML/JSON。
+   - 哪些字段属于硬件实体，哪些字段属于软件 workload，哪些字段只是 run policy。
 
-2. **再定 trace event schema**
+2. **再定 TRACE event schema**
    - 第一批事件名字和字段。
    - 哪些事件必须在 RTL 里加，哪些可以从现有日志推导。
+   - 哪些字段服务 verify，哪些字段服务 profile。
 
-3. **然后做最小闭环**
+3. **然后做三对象最小闭环**
    - 选一个最小 matmul 测试作为样板。
-   - 实现 artifact、verify、perf 的最小版本。
+   - 实现 `CONFIG + SOFTWARE + TracePolicy -> artifact -> verify/perf` 的最小版本。
 
-4. **最后迁移旧测试**
+4. **最后迁移 SOFTWARE legacy**
    - 不急着重写所有 `.c`。
    - 先让旧测试能被 manifest 纳管，再逐步模板化。
