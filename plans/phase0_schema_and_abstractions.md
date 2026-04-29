@@ -5,19 +5,19 @@
 Phase 0 的目标不是跑通完整测试，而是先把三大对象的手写入口定下来：
 
 - `HWConfig`: 由 `configs/hwconfigs/*.yaml` 描述。
-- `Test`: 由 `cutetest/**/project.yaml` 描述。
+- `Test`: 由 `cute-sdk/**/project.yaml` 描述。
 - `Trace`: 本阶段只做占位 schema/spec，后续专题展开。
 
 完成后，框架应能静态回答：
 
-- 某个 `cutetest` project 是否支持某个 `HWConfig`。
+- 某个 `cute-sdk` project 是否支持某个 `HWConfig`。
 - 某个 project 需要的 generated headers、capability、golden level、trace level 是什么。
 - 哪些字段是人工维护真相源，哪些字段是自动生成产物。
 
 ## 设计约束
 
 - 不恢复 `configs/tests/*.yaml` 作为人工维护入口。
-- `cutetest/**/project.yaml` 是 Test 的主真相源。
+- `cute-sdk/**/project.yaml` 是 Test 的主真相源。
 - `generated_headers` 属于 `HWConfig`，默认输出到 `build/hwconfigs/<name>/generated_headers/`。
 - Trace 只保留边界定义：`filter`、`func model`、`perf model`，不在本阶段细化事件 schema。
 - catalog/index 如果需要，只能由工具扫描生成，不能作为人工维护真相源。
@@ -38,7 +38,7 @@ configs/
 ├── trace_filters/
 └── suites/
 
-cutetest/
+cute-sdk/
 ├── runtime/
 │   └── cute_runtime/
 │       ├── include/
@@ -63,8 +63,8 @@ trace/
 
 scripts/
 
-verify/python/
-perf/python/
+tools/verify/
+tools/perf/
 ```
 
 **验收**: 所有目录存在，`legacy/` 下暂放 `.gitkeep`。
@@ -266,7 +266,7 @@ configs/schemas/project.schema.json
 
 ### Task 5: 创建两个样板 `project.yaml`
 
-#### 5.1 `cutetest/runtime/cute_runtime/project.yaml`
+#### 5.1 `cute-sdk/runtime/cute_runtime/project.yaml`
 
 ```yaml
 version: 1
@@ -303,7 +303,7 @@ trace:
   default_filters: [func_event]
 ```
 
-#### 5.2 `cutetest/tensor_ops/matmul/project.yaml`
+#### 5.2 `cute-sdk/tensor_ops/matmul/project.yaml`
 
 ```yaml
 version: 1
@@ -353,8 +353,8 @@ trace:
 #### 5.3 产物
 
 ```
-cutetest/runtime/cute_runtime/project.yaml
-cutetest/tensor_ops/matmul/project.yaml
+cute-sdk/runtime/cute_runtime/project.yaml
+cute-sdk/tensor_ops/matmul/project.yaml
 ```
 
 ---
@@ -418,7 +418,7 @@ configs/trace_filters/perf_task_stage.yaml
 
 ---
 
-### Task 7: 实现 `scripts/cute-check-config.py`
+### Task 7: 实现 `tools/runner/cute-check-config.py`
 
 #### 7.1 职责
 
@@ -426,17 +426,17 @@ configs/trace_filters/perf_task_stage.yaml
 
 ```text
 Usage:
-  scripts/cute-check-config.py --hwconfig <path>
+  tools/runner/cute-check-config.py --hwconfig <path>
     校验单个 hwconfig yaml 是否符合 schema
 
-  scripts/cute-check-config.py --project <path>
+  tools/runner/cute-check-config.py --project <path>
     校验单个 project.yaml 是否符合 schema
 
-  scripts/cute-check-config.py --hwconfig <path> --project <path>
+  tools/runner/cute-check-config.py --hwconfig <path> --project <path>
     校验两者，并判断 Test.target 是否匹配 HWConfig
 
-  scripts/cute-check-config.py --scan
-    扫描 configs/hwconfigs/ 和 cutetest/**/project.yaml，
+  tools/runner/cute-check-config.py --scan
+    扫描 configs/hwconfigs/ 和 cute-sdk/**/project.yaml，
     输出所有 project × hwconfig 的 target 匹配矩阵
 ```
 
@@ -469,7 +469,7 @@ Usage:
 #### 7.5 产物
 
 ```
-scripts/cute-check-config.py
+tools/runner/cute-check-config.py
 ```
 
 ---
@@ -487,8 +487,8 @@ configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
 configs/hwconfigs/cute4tops_scp128_dramsim48.yaml  (可选)
 
 # Test 样板
-cutetest/runtime/cute_runtime/project.yaml
-cutetest/tensor_ops/matmul/project.yaml
+cute-sdk/runtime/cute_runtime/project.yaml
+cute-sdk/tensor_ops/matmul/project.yaml
 
 # Trace 占位
 trace/format_spec.md
@@ -497,7 +497,7 @@ configs/trace_filters/func_store_tensor.yaml
 configs/trace_filters/perf_task_stage.yaml
 
 # 工具
-scripts/cute-check-config.py
+tools/runner/cute-check-config.py
 
 # 目录骨架
 (所有上述目录 + .gitkeep)
@@ -508,8 +508,8 @@ scripts/cute-check-config.py
 ## 验收标准
 
 - [ ] `cute-check-config.py --hwconfig configs/hwconfigs/cute2tops_scp64_dramsim32.yaml` 通过校验
-- [ ] `cute-check-config.py --project cutetest/runtime/cute_runtime/project.yaml` 通过校验
-- [ ] `cute-check-config.py --project cutetest/tensor_ops/matmul/project.yaml` 通过校验
+- [ ] `cute-check-config.py --project cute-sdk/runtime/cute_runtime/project.yaml` 通过校验
+- [ ] `cute-check-config.py --project cute-sdk/tensor_ops/matmul/project.yaml` 通过校验
 - [ ] `cute-check-config.py --hwconfig <hw> --project <proj>` 输出 MATCH 且理由正确
 - [ ] `cute-check-config.py --scan` 输出 project × hwconfig 匹配矩阵
 - [ ] `HWConfig` 和 `project.yaml` 的字段边界清楚，人工字段和自动生成字段有文档区分
@@ -545,6 +545,6 @@ scripts/cute-check-config.py
 Phase 0 完成后，Phase 1 可以直接：
 
 1. 读取 `configs/hwconfigs/cute2tops_scp64_dramsim32.yaml` 中的 `cute.chipyard_config` 调用 `generate-headers.sh`。
-2. 读取 `cutetest/runtime/cute_runtime/project.yaml` 知道 entry file 和 target。
+2. 读取 `cute-sdk/runtime/cute_runtime/project.yaml` 知道 entry file 和 target。
 3. 用 `cute-check-config.py` 确认 target match 后进入 build/run 流程。
 4. 在 artifact 中保存 `hwconfig.resolved.yaml` 和 `target_match.json`。

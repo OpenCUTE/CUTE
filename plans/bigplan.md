@@ -265,15 +265,15 @@ build/hwconfigs/<hwconfig-name>/
     └── cute_layout.h.generated
 ```
 
-`generated_headers` 应被视为 `HWConfig` 的固化产物，而不是 `Test` 或 `cutetest/runtime` 的全局状态。`Test.code` 编译时只通过 include path 引用当前匹配 `HWConfig` 的 generated headers：
+`generated_headers` 应被视为 `HWConfig` 的固化产物，而不是 `Test` 或 `cute-sdk/runtime` 的全局状态。`Test.code` 编译时只通过 include path 引用当前匹配 `HWConfig` 的 generated headers：
 
 ```text
 build(Test.code, HWConfig):
-  -I cutetest/include
+  -I cute-sdk/include
   -I build/hwconfigs/<hwconfig-name>/generated_headers
 ```
 
-这样可以避免“用 A 配置生成的 header 编译，却在 B 配置 simulator 上运行”的隐式错配。`cutetest/include` 只放稳定 runtime wrapper 和手写公共头；`.generated` 文件默认不再作为全局共享输入。
+这样可以避免“用 A 配置生成的 header 编译，却在 B 配置 simulator 上运行”的隐式错配。`cute-sdk/include` 只放稳定 runtime wrapper 和手写公共头；`.generated` 文件默认不再作为全局共享输入。
 
 `capability.json` 要服务 `Test.target` 匹配：
 
@@ -323,7 +323,7 @@ build(Test.code, HWConfig):
 
 ### 3.1 Test Pass 定义
 
-一个 test 的最小语义由 `cutetest/**/project.yaml` 描述。也就是说，Test 的第一抽象不是 `configs/tests/*.yaml`，而是 code project 自己的 `project.yaml`：
+一个 test 的最小语义由 `cute-sdk/**/project.yaml` 描述。也就是说，Test 的第一抽象不是 `configs/tests/*.yaml`，而是 code project 自己的 `project.yaml`：
 
 ```yaml
 version: 1
@@ -475,22 +475,22 @@ RUN_OK / TRACE_OK / FUNC_MODEL_NOT_READY
 
 这可以避免“代码跑了但无法验证”的测试被误判为 pass。
 
-### 3.5 Test 与 cutetest/project.yaml
+### 3.5 Test 与 cute-sdk/project.yaml
 
-`cutetest` 是 Test 的主工作区。每一个可维护的 Test/code project 都应有自己的 `project.yaml`：
+`cute-sdk` 是 Test 的主工作区。每一个可维护的 Test/code project 都应有自己的 `project.yaml`：
 
 ```text
-cutetest/.../<project>/project.yaml = Test spec + code project metadata
-cutetest/.../<project>/src/         = Test.code 实现
-cutetest/.../<project>/golden/      = golden 或 golden generator
-cutetest/.../<project>/data/        = 输入数据或数据生成脚本
+cute-sdk/.../<project>/project.yaml = Test spec + code project metadata
+cute-sdk/.../<project>/src/         = Test.code 实现
+cute-sdk/.../<project>/golden/      = golden 或 golden generator
+cute-sdk/.../<project>/data/        = 输入数据或数据生成脚本
 ```
 
-也就是说，一个可运行 Test 不再拆成 `configs/tests/*.yaml + cutetest project` 两个真相源，而是由 code project 自己描述：
+也就是说，一个可运行 Test 不再拆成 `configs/tests/*.yaml + cute-sdk project` 两个真相源，而是由 code project 自己描述：
 
 ```text
 Test
-└── code_project: cutetest/<level-or-lib>/<project-name>/
+└── code_project: cute-sdk/<level-or-lib>/<project-name>/
     ├── project.yaml        # Test 的主描述：target/code/golden/trace requirement
     ├── src/
     ├── include/
@@ -499,7 +499,7 @@ Test
     └── build_rules/
 ```
 
-`project.yaml` 是测试的“身份证/规格书”，同时贴着代码放，方便人手工维护。Runner 扫描 `cutetest/**/project.yaml`，选择匹配 `HWConfig` 的 project 和 variant，再进入该 project 构建。
+`project.yaml` 是测试的“身份证/规格书”，同时贴着代码放，方便人手工维护。Runner 扫描 `cute-sdk/**/project.yaml`，选择匹配 `HWConfig` 的 project 和 variant，再进入该 project 构建。
 
 示例：
 
@@ -538,7 +538,7 @@ golden:
 一个 code project 可以包含多个 variant，它们共同属于同一个 Test project：
 
 ```text
-cutetest/tensor_ops/matmul/
+cute-sdk/tensor_ops/matmul/
 ├── project.yaml
 ├── src/main.c
 └── variants:
@@ -569,10 +569,10 @@ v0.4: 扩展更多 HWConfig target
 v0.5: 支持 perf filter/profile，但 correctness pass 仍由 Trace.func 决定
 ```
 
-因此，`cutetest` 不是单纯“测试文件堆放目录”，而是 `Test project workspace`。它里面的 project 会随着 `project.yaml` 一起迭代，并逐层沉淀出 runtime lib、tensor op lib、layer op lib、fuse layer op lib、opt op lib。
+因此，`cute-sdk` 不是单纯“测试文件堆放目录”，而是 `Test project workspace`。它里面的 project 会随着 `project.yaml` 一起迭代，并逐层沉淀出 runtime lib、tensor op lib、layer op lib、fuse layer op lib、opt op lib。
 
 ```text
-cutetest/
+cute-sdk/
 ├── runtime/
 │   └── cute_runtime/
 │       ├── project.yaml
@@ -675,7 +675,7 @@ Artifact = 负责“这一次到底跑了什么、产生了什么证据”的结
 Runner 不定义测试语义，也不定义硬件语义；它只做编排：
 
 ```text
-给定 HWConfig + cutetest project + variant + Trace.filter
+给定 HWConfig + cute-sdk project + variant + Trace.filter
   -> 检查 target 是否匹配
   -> 准备 HWConfig.generated_headers
   -> 编译 Test.code
@@ -803,10 +803,10 @@ build/cute-runs/<run-id>/
 第一阶段可先用 scripts，成熟后转为 `tools/cutecli`：
 
 ```text
-scripts/cute-run.py --hw configs/hwconfigs/cute2tops_scp64_dramsim32.yaml --project cutetest/tensor_ops/matmul --variant i8_128
-scripts/cute-verify.py --artifact build/cute-runs/<run-id>
-scripts/cute-perf.py --artifact build/cute-runs/<run-id>
-scripts/cute-suite.py --suite configs/suites/smoke.yaml
+tools/runner/cute-run.py --hw configs/hwconfigs/cute2tops_scp64_dramsim32.yaml --project cute-sdk/tensor_ops/matmul --variant i8_128
+tools/runner/cute-verify.py --artifact build/cute-runs/<run-id>
+tools/runner/cute-perf.py --artifact build/cute-runs/<run-id>
+tools/runner/cute-suite.py --suite configs/suites/smoke.yaml
 ```
 
 ---
@@ -817,90 +817,80 @@ scripts/cute-suite.py --suite configs/suites/smoke.yaml
 
 ```text
 CUTE/
-├── configs/
-│   ├── hwconfigs/
-│   │   ├── cute2tops_scp64_dramsim32.yaml
-│   │   └── schemas/hwconfig.schema.json
-│   ├── trace_filters/
-│   │   ├── func_store_tensor.yaml
-│   │   ├── perf_task_stage.yaml
-│   │   └── perf_memory.yaml
-│   ├── suites/
-│   │   ├── smoke.yaml
-│   │   ├── correctness_full.yaml
-│   │   ├── perf_sweep.yaml
-│   │   └── model.yaml
-│   └── schemas/
-│       ├── project.schema.json
-│       ├── suite.schema.json
-│       └── trace_filter.schema.json
-├── cutetest/
-│   ├── include/
-│   │   ├── ygjk.h
-│   │   ├── marcohelper.h
-│   │   ├── cute_runtime.h
-│   │   ├── cute_tensor.h
-│   │   └── cute_ops.h
-│   ├── runtime/
-│   ├── tensor_ops/
-│   ├── layer_ops/
-│   ├── fuse_layer_ops/
-│   ├── opt_ops/
-│   ├── model_tests/
-│   ├── templates/
-│   ├── generated/
-│   └── legacy/
-├── trace/
-│   ├── format_spec.md
-│   ├── filters.md
-│   ├── python/
-│   │   ├── parser.py
-│   │   ├── filter.py
-│   │   ├── index.py
+├── cute-sdk/                          # 目标板软件栈（C，编译为 .riscv）
+│   ├── include/                       # 公共头文件
+│   │   ├── ygjk.h                     # 底层 inline asm（保留）
+│   │   ├── cute_runtime.h             # Runtime lib API
+│   │   ├── cute_tensor.h              # Tensor 描述符
+│   │   ├── cute_ops.h                 # Tensor op 封装
+│   │   ├── cute_layer.h               # Layer op 封装
+│   │   └── cute_fuse_layer.h          # Fuse layer op 封装
+│   ├── runtime/                       # Runtime lib project
+│   ├── tensor_ops/                    # Tensor op projects
+│   ├── layer_ops/                     # Layer op projects
+│   ├── fuse_layer_ops/                # Fuse layer op projects
+│   ├── opt_ops/                       # SOC-specific opt projects
+│   ├── model_tests/                   # Model test projects
+│   ├── templates/                     # C 代码模板
+│   └── legacy/                        # 旧测试（逐步迁移）
+│
+├── tools/                             # Host 端工具链（Python）
+│   ├── trace/                         # Trace parser + func/perf model
+│   │   ├── format_spec.md
 │   │   ├── func/
-│   │   │   ├── event_model.py
-│   │   │   ├── tensor_model.py
-│   │   │   ├── layer_model.py
-│   │   │   └── fused_model.py
+│   │   │   ├── event_model.py         # F0_event
+│   │   │   ├── tensor_model.py        # F1_store / F2_tensor_op
+│   │   │   ├── layer_model.py         # F3_layer
+│   │   │   └── fused_model.py         # F4_fused_layer
 │   │   └── perf/
-│   │       ├── timeline.py
-│   │       ├── stage_model.py
-│   │       ├── memory_model.py
-│   │       ├── utilization.py
-│   │       └── bottleneck.py
-│   └── tests/
-├── verify/
-│   ├── python/
-│   │   ├── golden.py
-│   │   ├── compare.py
-│   │   └── report.py
-│   └── tests/
-├── perf/
-│   ├── baselines/
-│   ├── reports/
-│   └── tests/
-├── tools/
-│   └── cutecli/
-├── build/
-│   ├── hwconfigs/
-│   │   └── <hwconfig-name>/
-│   │       ├── hwconfig.resolved.yaml
-│   │       ├── capability.json
-│   │       ├── header_fingerprint.txt
-│   │       └── generated_headers/
-│   ├── cutetests/
-│   ├── cute-runs/
-│   └── cute-reports/
-└── plans/
+│   │       ├── timeline.py            # 时间线模型
+│   │       ├── stage_model.py         # Stage 分解
+│   │       ├── memory_model.py        # 带宽模型
+│   │       └── utilization.py         # 利用率模型
+│   ├── verify/                        # Golden 生成 + 比对
+│   │   ├── cute_golden.py             # Golden 参考生成引擎
+│   │   ├── cute_verify.py             # 数值比对引擎
+│   │   └── cute_trace_golden.py       # 从 trace 提取 D tensor
+│   ├── perf/                          # Top-Down + Roofline
+│   │   ├── cute_perf_analyzer.py      # Top-Down 分析引擎
+│   │   ├── cute_perf_model.py         # Roofline 模型
+│   │   └── cute_perf_report.py        # 报告生成器
+│   └── runner/                        # Runner + CLI
+│       ├── cute-run.py                # 主 Runner
+│       ├── cute-check-config.py       # 静态配置检查
+│       ├── cute-gen-headers.py        # Header 生成
+│       ├── cute-gen-golden.py         # Golden 生成
+│       ├── cute-perf.py               # 性能分析 CLI
+│       └── cute-model-report.py       # 模型级报告
+│
+├── configs/                           # 配置和 schema
+│   ├── hwconfigs/                     # HWConfig manifests
+│   │   ├── cute2tops_scp64_dramsim32.yaml
+│   │   └── schemas/
+│   ├── trace_filters/                 # 可复用 Trace filter
+│   ├── suites/                        # 测试 suite 定义
+│   └── schemas/                       # JSON Schema
+│       ├── hwconfig.schema.json
+│       ├── project.schema.json
+│       └── trace_filter.schema.json
+│
+├── scripts/                           # 薄包装脚本（调用 tools/）
+├── build/                             # 构建产物 + artifact
+│   ├── hwconfigs/<name>/              # 生成的 headers + capability
+│   ├── cute-runs/<run-id>/            # Run artifact
+│   └── cute-reports/                  # 报告归档
+└── plans/                             # 设计文档
 ```
 
 原则：
 
+- `cute-sdk/` 只放**编译后跑在 RISC-V 上**的东西：C 头文件、op lib、test driver。
+- `tools/` 只放**运行在 host 上**的东西：Python 脚本、trace parser、golden generator、runner。
+- `configs/` 是纯声明式配置，不属于任何一侧。
 - `configs/hwconfigs` 承载 `HWConfig`。
-- `cutetest/**/project.yaml` 承载 `Test`。
+- `cute-sdk/**/project.yaml` 承载 `Test`。
 - `configs/trace_filters` 承载可复用 `Trace.filter`。
-- `cutetest` 承载 `Test.code`、Test metadata 和由 test 沉淀出的软件库。
-- `trace/python/func` 与 `trace/python/perf` 分开演进。
+- `tools/trace/func` 与 `tools/trace/perf` 分开演进。
 - `build/cute-runs` 承载三者组合后的事实快照。
 
 ---
@@ -914,7 +904,7 @@ CUTE/
 任务：
 
 - 定义 `hwconfig.schema.json`。
-- 定义 `project.schema.json`，明确 cutetest project 的 `target/code/golden`。
+- 定义 `project.schema.json`，明确 cute-sdk project 的 `target/code/golden`。
 - 定义 `trace_filter.schema.json`。
 - 定义 `trace/format_spec.md`。
 - 写一个 base test、一个 tensor test 的 `project.yaml`。
@@ -1043,33 +1033,33 @@ configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
 configs/schemas/hwconfig.schema.json
 
 # Test
-cutetest/runtime/cute_runtime/project.yaml
-cutetest/tensor_ops/matmul/project.yaml
+cute-sdk/runtime/cute_runtime/project.yaml
+cute-sdk/tensor_ops/matmul/project.yaml
 configs/schemas/project.schema.json
 
 # Trace
-trace/format_spec.md
+tools/trace/format_spec.md
 configs/trace_filters/func_event.yaml
 configs/trace_filters/func_store_tensor.yaml
 configs/trace_filters/perf_task_stage.yaml
 configs/schemas/trace_filter.schema.json
 
 # Runtime/Test code
-cutetest/runtime/cute_runtime/include/cute_runtime.h
-cutetest/runtime/cute_runtime/src/cute_runtime.c
-cutetest/templates/base_rocc_hello.c.j2
-cutetest/templates/tensor_matmul.c.j2
+cute-sdk/runtime/cute_runtime/include/cute_runtime.h
+cute-sdk/runtime/cute_runtime/src/cute_runtime.c
+cute-sdk/templates/base_rocc_hello.c.j2
+cute-sdk/templates/tensor_matmul.c.j2
 
 # Trace implementation
-trace/python/parser.py
-trace/python/filter.py
-trace/python/func/event_model.py
-trace/python/func/tensor_model.py
-trace/python/perf/timeline.py
+tools/trace/parser.py
+tools/trace/filter.py
+tools/trace/func/event_model.py
+tools/trace/func/tensor_model.py
+tools/trace/perf/timeline.py
 
 # Runner
-scripts/cute-run.py
-scripts/cute-suite.py
+tools/runner/cute-run.py
+tools/runner/cute-suite.py
 ```
 
 ---
