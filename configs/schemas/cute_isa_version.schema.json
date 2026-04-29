@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CUTE ISA Version",
+  "description": "CUTE 内部指令集版本。ChipyardConfig 通过 cute.isa.version 引用这里定义的 YGJK/CUTE instruction set，并用于校验 Scala object 与 generated header 是否一致。",
+  "type": "object",
+  "required": ["version", "id", "source", "groups"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema 版本，当前固定为 1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "ISA version 唯一标识，如 cute_isa_v1"
+    },
+    "description": {
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "required": ["scala_file", "scala_objects", "generated_header"],
+      "additionalProperties": false,
+      "properties": {
+        "scala_file": {
+          "type": "string",
+          "description": "定义指令集 object 的 Scala 源码路径"
+        },
+        "scala_objects": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "该 ISA version 对齐的 Scala object 全名"
+        },
+        "generated_header": {
+          "type": "string",
+          "description": "用于确认 RoCC funct 宏的 generated header"
+        }
+      }
+    },
+    "rocc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "opcode": {
+          "type": "string",
+          "pattern": "^0x[0-9A-Fa-f]+$",
+          "description": "RoCC opcode，当前来自 ygjk.h/inline asm 约定"
+        },
+        "cute_internal_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "CUTE internal instruction 在 RoCC funct 空间中的 offset"
+        }
+      }
+    },
+    "groups": {
+      "type": "object",
+      "required": ["ygjk", "cute"],
+      "additionalProperties": false,
+      "properties": {
+        "ygjk": { "$ref": "#/definitions/instruction_group" },
+        "cute": { "$ref": "#/definitions/instruction_group" }
+      }
+    }
+  },
+  "definitions": {
+    "instruction_group": {
+      "type": "object",
+      "required": ["scala_object", "description", "rocc_funct_offset", "instructions"],
+      "additionalProperties": false,
+      "properties": {
+        "scala_object": {
+          "type": "string",
+          "description": "该 group 对齐的 Scala object"
+        },
+        "description": {
+          "type": "string",
+          "description": "该 instruction group 的用途说明"
+        },
+        "rocc_funct_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "从 Scala funct 到 RoCC funct 的固定 offset"
+        },
+        "instructions": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/instruction" },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "instruction": {
+      "type": "object",
+      "required": ["name", "funct", "rocc_funct", "description", "return_description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "description": "软件/header 可见的指令名"
+        },
+        "funct": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Scala CuteInstConfig.funct"
+        },
+        "rocc_funct": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "CUTE_INST_FUNCT_<name> 在 generated header 中的值"
+        },
+        "description": {
+          "type": "string",
+          "description": "从 Scala CuteInstConfig.description 抄录的指令说明"
+        },
+        "return_description": {
+          "type": "string",
+          "description": "从 Scala CuteInstConfig.returnDescription 抄录的返回值说明"
+        }
+      }
+    }
+  }
+}

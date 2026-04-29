@@ -1,0 +1,12 @@
+version: 1
+id: cute_fpe_v1
+description: CUTE/FPE compute format set exported by current ElementDataType/HeaderGenerator.
+
+source:
+  generated_header: cutetest/include/datatype.h.generated
+  scala_object: cute.ElementDataType
+
+datatypes: [i8i8i32, fp16fp16fp32, bf16bf16fp32, tf32tf32fp32,
+            i8u8i32, u8i8i32, u8u8i32,
+            mxfp8e4m3fp32, mxfp8e5m2fp32, nvfp4fp32, mxfp4fp32,
+            fp8e4m3fp32, fp8e5m2fp32]

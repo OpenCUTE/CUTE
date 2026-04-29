@@ -2,9 +2,11 @@
 
 ## 目标
 
-Phase 0 的目标不是跑通完整测试，而是先把四类对象的手写入口定下来：
+Phase 0 的目标不是跑通完整测试，而是先把核心对象的手写入口定下来：
 
 - `ChipyardConfig`: 由 `configs/chipyard_configs/*.yaml` 描述，和现有 Chipyard Scala Config class 一一对应。
+- `CUTEFPEVersion`: 由 `configs/cute_fpe_versions/*.yaml` 描述，表示 CUTE/FPE 内部支持的计算格式版本。
+- `CUTEISAVersion`: 由 `configs/cute_isa_versions/*.yaml` 描述，表示 CUTE/YGJK 内部支持的指令集版本。
 - `HWConfig`: 由 `configs/hwconfigs/*.yaml` 描述，组合 `ChipyardConfig + memory model + simulator policy`。
 - `Test`: 由 `cute-sdk/**/project.yaml` 描述。
 - `Trace`: 本阶段只做占位 schema/spec，后续专题展开。
@@ -21,6 +23,8 @@ Phase 0 的目标不是跑通完整测试，而是先把四类对象的手写入
 - `cute-sdk/**/project.yaml` 是 Test 的主真相源。
 - `generated_headers` 属于 `ChipyardConfig`，默认输出到 `build/chipyard_configs/<id>/generated_headers/`。
 - `HWConfig` 不手写 SoC/core/bus/capability；这些从引用的 `ChipyardConfig` 解析得到。
+- datatype 能力列表不在每个 `ChipyardConfig` 中重复维护；由 `cute.fpe.version` 引用 `configs/cute_fpe_versions/<version>.yaml`，再派生为 resolved software capability。
+- instruction set 不在每个 `ChipyardConfig` 中重复维护；由 `cute.isa.version` 引用 `configs/cute_isa_versions/<version>.yaml`，后续由 `cute-check-config.py` 对齐 `CuteInstConfigs` 和 `YGJKInstConfigs`。
 - Trace 只保留边界定义：`filter`、`func model`、`perf model`，不在本阶段细化事件 schema。
 - catalog/index 如果需要，只能由工具扫描生成，不能作为人工维护真相源。
 
@@ -35,6 +39,8 @@ Phase 0 的目标不是跑通完整测试，而是先把四类对象的手写入
 ```
 configs/
 ├── chipyard_configs/
+├── cute_fpe_versions/
+├── cute_isa_versions/
 ├── hwconfigs/
 ├── memconfigs/
 │   └── dramsim2/
@@ -93,6 +99,10 @@ mode                       # existing_class
 cute:
   params_symbol            # CuteParams 符号，如 CuteParams.CUTE_2Tops_64SCP
   instances                # WithCUTE(Seq(...)) 中挂载 CUTE 的 core id 列表
+  fpe:
+    version                # CUTE/FPE 内部计算格式版本
+  isa:
+    version                # CUTE/YGJK 内部指令集版本
   generated_headers:
     output_dir             # 默认 build/chipyard_configs/<id>/generated_headers
     mode                   # generate_from_chipyard_config | reuse_existing
@@ -115,7 +125,6 @@ soc:
     tl_monitors
 
 capability:                # 由 ChipyardConfig/CUTE params 导出的软件可见能力
-  datatypes
   tensor_ops
   layer_ops
   fused_ops
@@ -133,14 +142,75 @@ trace_capability:          # RTL trace 能力声明（占位，Phase 3 细化）
 - `id` 必填，唯一。
 - `class` 必填，必须是现有 Scala Config class 全名。
 - `mode` 必填，本阶段固定为 `existing_class`。
-- `cute.params_symbol`、`cute.instances`、`cute.generated_headers` 必填。
+- `cute.params_symbol`、`cute.instances`、`cute.fpe.version`、`cute.isa.version`、`cute.generated_headers` 必填。
 - `soc.core.kind/count`、`soc.bus.system_bits/memory_bits` 必填。
-- `capability.datatypes` 必填，至少包含一个。
+- `cute.fpe.version` 必须能解析到 `configs/cute_fpe_versions/<version>.yaml`。
+- `cute.isa.version` 必须能解析到 `configs/cute_isa_versions/<version>.yaml`。
 
 #### 2.3 产物
 
 ```
 configs/schemas/chipyard_config.schema.json
+```
+
+---
+
+### Task 2.5: 定义 `cute_fpe_version.schema.json`
+
+`CUTEFPEVersion` 用于描述 CUTE/FPE 内部支持的计算格式版本，避免每个 `ChipyardConfig` 重复维护由这些格式派生出的 datatype 能力长列表。
+
+```text
+version                    # schema 版本，固定 1
+id                         # FPE version id，如 cute_fpe_v1
+description                # 说明
+source:
+  generated_header         # 如 cutetest/include/datatype.h.generated
+  scala_object             # 如 cute.ElementDataType
+datatypes                  # datatype name strings
+```
+
+产物：
+
+```
+configs/schemas/cute_fpe_version.schema.json
+configs/cute_fpe_versions/cute_fpe_v1.yaml
+```
+
+---
+
+### Task 2.6: 定义 `cute_isa_version.schema.json`
+
+`CUTEISAVersion` 用于描述 CUTE/YGJK 内部支持的指令集版本，避免每个 `ChipyardConfig` 重复维护 instruction set。该对象必须和 `CUTEParameters.scala` 中的 `CuteInstConfigs`、`YGJKInstConfigs` 对齐。
+
+```text
+version                    # schema 版本，固定 1
+id                         # ISA version id，如 cute_isa_v1
+description                # 说明
+source:
+  scala_file               # 如 src/main/scala/CUTEParameters.scala
+  scala_objects            # cute.CuteInstConfigs / cute.YGJKInstConfigs
+  generated_header         # 如 cutetest/include/instruction.h.generated
+rocc:
+  opcode                   # RoCC opcode，当前为 0x0B
+  cute_internal_offset     # CUTE internal 指令映射到 RoCC funct 时的 offset，当前为 64
+groups:
+  ygjk:
+    scala_object
+    description
+    rocc_funct_offset
+    instructions           # name / funct / rocc_funct / description / return_description
+  cute:
+    scala_object
+    description
+    rocc_funct_offset
+    instructions           # name / funct / rocc_funct / description / return_description
+```
+
+产物：
+
+```
+configs/schemas/cute_isa_version.schema.json
+configs/cute_isa_versions/cute_isa_v1.yaml
 ```
 
 ---
@@ -208,6 +278,10 @@ mode: existing_class
 cute:
   params_symbol: CuteParams.CUTE_2Tops_64SCP
   instances: [0]
+  fpe:
+    version: cute_fpe_v1
+  isa:
+    version: cute_isa_v1
   generated_headers:
     output_dir: build/chipyard_configs/cute2tops_scp64/generated_headers
     mode: generate_from_chipyard_config
@@ -223,10 +297,6 @@ soc:
     memory_bits: 512
 
 capability:
-  datatypes: [i8i8i32, fp16fp16fp32, bf16bf16fp32, tf32tf32fp32,
-              i8u8i32, u8i8i32, u8u8i32,
-              mxfp8e4m3fp32, mxfp8e5m2fp32, nvfp4fp32, mxfp4fp32,
-              fp8e4m3fp32, fp8e5m2fp32]
   tensor_ops: [matmul, conv]
   layer_ops: []
   fused_ops: []
@@ -260,6 +330,8 @@ simulator:
 ```
 configs/chipyard_configs/cute2tops_scp64.yaml
 configs/chipyard_configs/cute4tops_scp128.yaml  (可选)
+configs/cute_fpe_versions/cute_fpe_v1.yaml
+configs/cute_isa_versions/cute_isa_v1.yaml
 configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
 configs/hwconfigs/cute4tops_scp128_dramsim48.yaml  (可选)
 ```
@@ -516,11 +588,17 @@ Usage:
 解析步骤：
   1. 读取 HWConfig.chipyard_config = <id>
   2. 加载 configs/chipyard_configs/<id>.yaml
-  3. 如果 HWConfig.memory.model = dramsim2，
+  3. 读取 ChipyardConfig.cute.fpe.version = <version>
+  4. 加载 configs/cute_fpe_versions/<version>.yaml，派生并展开 resolved capability.datatypes
+  5. 读取 ChipyardConfig.cute.isa.version = <version>
+  6. 加载 configs/cute_isa_versions/<version>.yaml，派生并展开 resolved capability.instructions
+  7. 如果 HWConfig.memory.model = dramsim2，
      检查 configs/memconfigs/dramsim2/<config>/system.ini 等必要文件存在
-  4. 形成 resolved HWConfig:
+  8. 形成 resolved HWConfig:
      tags 来自 HWConfig
-     capability / trace_capability / generated_headers / soc 来自 ChipyardConfig
+     capability.tensor_ops/layer_ops/fused_ops、trace_capability、generated_headers、soc 来自 ChipyardConfig
+     capability.datatypes 来自 CUTEFPEVersion
+     capability.instructions 来自 CUTEISAVersion
      memory / simulator 来自 HWConfig
 ```
 
@@ -538,9 +616,21 @@ existing_class 检查：
   6. soc.bus.memory_bits 与 WithNBitMemoryBus(...) 一致
   7. soc.core.kind/count 与 WithNShuttleCores / WithNSmallBooms / WithNSmallCores 等片段一致
   8. cache 字段与 WithInclusiveCache / WithNBanks / WithCacheHash / WithoutTLMonitors 一致
+  9. cute.fpe.version 能解析到 configs/cute_fpe_versions/<version>.yaml
+  10. cute.isa.version 能解析到 configs/cute_isa_versions/<version>.yaml
+
+CUTEFPEVersion 检查：
+  1. CUTEFPEVersion.datatypes 与 ElementDataType/header 导出的 datatype set 一致
+
+CUTEISAVersion 检查：
+  1. groups.cute.instructions 的 name/funct/description/return_description 集合与 CuteInstConfigs.allInsts 一致
+  2. groups.ygjk.instructions 的 name/funct/description/return_description 集合与 YGJKInstConfigs.allInsts 一致
+  3. groups.cute.instructions[*].rocc_funct = funct + cute_internal_offset
+  4. groups.ygjk.instructions[*].rocc_funct = funct + rocc_funct_offset
+  5. instruction.h.generated 中 CUTE_INST_FUNCT_<name> 宏值与 rocc_funct 一致
 ```
 
-后续可选增强：调用 `HeaderGenerator`/参数 extractor 生成临时 headers，确认 `capability.datatypes` 和 CUTE 参数确实来自真实 Config。
+后续可选增强：调用 `HeaderGenerator`/参数 extractor 生成临时 headers，确认 `CUTEFPEVersion.datatypes`、`CUTEISAVersion.instructions` 和 CUTE 参数确实来自真实 Config。
 
 #### 7.4 Target 匹配逻辑
 
@@ -548,7 +638,7 @@ existing_class 检查：
 匹配条件（全部满足才为 MATCH）：
   1. HWConfig.tags 与 project.target.hwconfigs.include_tags 有交集
   2. HWConfig.tags 与 project.target.hwconfigs.exclude_tags 无交集
-  3. resolved ChipyardConfig.capability.datatypes ⊇ project.target.required_capability.datatypes
+  3. resolved capability.datatypes（由 CUTEFPEVersion 展开） ⊇ project.target.required_capability.datatypes
   4. resolved ChipyardConfig.capability.tensor_ops ⊇ project.target.required_capability.tensor_ops
 
 输出:
@@ -581,9 +671,17 @@ tools/runner/cute-check-config.py
 ```text
 # Schema
 configs/schemas/chipyard_config.schema.json
+configs/schemas/cute_fpe_version.schema.json
+configs/schemas/cute_isa_version.schema.json
 configs/schemas/hwconfig.schema.json
 configs/schemas/project.schema.json
 configs/schemas/trace_filter.schema.json
+
+# CUTE FPE version 样板
+configs/cute_fpe_versions/cute_fpe_v1.yaml
+
+# CUTE ISA version 样板
+configs/cute_isa_versions/cute_isa_v1.yaml
 
 # ChipyardConfig 样板
 configs/chipyard_configs/cute2tops_scp64.yaml
@@ -619,6 +717,8 @@ tools/runner/cute-check-config.py
 ## 验收标准
 
 - [ ] `cute-check-config.py --chipyard-config configs/chipyard_configs/cute2tops_scp64.yaml` 通过校验
+- [ ] `cute-check-config.py` 能解析 `cute.fpe.version` 并展开 datatype set
+- [ ] `cute-check-config.py` 能解析 `cute.isa.version` 并确认 instruction set 与 `CuteInstConfigs` / `YGJKInstConfigs` 一致
 - [ ] `cute-check-config.py --hwconfig configs/hwconfigs/cute2tops_scp64_dramsim32.yaml` 通过校验
 - [ ] `cute-check-config.py --project cute-sdk/runtime/cute_runtime/project.yaml` 通过校验
 - [ ] `cute-check-config.py --project cute-sdk/tensor_ops/matmul/project.yaml` 通过校验
@@ -648,7 +748,7 @@ tools/runner/cute-check-config.py
 | Schema 过早复杂化 | 本阶段只保留 Phase 1/2 需要的字段；不确定的字段用 `*_TODO` 标注或直接省略 |
 | Trace 过早展开 | 只做占位；level 名称冻结但内容为空 |
 | project.yaml 过于自由 | schema 约束最小必填字段，variant 内部允许自由键值对 |
-| HWConfig 字段与 CUTEParameters 不对齐 | HWConfig 不承载 CUTE 参数；`ChipyardConfig` contract 后续由 `cute-check-config.py` 对齐 `CuteConfig.scala` 和 generated headers |
+| HWConfig 字段与 CUTEParameters 不对齐 | HWConfig 不承载 CUTE 参数；`ChipyardConfig` contract 后续由 `cute-check-config.py` 对齐 `CuteConfig.scala` 和 generated headers；datatype set 由 `CUTEFPEVersion` 统一维护；instruction set 由 `CUTEISAVersion` 统一维护 |
 
 ---
 

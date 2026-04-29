@@ -173,7 +173,7 @@ Trace
 
 | 层级 | 示例 | 作用 |
 |---|---|---|
-| `ChipyardConfig.CUTE` | `Tensor_M/N/K`、`ReduceWidthByte`、FPE、scale layout、instruction field | 决定 CUTE 本体 capability |
+| `ChipyardConfig.CUTE` | `Tensor_M/N/K`、`ReduceWidthByte`、FPE version、ISA version、scale layout、instruction field | 决定 CUTE 本体 capability |
 | `ChipyardConfig.SOC` | `chipyard.CUTE2TopsSCP64Config`、core、bus、cache | 决定 SoC 集成形态和软件可见能力 |
 | `HWConfig.memory` | `dramsim2_ini_32GB_per_s` | 决定 memory model 配置 |
 | `HWConfig.simulator` | Verilator binary、max cycles、wave/trace mode | 决定 run policy |
@@ -186,6 +186,10 @@ Trace
 configs/chipyard_configs/
 ├── cute2tops_scp64.yaml
 └── cute4tops_scp128.yaml
+configs/cute_fpe_versions/
+└── cute_fpe_v1.yaml
+configs/cute_isa_versions/
+└── cute_isa_v1.yaml
 configs/hwconfigs/
 ├── cute2tops_scp64_dramsim32.yaml
 ├── cute4tops_scp128_dramsim48.yaml
@@ -207,6 +211,10 @@ mode: existing_class
 cute:
   params_symbol: CuteParams.CUTE_2Tops_64SCP
   instances: [0]
+  fpe:
+    version: cute_fpe_v1
+  isa:
+    version: cute_isa_v1
   generated_headers:
     output_dir: build/chipyard_configs/cute2tops_scp64/generated_headers
     mode: generate_from_chipyard_config
@@ -222,7 +230,6 @@ soc:
     memory_bits: 512
 
 capability:
-  datatypes: [i8i8i32, fp16fp16fp32, mxfp8e4m3, nvfp4]
   tensor_ops: [matmul]
   layer_ops: []
   fused_ops: []
@@ -301,7 +308,10 @@ build(Test.code, HWConfig):
     "tensor_m": 64,
     "tensor_n": 64,
     "tensor_k": 64,
+    "cute_fpe_version": "cute_fpe_v1",
+    "cute_isa_version": "cute_isa_v1",
     "datatypes": ["i8i8i32", "fp16fp16fp32"],
+    "instructions": ["SEND_MACRO_INST", "CONFIG_TENSOR_A", "QUERY_ACCELERATOR_BUSY"],
     "trace_events": ["TASK", "D_STORE_DATA", "MEM_REQ_RSP"]
   },
   "soc": {
@@ -884,12 +894,17 @@ CUTE/
 │       └── cute-model-report.py       # 模型级报告
 │
 ├── configs/                           # 配置和 schema
+│   ├── chipyard_configs/              # ChipyardConfig manifests
+│   ├── cute_fpe_versions/             # CUTE/FPE format version manifests
+│   ├── cute_isa_versions/             # CUTE/YGJK ISA version manifests
 │   ├── hwconfigs/                     # HWConfig manifests
 │   │   ├── cute2tops_scp64_dramsim32.yaml
-│   │   └── schemas/
 │   ├── trace_filters/                 # 可复用 Trace filter
 │   ├── suites/                        # 测试 suite 定义
 │   └── schemas/                       # JSON Schema
+│       ├── chipyard_config.schema.json
+│       ├── cute_fpe_version.schema.json
+│       ├── cute_isa_version.schema.json
 │       ├── hwconfig.schema.json
 │       ├── project.schema.json
 │       └── trace_filter.schema.json
@@ -1052,6 +1067,10 @@ CUTE/
 # ChipyardConfig / HWConfig
 configs/chipyard_configs/cute2tops_scp64.yaml
 configs/schemas/chipyard_config.schema.json
+configs/cute_fpe_versions/cute_fpe_v1.yaml
+configs/schemas/cute_fpe_version.schema.json
+configs/cute_isa_versions/cute_isa_v1.yaml
+configs/schemas/cute_isa_version.schema.json
 configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
 configs/schemas/hwconfig.schema.json
 

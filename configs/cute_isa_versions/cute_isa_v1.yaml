@@ -1,0 +1,126 @@
+version: 1
+id: cute_isa_v1
+description: CUTE/YGJK instruction set exported by current CuteInstConfigs, YGJKInstConfigs, and HeaderGenerator.
+
+source:
+  scala_file: src/main/scala/CUTEParameters.scala
+  scala_objects:
+    - cute.CuteInstConfigs
+    - cute.YGJKInstConfigs
+  generated_header: cutetest/include/instruction.h.generated
+
+rocc:
+  opcode: "0x0B"
+  cute_internal_offset: 64
+
+groups:
+  ygjk:
+    scala_object: cute.YGJKInstConfigs
+    description: YGK/RoCC interface instructions handled directly at the RoCC interface layer.
+    rocc_funct_offset: 0
+    instructions:
+      - name: QUERY_ACCELERATOR_BUSY
+        funct: 1
+        rocc_funct: 1
+        description: 查询加速器是否正在运行
+        return_description: 返回加速器是否忙碌 (1=忙碌, 0=空闲)
+      - name: QUERY_RUNTIME
+        funct: 2
+        rocc_funct: 2
+        description: 查询加速器运行时间（时钟周期数）
+        return_description: 返回加速器运行时间（时钟周期数）
+      - name: QUERY_MEM_READ_COUNT
+        funct: 3
+        rocc_funct: 3
+        description: 查询加速器对外访存读次数
+        return_description: 返回对外访存读次数
+      - name: QUERY_MEM_WRITE_COUNT
+        funct: 4
+        rocc_funct: 4
+        description: 查询加速器对外访存写次数
+        return_description: 返回对外访存写次数
+      - name: QUERY_COMPUTE_TIME
+        funct: 5
+        rocc_funct: 5
+        description: 查询加速器计算时间
+        return_description: 返回计算时间（时钟周期数）
+      - name: QUERY_MACRO_INST_FINISH
+        funct: 6
+        rocc_funct: 6
+        description: 查询 CUTE 宏指令的完成情况
+        return_description: 返回宏指令队列中的完成情况 (0010 = id为1的指令已完成)
+      - name: QUERY_MACRO_INST_FIFO_FULL
+        funct: 7
+        rocc_funct: 7
+        description: 查询 CUTE 宏指令队列是否已满
+        return_description: 返回FIFO是否已满 (1=满, 0=未满)
+      - name: QUERY_MACRO_INST_FIFO_INFO
+        funct: 8
+        rocc_funct: 8
+        description: 查询 CUTE 宏指令队列目前有多少指令
+        return_description: 返回FIFO中当前指令状态 (0010 = id为1的位置已有指令)
+  cute:
+    scala_object: cute.CuteInstConfigs
+    description: CUTE internal control instructions forwarded to the CUTE core through RoCC funct offset 64.
+    rocc_funct_offset: 64
+    instructions:
+      - name: SEND_MACRO_INST
+        funct: 0
+        rocc_funct: 64
+        description: 发送已配置的宏指令到指令FIFO
+        return_description: 返回指令在FIFO中的编号
+      - name: CONFIG_TENSOR_A
+        funct: 1
+        rocc_funct: 65
+        description: 配置A张量的基地址和步长
+        return_description: 未使用
+      - name: CONFIG_TENSOR_B
+        funct: 2
+        rocc_funct: 66
+        description: 配置B张量的基地址和步长
+        return_description: 未使用
+      - name: CONFIG_TENSOR_C
+        funct: 3
+        rocc_funct: 67
+        description: 配置C张量的基地址和步长
+        return_description: 未使用
+      - name: CONFIG_TENSOR_D
+        funct: 4
+        rocc_funct: 68
+        description: 配置D张量的基地址和步长
+        return_description: 未使用
+      - name: CONFIG_TENSOR_DIM
+        funct: 5
+        rocc_funct: 69
+        description: 配置张量维度(M,N,K)，对于卷积则是(ohow,oc,ic)
+        return_description: 未使用
+      - name: CONFIG_CONV_PARAMS
+        funct: 6
+        rocc_funct: 70
+        description: 配置卷积相关参数（element_type, bias_type, kernel_size等）
+        return_description: 未使用
+      - name: CONFIG_SCALE_A
+        funct: 7
+        rocc_funct: 71
+        description: 配置A Scale（量化参数）的基地址
+        return_description: 未使用
+      - name: CONFIG_SCALE_B
+        funct: 8
+        rocc_funct: 72
+        description: 配置B Scale（量化参数）的基地址
+        return_description: 未使用
+      - name: CLEAR_INST
+        funct: 16
+        rocc_funct: 80
+        description: 清除队尾的宏指令
+        return_description: 未使用
+      - name: QUERY_INST
+        funct: 17
+        rocc_funct: 81
+        description: 查询当前完成宏指令的尾编号位置
+        return_description: 返回已完成宏指令的尾编号位置
+      - name: RESERVED
+        funct: 18
+        rocc_funct: 82
+        description: 保留指令（空操作）
+        return_description: 未使用

@@ -7,6 +7,10 @@ mode: existing_class
 cute:
   params_symbol: CuteParams.CUTE_4Tops_128SCP
   instances: [0]
+  fpe:
+    version: cute_fpe_v1
+  isa:
+    version: cute_isa_v1
   generated_headers:
     output_dir: build/chipyard_configs/cute4tops_scp128/generated_headers
     mode: generate_from_chipyard_config
@@ -28,10 +32,6 @@ soc:
     tl_monitors: false
 
 capability:
-  datatypes: [i8i8i32, fp16fp16fp32, bf16bf16fp32, tf32tf32fp32,
-              i8u8i32, u8i8i32, u8u8i32,
-              mxfp8e4m3fp32, mxfp8e5m2fp32, nvfp4fp32, mxfp4fp32,
-              fp8e4m3fp32, fp8e5m2fp32]
   tensor_ops: [matmul, conv]
   layer_ops: []
   fused_ops: []

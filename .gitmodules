@@ -19,3 +19,9 @@
 [submodule "doc/design-doc"]
 	path = doc/design-doc
 	url = git@github.com:OpenCUTE/CUTE-Design-Doc.git
+[submodule "doc/sdk-doc"]
+	path = doc/sdk-doc
+	url = git@github.com:OpenCUTE/cute-sdk-doc.git
+[submodule "cute-sdk"]
+	path = cute-sdk
+	url = git@github.com:OpenCUTE/cute-sdk.git

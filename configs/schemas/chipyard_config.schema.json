@@ -32,7 +32,7 @@
     },
     "cute": {
       "type": "object",
-      "required": ["params_symbol", "instances", "generated_headers"],
+      "required": ["params_symbol", "instances", "fpe", "isa", "generated_headers"],
       "additionalProperties": false,
       "properties": {
         "params_symbol": {
@@ -44,6 +44,30 @@
           "items": { "type": "integer", "minimum": 0 },
           "minItems": 1,
           "description": "WithCUTE(Seq(...)) 中挂载 CUTE 的 core id 列表"
+        },
+        "fpe": {
+          "type": "object",
+          "required": ["version"],
+          "additionalProperties": false,
+          "properties": {
+            "version": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "description": "CUTE 内部 FPE/计算格式版本，引用 configs/cute_fpe_versions/<version>.yaml"
+            }
+          }
+        },
+        "isa": {
+          "type": "object",
+          "required": ["version"],
+          "additionalProperties": false,
+          "properties": {
+            "version": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "description": "CUTE 内部指令集版本，引用 configs/cute_isa_versions/<version>.yaml"
+            }
+          }
         },
         "generated_headers": {
           "type": "object",
@@ -141,15 +165,8 @@
     },
     "capability": {
       "type": "object",
-      "required": ["datatypes"],
       "additionalProperties": false,
       "properties": {
-        "datatypes": {
-          "type": "array",
-          "items": { "type": "string" },
-          "minItems": 1,
-          "description": "支持的数据类型列表，如 i8i8i32, fp16fp16fp32"
-        },
         "tensor_ops": {
           "type": "array",
           "items": { "type": "string" },

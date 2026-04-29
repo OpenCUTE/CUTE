@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CUTE FPE Version",
+  "description": "CUTE 内部 FPE/计算格式版本。ChipyardConfig 通过 cute.fpe.version 引用这里定义的计算格式集合，并派生软件可见 datatype 能力。",
+  "type": "object",
+  "required": ["version", "id", "datatypes"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema 版本，当前固定为 1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "FPE version 唯一标识，如 cute_fpe_v1"
+    },
+    "description": {
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generated_header": {
+          "type": "string",
+          "description": "用于确认该 datatype set 的 generated header"
+        },
+        "scala_object": {
+          "type": "string",
+          "description": "对应的 Scala datatype 定义对象"
+        }
+      }
+    },
+    "datatypes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "该 FPE version 支持的数据类型列表"
+    }
+  }
+}
