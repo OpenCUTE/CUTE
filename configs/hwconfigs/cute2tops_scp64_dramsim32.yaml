@@ -1,0 +1,37 @@
+version: 1
+name: cute2tops_scp64_dramsim32
+tags: [cute_tensor_v1, shuttle, small]
+
+cute:
+  chipyard_config: chipyard.CUTE2TopsSCP64Config
+  generated_headers:
+    output_dir: build/hwconfigs/cute2tops_scp64_dramsim32/generated_headers
+    mode: generate_from_hwconfig
+    fingerprint: auto
+  trace_capability:
+    structured_trace: false
+    d_store_data: false
+    mem_req_rsp: false
+    perf_counter_snapshot: true
+
+soc:
+  core: shuttle
+  core_count: 1
+  sysbus_width: 64
+  membus_width: 64
+  memory:
+    model: dramsim2
+    config: dramsim2_ini_32GB_per_s
+  simulator:
+    backend: verilator
+    binary: auto
+    max_cycles: 800000000
+
+capability:
+  datatypes: [i8i8i32, fp16fp16fp32, bf16bf16fp32, tf32tf32fp32,
+              i8u8i32, u8i8i32, u8u8i32,
+              mxfp8e4m3fp32, mxfp8e5m2fp32, nvfp4fp32, mxfp4fp32,
+              fp8e4m3fp32, fp8e5m2fp32]
+  tensor_ops: [matmul, conv]
+  layer_ops: []
+  fused_ops: []
