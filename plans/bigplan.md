@@ -190,6 +190,9 @@ configs/hwconfigs/
 ├── cute4tops_scp128_dramsim48.yaml
 ├── cute4tops_shuttle512_dramsim48.yaml
 └── schemas/hwconfig.schema.json
+configs/memconfigs/dramsim2/
+├── dramsim2_ini_32GB_per_s/
+└── dramsim2_ini_48GB_per_s/
 ```
 
 示例：
@@ -215,9 +218,9 @@ soc:
   core_count: 1
   sysbus_width: 64
   membus_width: 64
-  dramsim:
-    enabled: true
-    preset: dramsim2_ini_32GB_per_s
+  memory:
+    model: dramsim2
+    config: dramsim2_ini_32GB_per_s
   simulator:
     backend: verilator
     binary: auto
@@ -289,7 +292,8 @@ build(Test.code, HWConfig):
   },
   "soc": {
     "core": "rocket",
-    "dramsim_preset": "dramsim2_ini_32GB_per_s",
+    "memory_model": "dramsim2",
+    "memory_config": "dramsim2_ini_32GB_per_s",
     "sysbus_width": 64,
     "membus_width": 64
   }

@@ -33,7 +33,8 @@ Phase 0 的目标不是跑通完整测试，而是先把三大对象的手写入
 ```
 configs/
 ├── hwconfigs/
-│   └── schemas/
+├── memconfigs/
+│   └── dramsim2/
 ├── schemas/
 ├── trace_filters/
 └── suites/
@@ -101,9 +102,9 @@ soc:
   core_count               # int
   sysbus_width             # bit (如 64)
   membus_width             # bit (如 64)
-  dramsim:
-    enabled                # bool
-    preset                 # dramsim preset 名
+  memory:
+    model                  # dramsim2 | none
+    config                 # configs/memconfigs/<model>/<config>/ 下的配置目录名
   simulator:
     backend                # verilator | vcs | fpga
     binary                 # auto | <path>
@@ -122,6 +123,7 @@ capability:                # 由 HWConfig 导出的软件可见能力
 - `name` 必填，唯一。
 - `cute.chipyard_config` 必填。
 - `soc.core` 必填，枚举 `rocket | boom | shuttle`。
+- `soc.memory` 选填；如果 `model=dramsim2`，则 `config` 必填并指向 `configs/memconfigs/dramsim2/<config>/`。
 - `capability.datatypes` 必填，至少包含一个。
 - `capability.tensor_ops` 选填，默认 `[]`。
 - `cute.trace_capability` 整体选填，默认全部 false。
@@ -147,7 +149,7 @@ configs/schemas/hwconfig.schema.json
 - Matrix_M=4, Matrix_N=4
 - outsideDataWidth=512, VectorWidth=256
 - Shuttle core, 1 core
-- DRAMSim 32GB preset
+- DRAMSim2 memory config: `configs/memconfigs/dramsim2/dramsim2_ini_32GB_per_s/`
 
 ```yaml
 version: 1
@@ -171,9 +173,9 @@ soc:
   core_count: 1
   sysbus_width: 64
   membus_width: 64
-  dramsim:
-    enabled: true
-    preset: dramsim2_ini_32GB_per_s
+  memory:
+    model: dramsim2
+    config: dramsim2_ini_32GB_per_s
   simulator:
     backend: verilator
     binary: auto
@@ -485,6 +487,10 @@ configs/schemas/trace_filter.schema.json
 # HWConfig 样板
 configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
 configs/hwconfigs/cute4tops_scp128_dramsim48.yaml  (可选)
+
+# Memory model 配置目录
+configs/memconfigs/dramsim2/dramsim2_ini_32GB_per_s/
+configs/memconfigs/dramsim2/dramsim2_ini_48GB_per_s/
 
 # Test 样板
 cute-sdk/runtime/cute_runtime/project.yaml
