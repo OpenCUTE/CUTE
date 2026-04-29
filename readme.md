@@ -1,7 +1,7 @@
 # CUTE
 CUTE is an CPU-centric and Ultra-utilized Tensor Engine project.
 
-中文说明在此。
+[中文设计文档在此](https://opencute.github.io/CUTE-Design-Doc/)。
 
 ## Documentation
 
