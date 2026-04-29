@@ -1,10 +1,11 @@
-# Phase 0 Plan: 冻结 HWConfig / Test / Trace 抽象和 Schema
+# Phase 0 Plan: 冻结 ChipyardConfig / HWConfig / Test / Trace 抽象和 Schema
 
 ## 目标
 
-Phase 0 的目标不是跑通完整测试，而是先把三大对象的手写入口定下来：
+Phase 0 的目标不是跑通完整测试，而是先把四类对象的手写入口定下来：
 
-- `HWConfig`: 由 `configs/hwconfigs/*.yaml` 描述。
+- `ChipyardConfig`: 由 `configs/chipyard_configs/*.yaml` 描述，和现有 Chipyard Scala Config class 一一对应。
+- `HWConfig`: 由 `configs/hwconfigs/*.yaml` 描述，组合 `ChipyardConfig + memory model + simulator policy`。
 - `Test`: 由 `cute-sdk/**/project.yaml` 描述。
 - `Trace`: 本阶段只做占位 schema/spec，后续专题展开。
 
@@ -18,7 +19,8 @@ Phase 0 的目标不是跑通完整测试，而是先把三大对象的手写入
 
 - 不恢复 `configs/tests/*.yaml` 作为人工维护入口。
 - `cute-sdk/**/project.yaml` 是 Test 的主真相源。
-- `generated_headers` 属于 `HWConfig`，默认输出到 `build/hwconfigs/<name>/generated_headers/`。
+- `generated_headers` 属于 `ChipyardConfig`，默认输出到 `build/chipyard_configs/<id>/generated_headers/`。
+- `HWConfig` 不手写 SoC/core/bus/capability；这些从引用的 `ChipyardConfig` 解析得到。
 - Trace 只保留边界定义：`filter`、`func model`、`perf model`，不在本阶段细化事件 schema。
 - catalog/index 如果需要，只能由工具扫描生成，不能作为人工维护真相源。
 
@@ -32,6 +34,7 @@ Phase 0 的目标不是跑通完整测试，而是先把三大对象的手写入
 
 ```
 configs/
+├── chipyard_configs/
 ├── hwconfigs/
 ├── memconfigs/
 │   └── dramsim2/
@@ -72,63 +75,107 @@ tools/perf/
 
 ---
 
-### Task 2: 定义 `hwconfig.schema.json`
+### Task 2: 定义 `chipyard_config.schema.json`
 
-#### 2.1 字段定义（与 CUTEParameters.scala 对齐）
+#### 2.1 设计边界
 
-Schema 必须与现有 `HeaderGenerator` 能提取的参数一一对应。
+`ChipyardConfig` 是现有 `CuteConfig.scala` 中一个 Scala Config class 的结构化 contract。本阶段只支持 `mode: existing_class`，不生成 Scala。
 
 字段分组：
 
 ```text
 version                    # schema 版本，固定 1
-name                       # HWConfig 唯一标识 (如 cute2tops_scp64_dramsim32)
-tags                       # 标签列表，供 Test target matcher 使用
+id                         # ChipyardConfig 唯一标识 (如 cute2tops_scp64)
+class                      # Chipyard Config 类全名 (如 chipyard.CUTE2TopsSCP64Config)
+source_file                # class 定义文件，相对 CUTE 根目录
+mode                       # existing_class
 
 cute:
-  chipyard_config          # chipyard Config 类全名 (如 chipyard.CUTE2TopsSCP64Config)
+  params_symbol            # CuteParams 符号，如 CuteParams.CUTE_2Tops_64SCP
+  instances                # WithCUTE(Seq(...)) 中挂载 CUTE 的 core id 列表
   generated_headers:
-    output_dir             # 生成头文件输出目录 (默认 build/hwconfigs/<name>/generated_headers)
-    mode                   # generate_from_hwconfig | reuse_existing
+    output_dir             # 默认 build/chipyard_configs/<id>/generated_headers
+    mode                   # generate_from_chipyard_config | reuse_existing
     fingerprint            # auto | manual:<hash>
-  trace_capability:        # RTL trace 能力声明（占位，Phase 3 细化）
+
+soc:
+  core:
+    kind                   # rocket | boom | shuttle | mixed
+    count                  # int
+    shuttle_tile_beat_bytes
+    clusters               # mixed core config 占位
+  bus:
+    system_bits            # WithSystemBusWidth
+    memory_bits            # WithNBitMemoryBus
+  cache:
+    inclusive_kb
+    outer_latency_cycles
+    banks
+    cache_hash
+    tl_monitors
+
+capability:                # 由 ChipyardConfig/CUTE params 导出的软件可见能力
+  datatypes
+  tensor_ops
+  layer_ops
+  fused_ops
+
+trace_capability:          # RTL trace 能力声明（占位，Phase 3 细化）
     structured_trace       # bool
     d_store_data           # bool
     mem_req_rsp            # bool
     perf_counter_snapshot  # bool
-
-soc:
-  core                     # rocket | boom | shuttle
-  core_count               # int
-  sysbus_width             # bit (如 64)
-  membus_width             # bit (如 64)
-  memory:
-    model                  # dramsim2 | none
-    config                 # configs/memconfigs/<model>/<config>/ 下的配置目录名
-  simulator:
-    backend                # verilator | vcs | fpga
-    binary                 # auto | <path>
-    max_cycles             # 最大仿真周期
-
-capability:                # 由 HWConfig 导出的软件可见能力
-  datatypes                # list of datatype name strings
-  tensor_ops               # list of op name strings
-  layer_ops                # list
-  fused_ops                # list
 ```
 
 #### 2.2 Schema 校验规则
 
 - `version` 必填，固定为 1。
-- `name` 必填，唯一。
-- `cute.chipyard_config` 必填。
-- `soc.core` 必填，枚举 `rocket | boom | shuttle`。
-- `soc.memory` 选填；如果 `model=dramsim2`，则 `config` 必填并指向 `configs/memconfigs/dramsim2/<config>/`。
+- `id` 必填，唯一。
+- `class` 必填，必须是现有 Scala Config class 全名。
+- `mode` 必填，本阶段固定为 `existing_class`。
+- `cute.params_symbol`、`cute.instances`、`cute.generated_headers` 必填。
+- `soc.core.kind/count`、`soc.bus.system_bits/memory_bits` 必填。
 - `capability.datatypes` 必填，至少包含一个。
-- `capability.tensor_ops` 选填，默认 `[]`。
-- `cute.trace_capability` 整体选填，默认全部 false。
 
 #### 2.3 产物
+
+```
+configs/schemas/chipyard_config.schema.json
+```
+
+---
+
+### Task 3: 定义 `hwconfig.schema.json`
+
+#### 3.1 字段定义
+
+`HWConfig` 是可运行硬件目标组合，不再手写 SoC/core/bus/capability。
+
+```text
+version                    # schema 版本，固定 1
+name                       # HWConfig 唯一标识 (如 cute2tops_scp64_dramsim32)
+tags                       # 标签列表，供 Test target matcher 使用
+chipyard_config            # 引用 configs/chipyard_configs/<id>.yaml
+
+memory:
+  model                    # dramsim2 | none
+  config                   # configs/memconfigs/<model>/<config>/ 下的配置目录名
+
+simulator:
+  backend                  # verilator | vcs | fpga
+  binary                   # auto | <path>
+  max_cycles               # 最大仿真周期
+```
+
+#### 3.2 Schema 校验规则
+
+- `version` 必填，固定为 1。
+- `name` 必填，唯一。
+- `chipyard_config` 必填，必须能解析到 `configs/chipyard_configs/<id>.yaml`。
+- `memory.model` 必填；如果 `model=dramsim2`，则 `config` 必填并指向 `configs/memconfigs/dramsim2/<config>/`。
+- `simulator.backend/binary/max_cycles` 必填。
+
+#### 3.3 产物
 
 ```
 configs/schemas/hwconfig.schema.json
@@ -136,50 +183,44 @@ configs/schemas/hwconfig.schema.json
 
 ---
 
-### Task 3: 创建样板 `hwconfig.yaml`
+### Task 3.5: 创建样板 `chipyard_config.yaml` 和 `hwconfig.yaml`
 
 基于现有 CUTE 代码库中的实际配置创建。
 
-#### 3.1 `cute2tops_scp64_dramsim32.yaml`
+#### 3.5.1 `cute2tops_scp64.yaml`
 
-这个配置对应 `chipyard.CUTE2TopsSCP64Config`，是当前默认配置。
+这个配置对应 `chipyard.CUTE2TopsSCP64Config`，是当前默认 Chipyard Config contract。
 
 参数来源（从 `validation.h.generated` 确认）：
 - Tensor_M=64, Tensor_N=64, Tensor_K=64
 - Matrix_M=4, Matrix_N=4
 - outsideDataWidth=512, VectorWidth=256
-- Shuttle core, 1 core
-- DRAMSim2 memory config: `configs/memconfigs/dramsim2/dramsim2_ini_32GB_per_s/`
+- Shuttle core, 1 core, `WithShuttleTileBeatBytes(64)`
+- `WithSystemBusWidth(512)`、`WithNBitMemoryBus(512)`
 
 ```yaml
 version: 1
-name: cute2tops_scp64_dramsim32
-tags: [cute_tensor_v1, shuttle, small]
+id: cute2tops_scp64
+class: chipyard.CUTE2TopsSCP64Config
+source_file: chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
+mode: existing_class
 
 cute:
-  chipyard_config: chipyard.CUTE2TopsSCP64Config
+  params_symbol: CuteParams.CUTE_2Tops_64SCP
+  instances: [0]
   generated_headers:
-    output_dir: build/hwconfigs/cute2tops_scp64_dramsim32/generated_headers
-    mode: generate_from_hwconfig
+    output_dir: build/chipyard_configs/cute2tops_scp64/generated_headers
+    mode: generate_from_chipyard_config
     fingerprint: auto
-  trace_capability:
-    structured_trace: false
-    d_store_data: false
-    mem_req_rsp: false
-    perf_counter_snapshot: true
 
 soc:
-  core: shuttle
-  core_count: 1
-  sysbus_width: 64
-  membus_width: 64
-  memory:
-    model: dramsim2
-    config: dramsim2_ini_32GB_per_s
-  simulator:
-    backend: verilator
-    binary: auto
-    max_cycles: 800000000
+  core:
+    kind: shuttle
+    count: 1
+    shuttle_tile_beat_bytes: 64
+  bus:
+    system_bits: 512
+    memory_bits: 512
 
 capability:
   datatypes: [i8i8i32, fp16fp16fp32, bf16bf16fp32, tf32tf32fp32,
@@ -191,13 +232,34 @@ capability:
   fused_ops: []
 ```
 
-#### 3.2 `cute4tops_scp128_dramsim48.yaml`（可选，第二配置）
+#### 3.5.2 `cute2tops_scp64_dramsim32.yaml`
 
-对应 `chipyard.CUTE4TopsSCP128Config`，Tensor_M=128。
+```yaml
+version: 1
+name: cute2tops_scp64_dramsim32
+tags: [cute_tensor_v1, shuttle, small]
 
-#### 3.3 产物
+chipyard_config: cute2tops_scp64
+
+memory:
+  model: dramsim2
+  config: dramsim2_ini_32GB_per_s
+
+simulator:
+  backend: verilator
+  binary: auto
+  max_cycles: 800000000
+```
+
+#### 3.5.3 `cute4tops_scp128` / `cute4tops_scp128_dramsim48`（可选，第二配置）
+
+对应 `chipyard.CUTE4TopsSCP128Config`，Tensor_M=128，HWConfig 绑定 `dramsim2_ini_48GB_per_s`。
+
+#### 3.5.4 产物
 
 ```
+configs/chipyard_configs/cute2tops_scp64.yaml
+configs/chipyard_configs/cute4tops_scp128.yaml  (可选)
 configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
 configs/hwconfigs/cute4tops_scp128_dramsim48.yaml  (可选)
 ```
@@ -429,27 +491,65 @@ configs/trace_filters/perf_task_stage.yaml
 ```text
 Usage:
   tools/runner/cute-check-config.py --hwconfig <path>
-    校验单个 hwconfig yaml 是否符合 schema
+    校验单个 hwconfig yaml 是否符合 schema，
+    并检查 chipyard_config 引用和 memory config 目录是否存在
+
+  tools/runner/cute-check-config.py --chipyard-config <path>
+    校验单个 chipyard_config yaml 是否符合 schema，
+    并检查 id/class/source_file 与现有 CuteConfig.scala contract 是否一致
 
   tools/runner/cute-check-config.py --project <path>
     校验单个 project.yaml 是否符合 schema
 
   tools/runner/cute-check-config.py --hwconfig <path> --project <path>
-    校验两者，并判断 Test.target 是否匹配 HWConfig
+    校验两者，解析 HWConfig 引用的 ChipyardConfig，
+    并判断 Test.target 是否匹配 resolved HWConfig
 
   tools/runner/cute-check-config.py --scan
-    扫描 configs/hwconfigs/ 和 cute-sdk/**/project.yaml，
+    扫描 configs/chipyard_configs/、configs/hwconfigs/ 和 cute-sdk/**/project.yaml，
     输出所有 project × hwconfig 的 target 匹配矩阵
 ```
 
-#### 7.2 Target 匹配逻辑
+#### 7.2 引用解析逻辑
+
+```text
+解析步骤：
+  1. 读取 HWConfig.chipyard_config = <id>
+  2. 加载 configs/chipyard_configs/<id>.yaml
+  3. 如果 HWConfig.memory.model = dramsim2，
+     检查 configs/memconfigs/dramsim2/<config>/system.ini 等必要文件存在
+  4. 形成 resolved HWConfig:
+     tags 来自 HWConfig
+     capability / trace_capability / generated_headers / soc 来自 ChipyardConfig
+     memory / simulator 来自 HWConfig
+```
+
+#### 7.3 ChipyardConfig contract 检查（Phase 0 TODO）
+
+本阶段脚本只做静态检查，不编译、不生成 Verilog。需要预留以下检查：
+
+```text
+existing_class 检查：
+  1. source_file 存在
+  2. class 能在 source_file 中找到 class <Name> extends Config
+  3. cute.params_symbol 能在该 class 的 WithCuteCoustomParams(...) 中找到
+  4. cute.instances 与 WithCUTE(Seq(...)) 一致
+  5. soc.bus.system_bits 与 WithSystemBusWidth(...) 一致
+  6. soc.bus.memory_bits 与 WithNBitMemoryBus(...) 一致
+  7. soc.core.kind/count 与 WithNShuttleCores / WithNSmallBooms / WithNSmallCores 等片段一致
+  8. cache 字段与 WithInclusiveCache / WithNBanks / WithCacheHash / WithoutTLMonitors 一致
+```
+
+后续可选增强：调用 `HeaderGenerator`/参数 extractor 生成临时 headers，确认 `capability.datatypes` 和 CUTE 参数确实来自真实 Config。
+
+#### 7.4 Target 匹配逻辑
 
 ```text
 匹配条件（全部满足才为 MATCH）：
   1. HWConfig.tags 与 project.target.hwconfigs.include_tags 有交集
   2. HWConfig.tags 与 project.target.hwconfigs.exclude_tags 无交集
-  3. HWConfig.capability.datatypes ⊇ project.target.required_capability.datatypes
-  4. HWConfig.capability.tensor_ops ⊇ project.target.required_capability.tensor_ops
+  3. resolved ChipyardConfig.capability.datatypes ⊇ project.target.required_capability.datatypes
+  4. resolved ChipyardConfig.capability.tensor_ops ⊇ project.target.required_capability.tensor_ops
 
 输出:
   MATCH        — 全部满足
@@ -457,18 +557,18 @@ Usage:
   CAP_MISS     — capability 不满足，列出缺失项
 ```
 
-#### 7.3 Trace Level 检查
+#### 7.5 Trace Level 检查
 
 读取 `trace/format_spec.md` 中定义的占位 level 名称集合，检查 `project.trace.required_func_level` 是否在集合内。输出 `TRACE_LEVEL_KNOWN` 或 `TRACE_LEVEL_UNKNOWN`。
 
-#### 7.4 依赖
+#### 7.6 依赖
 
 - Python 3.8+
 - `jsonschema` (pip)
 - `pyyaml` (pip)
 - 无其他外部依赖
 
-#### 7.5 产物
+#### 7.7 产物
 
 ```
 tools/runner/cute-check-config.py
@@ -480,9 +580,14 @@ tools/runner/cute-check-config.py
 
 ```text
 # Schema
+configs/schemas/chipyard_config.schema.json
 configs/schemas/hwconfig.schema.json
 configs/schemas/project.schema.json
 configs/schemas/trace_filter.schema.json
+
+# ChipyardConfig 样板
+configs/chipyard_configs/cute2tops_scp64.yaml
+configs/chipyard_configs/cute4tops_scp128.yaml  (可选)
 
 # HWConfig 样板
 configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
@@ -513,12 +618,13 @@ tools/runner/cute-check-config.py
 
 ## 验收标准
 
+- [ ] `cute-check-config.py --chipyard-config configs/chipyard_configs/cute2tops_scp64.yaml` 通过校验
 - [ ] `cute-check-config.py --hwconfig configs/hwconfigs/cute2tops_scp64_dramsim32.yaml` 通过校验
 - [ ] `cute-check-config.py --project cute-sdk/runtime/cute_runtime/project.yaml` 通过校验
 - [ ] `cute-check-config.py --project cute-sdk/tensor_ops/matmul/project.yaml` 通过校验
 - [ ] `cute-check-config.py --hwconfig <hw> --project <proj>` 输出 MATCH 且理由正确
 - [ ] `cute-check-config.py --scan` 输出 project × hwconfig 匹配矩阵
-- [ ] `HWConfig` 和 `project.yaml` 的字段边界清楚，人工字段和自动生成字段有文档区分
+- [ ] `HWConfig`、`ChipyardConfig` 和 `project.yaml` 的字段边界清楚，人工字段和自动生成字段有文档区分
 - [ ] Trace level 名称（F0-F5）已作为占位冻结，但具体 event schema 未承诺
 - [ ] 文档明确：`configs/tests` 不作为人工维护入口
 
@@ -542,7 +648,7 @@ tools/runner/cute-check-config.py
 | Schema 过早复杂化 | 本阶段只保留 Phase 1/2 需要的字段；不确定的字段用 `*_TODO` 标注或直接省略 |
 | Trace 过早展开 | 只做占位；level 名称冻结但内容为空 |
 | project.yaml 过于自由 | schema 约束最小必填字段，variant 内部允许自由键值对 |
-| HWConfig 字段与 CUTEParameters 不对齐 | `hwconfig.yaml` 的 `capability` 字段从 `validation.h.generated` 实际值推导，不从记忆中猜测 |
+| HWConfig 字段与 CUTEParameters 不对齐 | HWConfig 不承载 CUTE 参数；`ChipyardConfig` contract 后续由 `cute-check-config.py` 对齐 `CuteConfig.scala` 和 generated headers |
 
 ---
 
@@ -550,7 +656,8 @@ tools/runner/cute-check-config.py
 
 Phase 0 完成后，Phase 1 可以直接：
 
-1. 读取 `configs/hwconfigs/cute2tops_scp64_dramsim32.yaml` 中的 `cute.chipyard_config` 调用 `generate-headers.sh`。
-2. 读取 `cute-sdk/runtime/cute_runtime/project.yaml` 知道 entry file 和 target。
-3. 用 `cute-check-config.py` 确认 target match 后进入 build/run 流程。
-4. 在 artifact 中保存 `hwconfig.resolved.yaml` 和 `target_match.json`。
+1. 读取 `configs/hwconfigs/cute2tops_scp64_dramsim32.yaml` 中的 `chipyard_config`，解析到 `configs/chipyard_configs/cute2tops_scp64.yaml`。
+2. 使用 `ChipyardConfig.class` 调用 `generate-headers.sh`。
+3. 读取 `cute-sdk/runtime/cute_runtime/project.yaml` 知道 entry file 和 target。
+4. 用 `cute-check-config.py` 确认 target match 后进入 build/run 流程。
+5. 在 artifact 中保存 `hwconfig.resolved.yaml` 和 `target_match.json`。

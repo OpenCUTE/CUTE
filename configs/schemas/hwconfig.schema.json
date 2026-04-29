@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CUTE HWConfig",
-  "description": "硬件配置描述，定义一颗仿真芯片的全部参数和能力",
+  "description": "可运行硬件目标组合。HWConfig 引用 ChipyardConfig，并绑定 memory model 与 simulator policy。",
   "type": "object",
-  "required": ["version", "name", "cute", "soc", "capability"],
+  "required": ["version", "name", "chipyard_config", "memory", "simulator"],
   "additionalProperties": false,
   "properties": {
     "version": {
@@ -21,154 +21,63 @@
       "items": { "type": "string" },
       "description": "标签列表，供 project.target matcher 使用"
     },
-
-    "cute": {
-      "type": "object",
-      "required": ["chipyard_config"],
-      "additionalProperties": false,
-      "properties": {
-        "chipyard_config": {
-          "type": "string",
-          "description": "chipyard Config 类全名，如 chipyard.CUTE2TopsSCP64Config"
-        },
-        "generated_headers": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "output_dir": {
-              "type": "string",
-              "description": "生成头文件输出目录，默认 build/hwconfigs/<name>/generated_headers"
-            },
-            "mode": {
-              "type": "string",
-              "enum": ["generate_from_hwconfig", "reuse_existing"],
-              "description": "generate_from_hwconfig: 从 chipyard 生成; reuse_existing: 复用已有头文件"
-            },
-            "fingerprint": {
-              "type": "string",
-              "pattern": "^(auto|manual:.+)$",
-              "description": "auto: 自动计算; manual:<hash>: 手动指定"
-            }
-          }
-        },
-        "trace_capability": {
-          "type": "object",
-          "additionalProperties": false,
-          "description": "RTL trace 能力声明（占位，Phase 3 细化），默认全部 false",
-          "properties": {
-            "structured_trace":      { "type": "boolean" },
-            "d_store_data":          { "type": "boolean" },
-            "mem_req_rsp":           { "type": "boolean" },
-            "perf_counter_snapshot": { "type": "boolean" }
-          }
-        }
-      }
+    "chipyard_config": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "引用 configs/chipyard_configs/<id>.yaml"
     },
-
-    "soc": {
+    "memory": {
       "type": "object",
-      "required": ["core"],
+      "required": ["model"],
+      "additionalProperties": false,
+      "description": "内存模型配置引用。model=configs/memconfigs/<model>/，config 为其下的配置目录名。",
+      "properties": {
+        "model": {
+          "type": "string",
+          "enum": ["dramsim2", "none"],
+          "description": "内存模型类型。dramsim2 表示使用 configs/memconfigs/dramsim2/<config>/。"
+        },
+        "config": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "description": "内存模型配置目录名，如 dramsim2_ini_32GB_per_s"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "model": { "const": "dramsim2" } },
+            "required": ["model"]
+          },
+          "then": { "required": ["config"] }
+        },
+        {
+          "if": {
+            "properties": { "model": { "const": "none" } },
+            "required": ["model"]
+          },
+          "then": { "not": { "required": ["config"] } }
+        }
+      ]
+    },
+    "simulator": {
+      "type": "object",
+      "required": ["backend", "binary", "max_cycles"],
       "additionalProperties": false,
       "properties": {
-        "core": {
+        "backend": {
           "type": "string",
-          "enum": ["rocket", "boom", "shuttle"],
-          "description": "处理器核心类型"
+          "enum": ["verilator", "vcs", "fpga"],
+          "description": "仿真后端"
         },
-        "core_count": {
+        "binary": {
+          "type": "string",
+          "description": "auto: 自动查找; 或指定路径"
+        },
+        "max_cycles": {
           "type": "integer",
           "minimum": 1,
-          "description": "核心数量"
-        },
-        "sysbus_width": {
-          "type": "integer",
-          "description": "系统总线宽度 (bit)"
-        },
-        "membus_width": {
-          "type": "integer",
-          "description": "内存总线宽度 (bit)"
-        },
-        "memory": {
-          "type": "object",
-          "required": ["model"],
-          "additionalProperties": false,
-          "description": "内存模型配置引用。model=configs/memconfigs/<model>/，config 为其下的配置目录名。",
-          "properties": {
-            "model": {
-              "type": "string",
-              "enum": ["dramsim2", "none"],
-              "description": "内存模型类型。dramsim2 表示使用 configs/memconfigs/dramsim2/<config>/。"
-            },
-            "config": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9_.-]+$",
-              "description": "内存模型配置目录名，如 dramsim2_ini_32GB_per_s"
-            }
-          },
-          "allOf": [
-            {
-              "if": {
-                "properties": { "model": { "const": "dramsim2" } },
-                "required": ["model"]
-              },
-              "then": { "required": ["config"] }
-            },
-            {
-              "if": {
-                "properties": { "model": { "const": "none" } },
-                "required": ["model"]
-              },
-              "then": { "not": { "required": ["config"] } }
-            }
-          ]
-        },
-        "simulator": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "backend": {
-              "type": "string",
-              "enum": ["verilator", "vcs", "fpga"],
-              "description": "仿真后端"
-            },
-            "binary": {
-              "type": "string",
-              "description": "auto: 自动查找; 或指定路径"
-            },
-            "max_cycles": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "最大仿真周期数"
-            }
-          }
-        }
-      }
-    },
-
-    "capability": {
-      "type": "object",
-      "required": ["datatypes"],
-      "additionalProperties": false,
-      "properties": {
-        "datatypes": {
-          "type": "array",
-          "items": { "type": "string" },
-          "minItems": 1,
-          "description": "支持的数据类型列表，如 i8i8i32, fp16fp16fp32"
-        },
-        "tensor_ops": {
-          "type": "array",
-          "items": { "type": "string" },
-          "default": [],
-          "description": "支持的 tensor 操作列表"
-        },
-        "layer_ops": {
-          "type": "array",
-          "items": { "type": "string" }
-        },
-        "fused_ops": {
-          "type": "array",
-          "items": { "type": "string" }
+          "description": "最大仿真周期数"
         }
       }
     }

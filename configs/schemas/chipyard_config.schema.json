@@ -1,0 +1,181 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CUTE ChipyardConfig",
+  "description": "现有 Chipyard Scala Config class 的结构化 contract。Phase 0 只描述 existing_class，不生成 Scala。",
+  "type": "object",
+  "required": ["version", "id", "class", "source_file", "mode", "cute", "soc", "capability"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema 版本，当前固定为 1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "ChipyardConfig 唯一标识，如 cute2tops_scp64"
+    },
+    "class": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.]*$",
+      "description": "Chipyard Config 类全名，如 chipyard.CUTE2TopsSCP64Config"
+    },
+    "source_file": {
+      "type": "string",
+      "description": "定义该 class 的源码路径，相对 CUTE 根目录"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["existing_class"],
+      "description": "Phase 0 只允许引用现有 Scala Config class"
+    },
+    "cute": {
+      "type": "object",
+      "required": ["params_symbol", "instances", "generated_headers"],
+      "additionalProperties": false,
+      "properties": {
+        "params_symbol": {
+          "type": "string",
+          "description": "CuteParams 符号，如 CuteParams.CUTE_2Tops_64SCP"
+        },
+        "instances": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0 },
+          "minItems": 1,
+          "description": "WithCUTE(Seq(...)) 中挂载 CUTE 的 core id 列表"
+        },
+        "generated_headers": {
+          "type": "object",
+          "required": ["output_dir", "mode", "fingerprint"],
+          "additionalProperties": false,
+          "properties": {
+            "output_dir": {
+              "type": "string",
+              "description": "生成头文件输出目录，默认 build/chipyard_configs/<id>/generated_headers"
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["generate_from_chipyard_config", "reuse_existing"],
+              "description": "generate_from_chipyard_config: 从现有 Chipyard Config 生成; reuse_existing: 复用已有头文件"
+            },
+            "fingerprint": {
+              "type": "string",
+              "pattern": "^(auto|manual:.+)$",
+              "description": "auto: 自动计算; manual:<hash>: 手动指定"
+            }
+          }
+        }
+      }
+    },
+    "soc": {
+      "type": "object",
+      "required": ["core", "bus"],
+      "additionalProperties": false,
+      "properties": {
+        "core": {
+          "type": "object",
+          "required": ["kind", "count"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["rocket", "boom", "shuttle", "mixed"],
+              "description": "处理器核心类型"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "核心数量"
+            },
+            "shuttle_tile_beat_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "WithShuttleTileBeatBytes 参数"
+            },
+            "clusters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["kind", "count"],
+                "additionalProperties": false,
+                "properties": {
+                  "kind": { "type": "string", "enum": ["rocket", "boom", "shuttle"] },
+                  "count": { "type": "integer", "minimum": 1 },
+                  "variant": { "type": "string" }
+                }
+              },
+              "description": "mixed core config 的核心组成，占位字段"
+            }
+          }
+        },
+        "bus": {
+          "type": "object",
+          "required": ["system_bits", "memory_bits"],
+          "additionalProperties": false,
+          "properties": {
+            "system_bits": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "WithSystemBusWidth 参数，bit"
+            },
+            "memory_bits": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "WithNBitMemoryBus 参数，bit"
+            }
+          }
+        },
+        "cache": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "inclusive_kb": { "type": "integer", "minimum": 1 },
+            "outer_latency_cycles": { "type": "integer", "minimum": 0 },
+            "banks": { "type": "integer", "minimum": 1 },
+            "cache_hash": { "type": "boolean" },
+            "tl_monitors": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "required": ["datatypes"],
+      "additionalProperties": false,
+      "properties": {
+        "datatypes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "支持的数据类型列表，如 i8i8i32, fp16fp16fp32"
+        },
+        "tensor_ops": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "支持的 tensor 操作列表"
+        },
+        "layer_ops": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "fused_ops": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "trace_capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "RTL trace 能力声明（占位，Phase 3 细化），默认全部 false",
+      "properties": {
+        "structured_trace": { "type": "boolean" },
+        "d_store_data": { "type": "boolean" },
+        "mem_req_rsp": { "type": "boolean" },
+        "perf_counter_snapshot": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -167,70 +167,84 @@ Trace
 
 ### 2.1 HWConfig 不等于 CUTE Config
 
-当前已有 `HeaderGenerator` 能从 Chipyard Config 提取 `CuteParams`，这只覆盖了 `HWConfig.CUTE` 的一部分。新的 `HWConfig` 还必须包含 SoC 层配置。
+当前已有 `HeaderGenerator` 能从 Chipyard Config 提取 `CuteParams`。为了避免在 HWConfig 中手抄 SoC/core/bus 字段，配置拆成两层：
 
 建议区分：
 
 | 层级 | 示例 | 作用 |
 |---|---|---|
-| `HWConfig.CUTE` | `Tensor_M/N/K`、`ReduceWidthByte`、FPE、scale layout、instruction field | 决定 CUTE 本体 capability |
-| `HWConfig.SOC.Chipyard` | `chipyard.CUTE2TopsSCP64Config` | 决定 SoC 集成形态 |
-| `HWConfig.SOC.Core` | Rocket / BOOM / Shuttle / core count | 决定 host 侧行为和软件运行环境 |
-| `HWConfig.SOC.BusMem` | sysbus/membus/cache/L2 width | 决定访存路径和性能解释 |
-| `HWConfig.SOC.DRAMSim` | `dramsim2_ini_32GB_per_s` | 决定 memory profile |
-| `HWConfig.SOC.Sim` | Verilator binary、max cycles、wave/trace mode | 决定 run policy |
+| `ChipyardConfig.CUTE` | `Tensor_M/N/K`、`ReduceWidthByte`、FPE、scale layout、instruction field | 决定 CUTE 本体 capability |
+| `ChipyardConfig.SOC` | `chipyard.CUTE2TopsSCP64Config`、core、bus、cache | 决定 SoC 集成形态和软件可见能力 |
+| `HWConfig.memory` | `dramsim2_ini_32GB_per_s` | 决定 memory model 配置 |
+| `HWConfig.simulator` | Verilator binary、max cycles、wave/trace mode | 决定 run policy |
 
-### 2.2 HWConfig Manifest
+### 2.2 ChipyardConfig / HWConfig Manifest
 
 建议新增：
 
 ```text
+configs/chipyard_configs/
+├── cute2tops_scp64.yaml
+└── cute4tops_scp128.yaml
 configs/hwconfigs/
 ├── cute2tops_scp64_dramsim32.yaml
 ├── cute4tops_scp128_dramsim48.yaml
-├── cute4tops_shuttle512_dramsim48.yaml
-└── schemas/hwconfig.schema.json
+└── cute4tops_shuttle512_dramsim48.yaml
 configs/memconfigs/dramsim2/
 ├── dramsim2_ini_32GB_per_s/
 └── dramsim2_ini_48GB_per_s/
 ```
 
-示例：
+ChipyardConfig 示例：
 
 ```yaml
 version: 1
-name: cute2tops_scp64_dramsim32
+id: cute2tops_scp64
+class: chipyard.CUTE2TopsSCP64Config
+source_file: chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
+mode: existing_class
 
 cute:
-  chipyard_config: chipyard.CUTE2TopsSCP64Config
+  params_symbol: CuteParams.CUTE_2Tops_64SCP
+  instances: [0]
   generated_headers:
-    output_dir: build/hwconfigs/cute2tops_scp64_dramsim32/generated_headers
-    mode: generate_from_hwconfig
+    output_dir: build/chipyard_configs/cute2tops_scp64/generated_headers
+    mode: generate_from_chipyard_config
     fingerprint: auto
-  trace_capability:
-    structured_trace: true
-    d_store_data: true
-    mem_req_rsp: true
-    perf_counter_snapshot: true
 
 soc:
-  core: rocket
-  core_count: 1
-  sysbus_width: 64
-  membus_width: 64
-  memory:
-    model: dramsim2
-    config: dramsim2_ini_32GB_per_s
-  simulator:
-    backend: verilator
-    binary: auto
-    max_cycles: 800000000
+  core:
+    kind: shuttle
+    count: 1
+    shuttle_tile_beat_bytes: 64
+  bus:
+    system_bits: 512
+    memory_bits: 512
 
 capability:
   datatypes: [i8i8i32, fp16fp16fp32, mxfp8e4m3, nvfp4]
   tensor_ops: [matmul]
   layer_ops: []
   fused_ops: []
+```
+
+HWConfig 示例：
+
+```yaml
+version: 1
+name: cute2tops_scp64_dramsim32
+tags: [cute_tensor_v1, shuttle, small]
+
+chipyard_config: cute2tops_scp64
+
+memory:
+  model: dramsim2
+  config: dramsim2_ini_32GB_per_s
+
+simulator:
+  backend: verilator
+  binary: auto
+  max_cycles: 800000000
 ```
 
 ### 2.3 Generated Headers 与 Capability 导出
@@ -240,14 +254,14 @@ capability:
 ```text
 Chipyard Config
   -> HeaderGenerator.extractParamsFromConfig
-  -> HWConfig.generated_headers/*.generated
+  -> ChipyardConfig.generated_headers/*.generated
 ```
 
 需要增强为：
 
 ```text
-HWConfig
-  -> generated C headers under this HWConfig
+ChipyardConfig
+  -> generated C headers under this ChipyardConfig
   -> generated capability json
   -> generated software constraints
 ```
@@ -255,8 +269,8 @@ HWConfig
 建议生成：
 
 ```text
-build/hwconfigs/<hwconfig-name>/
-├── hwconfig.resolved.yaml
+build/chipyard_configs/<chipyard-config-id>/
+├── chipyard_config.resolved.yaml
 ├── cute_params.json
 ├── capability.json
 ├── header_fingerprint.txt
@@ -268,12 +282,12 @@ build/hwconfigs/<hwconfig-name>/
     └── cute_layout.h.generated
 ```
 
-`generated_headers` 应被视为 `HWConfig` 的固化产物，而不是 `Test` 或 `cute-sdk/runtime` 的全局状态。`Test.code` 编译时只通过 include path 引用当前匹配 `HWConfig` 的 generated headers：
+`generated_headers` 应被视为 `ChipyardConfig` 的固化产物，而不是 `Test` 或 `cute-sdk/runtime` 的全局状态。`Test.code` 编译时只通过 include path 引用当前匹配 `HWConfig` 解析出的 `ChipyardConfig` headers：
 
 ```text
 build(Test.code, HWConfig):
   -I cute-sdk/include
-  -I build/hwconfigs/<hwconfig-name>/generated_headers
+  -I build/chipyard_configs/<chipyard-config-id>/generated_headers
 ```
 
 这样可以避免“用 A 配置生成的 header 编译，却在 B 配置 simulator 上运行”的隐式错配。`cute-sdk/include` 只放稳定 runtime wrapper 和手写公共头；`.generated` 文件默认不再作为全局共享输入。
@@ -681,7 +695,8 @@ Runner 不定义测试语义，也不定义硬件语义；它只做编排：
 ```text
 给定 HWConfig + cute-sdk project + variant + Trace.filter
   -> 检查 target 是否匹配
-  -> 准备 HWConfig.generated_headers
+  -> 解析 HWConfig.chipyard_config
+  -> 准备 ChipyardConfig.generated_headers
   -> 编译 Test.code
   -> 选择 simulator
   -> 运行
@@ -760,6 +775,7 @@ Artifact 建议满足两个原则：
 build/cute-runs/<run-id>/
 ├── hwconfig/
 │   ├── hwconfig.resolved.yaml
+│   ├── chipyard_config.resolved.yaml
 │   ├── capability.json
 │   ├── header_fingerprint.txt
 │   └── generated_headers/
@@ -891,6 +907,7 @@ CUTE/
 - `cute-sdk/` 只放**编译后跑在 RISC-V 上**的东西：C 头文件、op lib、test driver。
 - `tools/` 只放**运行在 host 上**的东西：Python 脚本、trace parser、golden generator、runner。
 - `configs/` 是纯声明式配置，不属于任何一侧。
+- `configs/chipyard_configs` 承载 `ChipyardConfig`。
 - `configs/hwconfigs` 承载 `HWConfig`。
 - `cute-sdk/**/project.yaml` 承载 `Test`。
 - `configs/trace_filters` 承载可复用 `Trace.filter`。
@@ -1032,7 +1049,9 @@ CUTE/
 第一批不要追求全量，只追求抽象闭环。
 
 ```text
-# HWConfig
+# ChipyardConfig / HWConfig
+configs/chipyard_configs/cute2tops_scp64.yaml
+configs/schemas/chipyard_config.schema.json
 configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
 configs/schemas/hwconfig.schema.json
 

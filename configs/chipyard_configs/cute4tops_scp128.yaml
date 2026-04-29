@@ -1,0 +1,43 @@
+version: 1
+id: cute4tops_scp128
+class: chipyard.CUTE4TopsSCP128Config
+source_file: chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
+mode: existing_class
+
+cute:
+  params_symbol: CuteParams.CUTE_4Tops_128SCP
+  instances: [0]
+  generated_headers:
+    output_dir: build/chipyard_configs/cute4tops_scp128/generated_headers
+    mode: generate_from_chipyard_config
+    fingerprint: auto
+
+soc:
+  core:
+    kind: shuttle
+    count: 1
+    shuttle_tile_beat_bytes: 64
+  bus:
+    system_bits: 512
+    memory_bits: 512
+  cache:
+    inclusive_kb: 512
+    outer_latency_cycles: 40
+    banks: 4
+    cache_hash: true
+    tl_monitors: false
+
+capability:
+  datatypes: [i8i8i32, fp16fp16fp32, bf16bf16fp32, tf32tf32fp32,
+              i8u8i32, u8i8i32, u8u8i32,
+              mxfp8e4m3fp32, mxfp8e5m2fp32, nvfp4fp32, mxfp4fp32,
+              fp8e4m3fp32, fp8e5m2fp32]
+  tensor_ops: [matmul, conv]
+  layer_ops: []
+  fused_ops: []
+
+trace_capability:
+  structured_trace: false
+  d_store_data: false
+  mem_req_rsp: false
+  perf_counter_snapshot: true
