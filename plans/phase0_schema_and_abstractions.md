@@ -32,6 +32,34 @@ Phase 0 的目标不是跑通完整测试，而是先把核心对象的入口和
 - Trace 只保留边界定义：`filter`、`func model`、`perf model`，不在本阶段细化事件 schema。
 - catalog/index 如果需要，只能由工具扫描生成，不能作为人工维护真相源。
 
+### Config manifest 的定位
+
+这些 YAML manifest 不是为了复制 Chipyard Config 里的硬件参数。它们保留的价值在于给软件侧、runner 和 CI 一个稳定的协作契约：
+
+- 稳定入口：用 `cute2tops_scp64` 这样的 id 绑定 Chipyard Config class、生成产物目录和 HWConfig 引用。
+- 软件 compatibility contract：用 `CUTEFPEVersion`、`CUTEISAVersion`、`VectorVersion` 表达软件/测试可见的版本和能力集合，而不是让 test 直接匹配 Scala mixin 或参数细节。
+- 运行组合：`HWConfig` 负责组合 `ChipyardConfig + memory model + simulator policy + tags`，这些不完全属于 Chipyard Config。
+- target matcher：`project.yaml` 可以用 datatype、instruction、vector version、trace/capability 标签判断能否运行。
+- 漂移检查：后续 Chipyard exporter 导出真实 facts 后，manifest 声明必须和 exporter facts、generated header fingerprint 对齐。
+
+因此长期分层是：
+
+```text
+manifest YAML                 # 软件协作契约、稳定入口、target matcher 输入
+Chipyard exporter facts        # 硬件/Scala Config 实例化后的结构事实
+generated headers/fingerprint  # 编译输入和 header 生成结果
+```
+
+Phase 0 checker 只检查 manifest 自洽；强一致性 checker 在 exporter 可用后比较：
+
+```text
+CUTEFPEVersion.datatypes        vs exporter.datatypes
+CUTEISAVersion.groups.*         vs exporter.instructions
+VectorVersion.version/features  vs exporter.soc.vector
+ChipyardConfig.compatibility.*  vs exporter 支持的 compatibility facts
+generated header fingerprint    vs exporter/header generation 输出
+```
+
 ---
 
 ## 任务拆解
@@ -185,8 +213,7 @@ version                    # schema 版本，固定 1
 id                         # FPE version id，如 cute_fpe_v1
 description                # 说明
 source:
-  generated_header         # 如 cutetest/include/datatype.h.generated；后续生成产物路径元数据，Phase 0 checker 不读取
-  scala_object             # 如 cute.ElementDataType
+  scala_object             # 如 cute.ElementDataType；metadata/exporter 线索，Phase 0 checker 不读取
 datatypes                  # datatype name strings
 ```
 
@@ -201,16 +228,15 @@ configs/cute_fpe_versions/cute_fpe_v1.yaml
 
 ### Task 2.6: 定义 `cute_isa_version.schema.json`
 
-`CUTEISAVersion` 用于描述 CUTE/YGJK 内部支持的指令集版本，避免每个 `ChipyardConfig` 重复维护 instruction set。该对象必须和 `CUTEParameters.scala` 中的 `CuteInstConfigs`、`YGJKInstConfigs` 对齐。
+`CUTEISAVersion` 用于描述 CUTE/YGJK 内部支持的指令集版本，避免每个 `ChipyardConfig` 重复维护 instruction set。该对象最终必须和 Chipyard exporter 从 `CuteInstConfigs`、`YGJKInstConfigs` 导出的 facts 对齐；Phase 0 checker 不直接读取 Scala 源码。
 
 ```text
 version                    # schema 版本，固定 1
 id                         # ISA version id，如 cute_isa_v1
 description                # 说明
 source:
-  scala_file               # 如 src/main/scala/CUTEParameters.scala
-  scala_objects            # cute.CuteInstConfigs / cute.YGJKInstConfigs
-  generated_header         # 如 cutetest/include/instruction.h.generated；后续生成产物路径元数据，Phase 0 checker 不读取
+  scala_file               # 如 src/main/scala/CUTEParameters.scala；metadata/exporter 线索，Phase 0 checker 不读取
+  scala_objects            # cute.CuteInstConfigs / cute.YGJKInstConfigs；metadata/exporter 线索
 rocc:
   opcode                   # RoCC opcode，当前为 0x0B
   cute_internal_offset     # CUTE internal 指令映射到 RoCC funct 时的 offset，当前为 64
@@ -234,6 +260,9 @@ configs/schemas/cute_isa_version.schema.json
 configs/cute_isa_versions/cute_isa_v1.yaml
 ```
 
+FPE/ISA version manifest 不记录 generated header 路径。header 产物属于具体 `ChipyardConfig.export.generated_headers.output_dir`；强一致性阶段如果需要比较 header fingerprint，应从 Chipyard exporter/header generation 产物中定位，而不是让 version manifest 再维护一份 header 名称。
+
+
 ---
 
 ### Task 2.7: 定义 `vector_version.schema.json`
@@ -246,9 +275,9 @@ id                         # Vector version id；none 是合法且真实的 id
 description                # 说明
 kind                       # none | rvv | custom
 source:
-  generator_path           # 如 chipyard/generators/saturn
-  scala_files              # 定义向量实现/mixin 的 Scala 文件
-  scala_mixins             # 启用该向量实现的 Config mixin
+  generator_path           # 如 chipyard/generators/saturn；metadata/exporter 线索
+  scala_files              # 定义向量实现/mixin 的 Scala 文件；Phase 0 只做路径检查，不解析内容
+  scala_mixins             # 启用该向量实现的 Config mixin；Phase 0 只检查字段格式
   docs                     # 本地文档
   tests                    # 可用于确认能力的测试或 benchmark 路径
 features:
@@ -696,13 +725,11 @@ Phase 0 的输入真相源只包括：
 2. JSON Schema:
    configs/schemas/*.schema.json
 
-3. 静态 Scala 源码文本:
-   ChipyardConfig.source_file 指向的 CuteConfig.scala（只做 class 存在性 sanity check）
-   CUTEISAVersion.source.scala_file 指向的 CUTEParameters.scala（用于 FPE/ISA version manifest 的源码对齐）
-
-4. 文件系统存在性:
+3. 文件系统存在性:
+   ChipyardConfig.source_file 路径（只检查文件存在；不解析 Scala 内容）
+   CUTEISAVersion.source.scala_file 路径（metadata/exporter 线索；不解析 Scala 内容）
    memory config 目录
-   VectorVersion.source 中列出的本地文件/目录
+   VectorVersion.source 中列出的本地文件/目录（metadata/exporter 线索；不解析 Scala 内容）
    trace/format_spec.md
 ```
 
@@ -714,17 +741,17 @@ datatype.h.generated
 validation.h.generated
 build/chipyard_configs/**
 chipyard_config.extracted.json
+Scala 源码内容解析（Phase 0 不解析 CuteConfig.scala/CUTEParameters.scala）
 任何由 HeaderGenerator、Chipyard elaboration 或 runner 后续流程产生的文件
 ```
 
-原因：`.h.generated` 和 extracted JSON 都是后续生成流程的产物。`cute-check-config.py` 第一版只能回答“当前人工 manifest 的 schema、引用、版本标签和轻量源码引用是否自洽”，不能反向依赖后续 build artifact。
+原因：`.h.generated`、extracted JSON 和 Scala Config 实例化事实都属于后续生成/exporter 流程。`cute-check-config.py` 第一版只能回答“当前人工 manifest 的 schema、引用、版本标签和路径声明是否自洽”，不能反向依赖后续 build artifact，也不能用 Python 正则伪装成 Scala elaboration。
 
 后续 Phase 1/独立任务可以在 Chipyard 侧复用 HeaderGenerator 的参数提取思路，生成结构化 `chipyard_config.extracted.json`，再新增强一致性检查：
 
 ```text
 manifest YAML
-  vs 静态 Scala source contract
-  vs Chipyard 实例化后 extracted JSON
+  vs Chipyard exporter facts (chipyard_config.extracted.json)
   vs generated header fingerprint
 ```
 
@@ -779,35 +806,38 @@ Usage:
      memory / simulator 来自 HWConfig
 ```
 
-#### 7.4 静态 Contract 检查
+#### 7.4 Manifest / reference 检查
 
-本阶段脚本只做静态检查，不编译、不生成 Verilog、不读取 generated headers。需要预留以下检查：
+本阶段脚本只做 manifest/schema/reference/path 层检查，不编译、不生成 Verilog、不读取 generated headers、不解析 Scala 源码内容。需要预留以下检查：
 
 ```text
 ChipyardConfig manifest 检查：
   1. source_file 存在
-  2. class 能在 source_file 中找到 class <Name> extends Config（sanity check）
+  2. class 字符串存在且形如 Scala 全名；不检查 class 是否真的声明在 source_file 中
   3. export.artifact / generated_headers.output_dir 路径声明合法
   4. compatibility.fpe.version 能解析到 configs/cute_fpe_versions/<version>.yaml
   5. compatibility.isa.version 能解析到 configs/cute_isa_versions/<version>.yaml
   6. compatibility.vector.version 能解析到 configs/vector_versions/<version>.yaml
-  7. 不用 Python 正则校验 WithCuteCoustomParams/WithCUTE/bus/core/cache；这些结构事实由后续 Chipyard exporter 输出
+  7. 不用 Python 正则校验 Config class、WithCuteCoustomParams/WithCUTE/bus/core/cache；这些结构事实由后续 Chipyard exporter 输出
 
 CUTEFPEVersion 检查：
-  1. CUTEFPEVersion.datatypes 与 CUTEParameters.scala 中 ElementDataType 静态定义一致
-  2. 只比较静态源码中能解析出的 datatype 名称/枚举，不比较 datatype.h.generated
+  1. 文件名、id、ChipyardConfig.compatibility.fpe.version 引用一致
+  2. datatypes 非空、唯一、命名合法
+  3. source.scala_object 只作为 exporter metadata；Phase 0 不读取 datatype.h.generated，也不读取 CUTEParameters.scala
+  4. 后续由 Chipyard exporter 导出的 datatype facts 与该 manifest 对齐
 
 CUTEISAVersion 检查：
-  1. groups.cute.instructions 的 name/funct/description/return_description 集合与 CuteInstConfigs.allInsts 一致
-  2. groups.ygjk.instructions 的 name/funct/description/return_description 集合与 YGJKInstConfigs.allInsts 一致
+  1. 文件名、id、ChipyardConfig.compatibility.isa.version 引用一致
+  2. groups.cute/groups.ygjk 的 instruction name/funct 唯一，description/return_description 字段齐全
   3. groups.cute.instructions[*].rocc_funct = funct + cute_internal_offset
   4. groups.ygjk.instructions[*].rocc_funct = funct + rocc_funct_offset
-  5. 不比较 instruction.h.generated；header 是后续生成流程产物
+  5. source.scala_file/source.scala_objects 只作为 exporter metadata；Phase 0 不读取 CUTEParameters.scala，也不比较 instruction.h.generated
+  6. 后续由 Chipyard exporter 导出的 instruction facts 与该 manifest 对齐
 
 VectorVersion 检查：
   1. 文件名、id、Project.target.requires.vector_versions 引用一致
   2. none.yaml 的 kind/features 必须表示无向量实现
-  3. saturn_rvv.yaml 中的 source.scala_files/source.scala_mixins 必须能在源码中找到
+  3. saturn_rvv.yaml 中的 source.generator_path/source.scala_files/docs/tests 等本地路径存在；scala_mixins 只检查字段格式，不在源码中查找
   4. 后续如果某个 ChipyardConfig.compatibility.vector.version != none，应由 Chipyard exporter 检查其 Config class 是否包含对应 VectorVersion.source.scala_mixins
 ```
 
@@ -830,16 +860,11 @@ Manifest 加载 / 引用展开:
   load_vector_version(version_id) -> dict
   resolve_hwconfig(hwconfig_path) -> ResolvedHWConfig
 
-静态 Scala 文本提取:
-  check_scala_class_declared(scala_file: Path, class_name: str) -> list[Issue]
-  extract_scala_instruction_sets(scala_file: Path) -> dict
-  extract_scala_datatypes(scala_file: Path) -> dict
-
-Contract 检查:
+Manifest / reference 检查:
   check_chipyard_config_manifest(chipyard_yaml: dict) -> list[Issue]
-  check_fpe_contract(fpe_yaml: dict) -> list[Issue]
-  check_isa_contract(isa_yaml: dict) -> list[Issue]
-  check_vector_version_contract(vector_yaml: dict) -> list[Issue]
+  check_fpe_version_manifest(fpe_yaml: dict) -> list[Issue]
+  check_isa_version_manifest(isa_yaml: dict) -> list[Issue]
+  check_vector_version_manifest(vector_yaml: dict) -> list[Issue]
   check_hwconfig_references(hwconfig_yaml: dict) -> list[Issue]
   check_project_trace(project_yaml: dict) -> list[Issue]
 
@@ -856,7 +881,7 @@ CLI 编排:
   main() -> int
 ```
 
-不设置 `extract_header_instruction_functs()`、`extract_header_datatypes()`、`extract_chipyard_config_contract()` 或 `dump_chipyard_config_json()`。这些属于后续生成/强一致性阶段。
+不设置 `extract_header_instruction_functs()`、`extract_header_datatypes()`、`check_scala_class_declared()`、`extract_scala_instruction_sets()`、`extract_scala_datatypes()`、`extract_chipyard_config_contract()` 或 `dump_chipyard_config_json()`。这些属于后续生成/exporter/强一致性阶段。
 
 #### 7.6 调用关系
 
@@ -865,7 +890,6 @@ CLI 编排:
   load_yaml
   validate_schema(chipyard_config.schema.json)
   check_chipyard_config_manifest
-    -> check_scala_class_declared
     -> load/check referenced FPE/ISA/Vector manifests
 
 --hwconfig <path>
@@ -878,11 +902,9 @@ CLI 编排:
     -> load_isa_version
     -> load_vector_version
   check_chipyard_config_manifest
-  check_fpe_contract
-    -> extract_scala_datatypes
-  check_isa_contract
-    -> extract_scala_instruction_sets
-  check_vector_version_contract
+  check_fpe_version_manifest
+  check_isa_version_manifest
+  check_vector_version_manifest
 
 --project <path>
   load_yaml
@@ -1028,8 +1050,8 @@ tools/runner/cute-check-config.py
 ## 验收标准
 
 - [ ] `cute-check-config.py --chipyard-config configs/chipyard_configs/cute2tops_scp64.yaml` 通过 manifest/reference 校验
-- [ ] `cute-check-config.py` 能解析 `compatibility.fpe.version` 并展开 datatype set
-- [ ] `cute-check-config.py` 能解析 `compatibility.isa.version` 并确认 instruction set 与 `CuteInstConfigs` / `YGJKInstConfigs` 一致
+- [ ] `cute-check-config.py` 能解析 `compatibility.fpe.version` 并展开 datatype set；不读取 Scala/header
+- [ ] `cute-check-config.py` 能解析 `compatibility.isa.version` 并展开 instruction set；不读取 Scala/header
 - [ ] `cute-check-config.py` 能解析 `compatibility.vector.version` 并展开 VectorVersion features
 - [ ] `cute-check-config.py --hwconfig configs/hwconfigs/cute2tops_scp64_dramsim32.yaml` 通过校验
 - [ ] `cute-check-config.py --project cute-sdk/runtime/cute_runtime/project.yaml` 通过校验

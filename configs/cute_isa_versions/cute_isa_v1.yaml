@@ -1,13 +1,12 @@
 version: 1
 id: cute_isa_v1
-description: CUTE/YGJK instruction set exported by current CuteInstConfigs, YGJKInstConfigs, and HeaderGenerator.
+description: CUTE/YGJK instruction manifest for the current SDK compatibility version.
 
 source:
   scala_file: src/main/scala/CUTEParameters.scala
   scala_objects:
     - cute.CuteInstConfigs
     - cute.YGJKInstConfigs
-  generated_header: cutetest/include/instruction.h.generated
 
 rocc:
   opcode: "0x0B"

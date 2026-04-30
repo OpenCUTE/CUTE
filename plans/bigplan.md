@@ -233,6 +233,10 @@ capability_labels:
 
 在 exporter 完成前可以存在 `bootstrap_manual` 过渡字段，但它们只是跑通 target matcher 的临时输入，不是长期真相源。长期 SoC/core/bus/cache、CuteParams、vector config-dependent fields 都来自 Chipyard 导出的 `chipyard_config.extracted.json`。
 
+Phase 0 的 `cute-check-config.py` 只检查这些 manifest 的 schema、引用、版本标签和路径声明；不解析 Scala 源码，不读取 `.h.generated`，也不尝试证明 Config class/mixin/datatype/instruction facts。datatype、instruction 和 vector Config 事实都应由后续 Chipyard exporter 输出后再做强一致性比较。
+
+这些 manifest 的价值不是复刻硬件参数，而是给软件、runner 和 CI 一个稳定协作契约：稳定 id、compatibility version、memory/simulator 组合、target matcher 标签，以及后续用于防止软件契约和 Chipyard 导出事实漂移的比较入口。也就是说，manifest 是软件契约和运行入口，Chipyard exporter facts 是硬件结构真相源，generated headers/fingerprint 是编译产物和最终落地结果。
+
 HWConfig 示例：
 
 ```yaml

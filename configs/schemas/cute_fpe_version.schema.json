@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CUTE FPE Version",
-  "description": "CUTE 内部 FPE/计算格式版本。ChipyardConfig 通过 cute.fpe.version 引用这里定义的计算格式集合，并派生软件可见 datatype 能力。",
+  "description": "CUTE 内部 FPE/计算格式版本。ChipyardConfig 通过 compatibility.fpe.version 引用这里定义的计算格式集合，并派生软件可见 datatype 能力。Phase 0 不读取 Scala 或 generated header；后续由 Chipyard exporter facts/header fingerprint 做强一致性检查。Header 产物归属于 ChipyardConfig.export.generated_headers，不在本 manifest 中记录。",
   "type": "object",
   "required": ["version", "id", "datatypes"],
   "additionalProperties": false,
@@ -23,13 +23,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "generated_header": {
-          "type": "string",
-          "description": "用于确认该 datatype set 的 generated header"
-        },
         "scala_object": {
           "type": "string",
-          "description": "对应的 Scala datatype 定义对象"
+          "description": "对应的 Scala datatype 定义对象，仅作为 Chipyard exporter metadata；Phase 0 不读取 Scala"
         }
       }
     },
