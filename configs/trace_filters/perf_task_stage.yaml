@@ -1,0 +1,5 @@
+version: 1
+name: perf_task_stage
+purpose: perf
+description: Placeholder performance filter for future task and pipeline-stage timeline analysis.
+status: placeholder

@@ -36,7 +36,7 @@ cute-sdk/layer_ops/<layer-project>/
 └── build_rules/
     └── Makefile
 
-tools/trace/
+trace/
 ├── parser.py                           # Trace parser
 ├── filter.py                           # Trace filter
 └── func/
@@ -255,7 +255,7 @@ trace:
 
 ## Task 3.4: 实现 Trace Parser 和 Func Model
 
-### 3.4.1 `tools/trace/parser.py`
+### 3.4.1 `trace/parser.py`
 
 ```python
 """
@@ -334,7 +334,7 @@ class CuteTraceParser:
         return result
 ```
 
-### 3.4.2 `tools/trace/func/tensor_model.py`
+### 3.4.2 `trace/func/tensor_model.py`
 
 ```python
 """

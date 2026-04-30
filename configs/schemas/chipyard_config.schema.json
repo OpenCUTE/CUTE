@@ -94,7 +94,7 @@
     },
     "soc": {
       "type": "object",
-      "required": ["core", "bus"],
+      "required": ["core", "bus", "vector"],
       "additionalProperties": false,
       "properties": {
         "core": {
@@ -160,6 +160,18 @@
             "cache_hash": { "type": "boolean" },
             "tl_monitors": { "type": "boolean" }
           }
+        },
+        "vector": {
+          "type": "object",
+          "required": ["version"],
+          "additionalProperties": false,
+          "description": "Chipyard SoC 中的软件可见向量实现版本。无向量实现时显式写 none。",
+          "properties": {
+            "version": {
+              "$ref": "#/definitions/vector_version_id",
+              "description": "引用 configs/vector_versions/<version>.yaml"
+            }
+          }
         }
       }
     },
@@ -193,6 +205,22 @@
         "mem_req_rsp": { "type": "boolean" },
         "perf_counter_snapshot": { "type": "boolean" }
       }
+    }
+  },
+  "definitions": {
+    "vector_version_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "none",
+          "description": "无向量实现"
+        },
+        {
+          "type": "string",
+          "pattern": "^(?!none$)[a-z][a-z0-9_]*$",
+          "description": "向量实现版本 id，如 saturn_rvv"
+        }
+      ]
     }
   }
 }

@@ -190,6 +190,9 @@ configs/cute_fpe_versions/
 └── cute_fpe_v1.yaml
 configs/cute_isa_versions/
 └── cute_isa_v1.yaml
+configs/vector_versions/
+├── none.yaml
+└── saturn_rvv.yaml
 configs/hwconfigs/
 ├── cute2tops_scp64_dramsim32.yaml
 ├── cute4tops_scp128_dramsim48.yaml
@@ -228,6 +231,8 @@ soc:
   bus:
     system_bits: 512
     memory_bits: 512
+  vector:
+    version: none
 
 capability:
   tensor_ops: [matmul]
@@ -316,6 +321,14 @@ build(Test.code, HWConfig):
   },
   "soc": {
     "core": "rocket",
+    "vector": {
+      "version": "none",
+      "features": {
+        "vector_isa": "none",
+        "implementation": "none",
+        "ops": []
+      }
+    },
     "memory_model": "dramsim2",
     "memory_config": "dramsim2_ini_32GB_per_s",
     "sysbus_width": 64,
@@ -363,33 +376,39 @@ version_name: v0.3
 target:
   hwconfigs:
     include_tags: [cute_tensor_v1]
-  required_capability:
-    datatypes: [i8i8i32]
-    tensor_ops: [matmul]
-    trace_func_level: tensor_store
+  requires:
+    fpe_versions: [cute_fpe_v1]
+    isa_versions: [cute_isa_v1]
+    vector_versions: [none]
 
 code:
   entry: src/main.c
   build: make
-  runtime_lib: runtime_v1
-  op_lib: tensor_op_v1
+  runtime_lib: runtime.cute_runtime
+  op_lib: null
   variants:
     - name: i8_128
-      M: 128
-      N: 128
-      K: 128
-      dtype: i8i8i32
+      params:
+        M: 128
+        N: 128
+        K: 128
+        dtype: i8i8i32
     - name: fp16_128
-      M: 128
-      N: 128
-      K: 128
-      dtype: fp16fp16fp32
+      params:
+        M: 128
+        N: 128
+        K: 128
+        dtype: fp16fp16fp32
 
 golden:
   level: tensor_op
   source: python_reference
   compare:
     mode: exact
+
+trace:
+  required_func_level: F2_tensor_op
+  default_filters: [func_store_tensor]
 ```
 
 Pass 规则：
@@ -534,33 +553,44 @@ Test
 ```yaml
 id: tensor.matmul
 name: matmul
-version: 0.3
+version: 1
 kind: tensor_test
+version_name: v0.3
 
 target:
-  required_capability:
-    datatypes: [i8i8i32]
-    tensor_ops: [matmul]
-    trace_func_level: tensor_op
+  hwconfigs:
+    include_tags: [cute_tensor_v1]
+  requires:
+    fpe_versions: [cute_fpe_v1]
+    isa_versions: [cute_isa_v1]
+    vector_versions: [none]
 
 code:
   entry: src/main.c
   build: make
   variants:
     - name: i8_128
-      dtype: i8i8i32
-      M: 128
-      N: 128
-      K: 128
+      params:
+        dtype: i8i8i32
+        M: 128
+        N: 128
+        K: 128
     - name: fp16_128
-      dtype: fp16fp16fp32
-      M: 128
-      N: 128
-      K: 128
+      params:
+        dtype: fp16fp16fp32
+        M: 128
+        N: 128
+        K: 128
 
 golden:
   level: tensor_op
   source: python_reference
+  compare:
+    mode: exact
+
+trace:
+  required_func_level: F2_tensor_op
+  default_filters: [func_store_tensor]
 ```
 
 一个 code project 可以包含多个 variant，它们共同属于同一个 Test project：
@@ -864,19 +894,23 @@ CUTE/
 │   ├── templates/                     # C 代码模板
 │   └── legacy/                        # 旧测试（逐步迁移）
 │
+├── trace/                             # Trace 边界文档和测试
+│   ├── format_spec.md                 # Phase 0 trace level/interface 占位
+│   ├── parser.py                      # Trace parser
+│   ├── filter.py                      # Trace filter engine
+│   ├── func/                          # Trace.func correctness models
+│   │   ├── event_model.py             # F0_event
+│   │   ├── tensor_model.py            # F1_store / F2_tensor_op
+│   │   ├── layer_model.py             # F3_layer
+│   │   └── fused_model.py             # F4_fused_layer
+│   ├── perf/                          # Trace.perf performance models
+│   │   ├── timeline.py                # 时间线模型
+│   │   ├── stage_model.py             # Stage 分解
+│   │   ├── memory_model.py            # 带宽模型
+│   │   └── utilization.py             # 利用率模型
+│   └── tests/
+│
 ├── tools/                             # Host 端工具链（Python）
-│   ├── trace/                         # Trace parser + func/perf model
-│   │   ├── format_spec.md
-│   │   ├── func/
-│   │   │   ├── event_model.py         # F0_event
-│   │   │   ├── tensor_model.py        # F1_store / F2_tensor_op
-│   │   │   ├── layer_model.py         # F3_layer
-│   │   │   └── fused_model.py         # F4_fused_layer
-│   │   └── perf/
-│   │       ├── timeline.py            # 时间线模型
-│   │       ├── stage_model.py         # Stage 分解
-│   │       ├── memory_model.py        # 带宽模型
-│   │       └── utilization.py         # 利用率模型
 │   ├── verify/                        # Golden 生成 + 比对
 │   │   ├── cute_golden.py             # Golden 参考生成引擎
 │   │   ├── cute_verify.py             # 数值比对引擎
@@ -897,6 +931,7 @@ CUTE/
 │   ├── chipyard_configs/              # ChipyardConfig manifests
 │   ├── cute_fpe_versions/             # CUTE/FPE format version manifests
 │   ├── cute_isa_versions/             # CUTE/YGJK ISA version manifests
+│   ├── vector_versions/               # VectorVersion manifests: none, saturn_rvv, ...
 │   ├── hwconfigs/                     # HWConfig manifests
 │   │   ├── cute2tops_scp64_dramsim32.yaml
 │   ├── trace_filters/                 # 可复用 Trace filter
@@ -905,6 +940,7 @@ CUTE/
 │       ├── chipyard_config.schema.json
 │       ├── cute_fpe_version.schema.json
 │       ├── cute_isa_version.schema.json
+│       ├── vector_version.schema.json
 │       ├── hwconfig.schema.json
 │       ├── project.schema.json
 │       └── trace_filter.schema.json
@@ -926,7 +962,7 @@ CUTE/
 - `configs/hwconfigs` 承载 `HWConfig`。
 - `cute-sdk/**/project.yaml` 承载 `Test`。
 - `configs/trace_filters` 承载可复用 `Trace.filter`。
-- `tools/trace/func` 与 `tools/trace/perf` 分开演进。
+- `trace/func` 与 `trace/perf` 分开演进。
 - `build/cute-runs` 承载三者组合后的事实快照。
 
 ---
@@ -940,6 +976,7 @@ CUTE/
 任务：
 
 - 定义 `hwconfig.schema.json`。
+- 定义 `cute_fpe_version.schema.json`、`cute_isa_version.schema.json`、`vector_version.schema.json`。
 - 定义 `project.schema.json`，明确 cute-sdk project 的 `target/code/golden`。
 - 定义 `trace_filter.schema.json`。
 - 定义 `trace/format_spec.md`。
@@ -1071,6 +1108,9 @@ configs/cute_fpe_versions/cute_fpe_v1.yaml
 configs/schemas/cute_fpe_version.schema.json
 configs/cute_isa_versions/cute_isa_v1.yaml
 configs/schemas/cute_isa_version.schema.json
+configs/vector_versions/none.yaml
+configs/vector_versions/saturn_rvv.yaml
+configs/schemas/vector_version.schema.json
 configs/hwconfigs/cute2tops_scp64_dramsim32.yaml
 configs/schemas/hwconfig.schema.json
 
@@ -1080,7 +1120,7 @@ cute-sdk/tensor_ops/matmul/project.yaml
 configs/schemas/project.schema.json
 
 # Trace
-tools/trace/format_spec.md
+trace/format_spec.md
 configs/trace_filters/func_event.yaml
 configs/trace_filters/func_store_tensor.yaml
 configs/trace_filters/perf_task_stage.yaml
@@ -1092,12 +1132,16 @@ cute-sdk/runtime/cute_runtime/src/cute_runtime.c
 cute-sdk/templates/base_rocc_hello.c.j2
 cute-sdk/templates/tensor_matmul.c.j2
 
+# Template system TODO
+# 后续评估高级模板/模版编程，用于 variant 专用代码、datatype/layout dispatch、
+# tensor/layer op wrapper 和重复 test driver 生成；Phase 0 不扩展 project schema。
+
 # Trace implementation
-tools/trace/parser.py
-tools/trace/filter.py
-tools/trace/func/event_model.py
-tools/trace/func/tensor_model.py
-tools/trace/perf/timeline.py
+trace/parser.py
+trace/filter.py
+trace/func/event_model.py
+trace/func/tensor_model.py
+trace/perf/timeline.py
 
 # Runner
 tools/runner/cute-run.py

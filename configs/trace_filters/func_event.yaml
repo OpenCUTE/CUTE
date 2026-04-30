@@ -1,0 +1,5 @@
+version: 1
+name: func_event
+purpose: func
+description: Placeholder functional filter for F0_event basic runtime and event-order checks.
+status: placeholder

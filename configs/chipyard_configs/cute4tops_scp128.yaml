@@ -30,6 +30,8 @@ soc:
     banks: 4
     cache_hash: true
     tl_monitors: false
+  vector:
+    version: none
 
 capability:
   tensor_ops: [matmul, conv]

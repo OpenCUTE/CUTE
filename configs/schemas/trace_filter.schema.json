@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CUTE Trace Filter",
+  "description": "Placeholder manifest for reusable trace filters. Phase 0 only freezes filter identity, purpose, and status; concrete filter predicates are intentionally deferred.",
+  "type": "object",
+  "required": ["version", "name", "purpose", "description", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version, fixed to 1"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+      "description": "Trace filter name, matching the file stem by convention"
+    },
+    "purpose": {
+      "type": "string",
+      "enum": ["func", "perf", "debug"],
+      "description": "Whether the filter is intended for functional checking, performance analysis, or debug"
+    },
+    "description": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["placeholder", "draft", "stable"]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+version: 1
+id: saturn_rvv
+description: Saturn-backed RISC-V Vector path for projects that require RVV helper kernels.
+kind: rvv
+
+source:
+  generator_path: chipyard/generators/saturn
+  scala_files:
+    - chipyard/generators/chipyard/src/main/scala/config/SaturnConfigs.scala
+    - chipyard/generators/saturn/src/main/scala/shuttle/Configs.scala
+    - chipyard/generators/saturn/src/main/scala/rocket/Configs.scala
+  scala_mixins:
+    - saturn.shuttle.WithShuttleVectorUnit
+    - saturn.rocket.WithRocketVectorUnit
+  docs:
+    - chipyard/generators/saturn/docs/index.html
+  tests:
+    - chipyard/generators/saturn/riscv-vector-tests
+    - chipyard/generators/saturn/benchmarks
+
+features:
+  vector_isa: rvv
+  implementation: saturn
+  spec: rvv_1_0
+  isa_extensions: [v, zvbb]
+  ops: [load_store, elementwise, reduction, mask, permutation, floating_point, integer]
+  config_dependent_fields: [vLen, dLen, mLen, cores, core_kind]
+  notes:
+    - VLEN, DLEN, MLEN, and core attachment are selected by the concrete Chipyard Config.
+    - Layer and model projects should require this version when they use Saturn/RVV helper kernels.

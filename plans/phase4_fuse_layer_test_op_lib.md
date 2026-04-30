@@ -42,7 +42,7 @@ cute-sdk/fuse_layer_ops/llama_ffn_fused/
 └── build_rules/
     └── Makefile
 
-tools/trace/func/
+trace/func/
 └── fused_model.py                      # F4_fused_layer trace func model
 ```
 
@@ -276,7 +276,7 @@ trace:
 
 ## Task 4.4: F4_fused_layer Trace Func Model
 
-### 4.4.1 `tools/trace/func/fused_model.py`
+### 4.4.1 `trace/func/fused_model.py`
 
 ```python
 """
@@ -399,7 +399,7 @@ def compare_fused_vs_nonfused(
 ## 与 Phase 3 的衔接
 
 - 复用 `cute_layer.h` 的 LLaMA FFN 描述符
-- 复用 `tools/trace/func/tensor_model.py` 的 D tensor 重建逻辑
+- 复用 `trace/func/tensor_model.py` 的 D tensor 重建逻辑
 - 融合版本的 golden 与未融合版本相同（数学等价）
 
 ## 与 Phase 5 的衔接

@@ -1,0 +1,289 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CUTE Project",
+  "description": "cute-sdk project.yaml schema. Project target is intentionally narrow in Phase 0: select HWConfig candidates by tags, then require only CUTE internal FPE/ISA/vector version compatibility.",
+  "type": "object",
+  "required": ["version", "id", "name", "kind", "version_name", "target", "code", "golden", "trace"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema 版本，当前固定为 1"
+    },
+    "id": {
+      "$ref": "#/definitions/project_id",
+      "description": "全局唯一 project id，如 tensor.matmul"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+      "description": "显示名，如 matmul"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["base_test", "tensor_test", "layer_test", "fuse_layer_test", "soc_opt_test", "model_test"]
+    },
+    "version_name": {
+      "type": "string",
+      "pattern": "^v?[0-9]+(\\.[0-9]+)*([-+][A-Za-z0-9_.-]+)?$",
+      "description": "人工维护的语义版本，如 v0.3"
+    },
+    "description": {
+      "type": "string"
+    },
+    "target": {
+      "$ref": "#/definitions/project_target"
+    },
+    "code": {
+      "$ref": "#/definitions/code"
+    },
+    "golden": {
+      "$ref": "#/definitions/golden"
+    },
+    "trace": {
+      "$ref": "#/definitions/trace"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/value" }
+    }
+  },
+  "definitions": {
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"
+    },
+    "config_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "vector_version_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "none",
+          "description": "无向量依赖或无向量实现要求"
+        },
+        {
+          "type": "string",
+          "pattern": "^(?!none$)[a-z][a-z0-9_]*$",
+          "description": "向量实现版本 id，如 saturn_rvv；应能解析到 configs/vector_versions/<id>.yaml"
+        }
+      ]
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+    },
+    "project_id_list": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/project_id" },
+      "uniqueItems": true
+    },
+    "config_id_list": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/config_id" },
+      "uniqueItems": true
+    },
+    "vector_version_id_list": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/vector_version_id" },
+      "uniqueItems": true
+    },
+    "token_list": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/token" },
+      "uniqueItems": true
+    },
+    "project_target": {
+      "type": "object",
+      "required": ["hwconfigs", "requires"],
+      "additionalProperties": false,
+      "properties": {
+        "hwconfigs": {
+          "$ref": "#/definitions/hwconfig_selector",
+          "description": "Phase 0 暂只按 HWConfig.tags 做轻量候选选择。"
+        },
+        "requires": {
+          "$ref": "#/definitions/requirements",
+          "description": "Phase 0 暂只声明 CUTE/FPE、CUTE/ISA 和向量实现版本兼容性。"
+        }
+      }
+    },
+    "variant_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hwconfigs": {
+          "$ref": "#/definitions/hwconfig_selector",
+          "description": "Variant 级 tag 过滤，与 project target 取交集。"
+        },
+        "requires": {
+          "$ref": "#/definitions/requirements",
+          "description": "Variant 级 FPE/ISA/vector version 要求，与 project target.requires 合并。"
+        }
+      }
+    },
+    "hwconfig_selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include_tags": {
+          "$ref": "#/definitions/token_list",
+          "description": "候选 HWConfig 至少命中一个 include tag；为空表示不按 tag 纳入。"
+        },
+        "exclude_tags": {
+          "$ref": "#/definitions/token_list",
+          "description": "候选 HWConfig 命中任一 exclude tag 时排除。"
+        }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fpe_versions": {
+          "$ref": "#/definitions/config_id_list",
+          "description": "允许的 CUTEFPEVersion id。候选 HWConfig 的 ChipyardConfig.cute.fpe.version 必须在该集合内。"
+        },
+        "isa_versions": {
+          "$ref": "#/definitions/config_id_list",
+          "description": "允许的 CUTEISAVersion id。候选 HWConfig 的 ChipyardConfig.cute.isa.version 必须在该集合内。"
+        },
+        "vector_versions": {
+          "$ref": "#/definitions/vector_version_id_list",
+          "description": "允许的 VectorVersion id。没有向量依赖时显式写 none；当前 RVV 版本可写 saturn_rvv；每个 id 都应能解析到 configs/vector_versions/<id>.yaml。"
+        }
+      }
+    },
+    "code": {
+      "type": "object",
+      "required": ["entry", "build", "variants"],
+      "additionalProperties": false,
+      "properties": {
+        "entry": {
+          "type": "string",
+          "description": "主入口源码路径，相对 project.yaml 所在目录"
+        },
+        "build": {
+          "anyOf": [
+            { "type": "string", "enum": ["make", "cmake"] },
+            { "type": "string", "pattern": "^custom:.+$" }
+          ]
+        },
+        "runtime_lib": {
+          "anyOf": [
+            { "$ref": "#/definitions/project_id" },
+            { "type": "null" }
+          ]
+        },
+        "op_lib": {
+          "anyOf": [
+            { "$ref": "#/definitions/project_id" },
+            { "type": "null" }
+          ],
+          "description": "单个 op lib 依赖；多个依赖用 op_libs"
+        },
+        "op_libs": {
+          "$ref": "#/definitions/project_id_list"
+        },
+        "variants": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/variant" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "required": ["name", "params"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+        },
+        "description": { "type": "string" },
+        "params": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/value" },
+          "description": "编译/运行参数。不要在 variant 顶层自由加键，统一放在 params 下。"
+        },
+        "target": {
+          "$ref": "#/definitions/variant_target",
+          "description": "Variant 特有的 tag 过滤或 FPE/ISA version 约束。"
+        }
+      }
+    },
+    "golden": {
+      "type": "object",
+      "required": ["level", "source", "compare"],
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["event", "store_tensor", "tensor_op", "layer", "fused_layer", "model"]
+        },
+        "source": {
+          "type": "string",
+          "enum": ["python_reference", "c_reference", "existing_checker", "external"]
+        },
+        "compare": { "$ref": "#/definitions/compare" }
+      }
+    },
+    "compare": {
+      "type": "object",
+      "required": ["mode"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["exact", "tolerance", "semantic"]
+        },
+        "abs_err": { "type": "number", "minimum": 0 },
+        "rel_err": { "type": "number", "minimum": 0 }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "required": ["required_func_level", "default_filters"],
+      "additionalProperties": false,
+      "properties": {
+        "required_func_level": {
+          "type": "string",
+          "pattern": "^(none|F[0-9]_[A-Za-z0-9_]+)$"
+        },
+        "required_perf_level": {
+          "type": "string",
+          "pattern": "^(none|P[0-9]_[A-Za-z0-9_]+)$",
+          "default": "none"
+        },
+        "default_filters": {
+          "$ref": "#/definitions/token_list"
+        },
+        "required_events": {
+          "$ref": "#/definitions/token_list",
+          "description": "功能/性能模型需要的结构化 trace event 名称，占位字段"
+        }
+      }
+    },
+    "value": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "integer" },
+        { "type": "boolean" },
+        { "type": "null" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/value" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/value" }
+        }
+      ]
+    }
+  }
+}

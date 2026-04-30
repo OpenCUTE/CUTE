@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CUTE Vector Version",
+  "description": "Software-visible vector implementation version. Project target.requires.vector_versions references these manifests by id, then tooling expands the referenced features.",
+  "type": "object",
+  "required": ["version", "id", "kind", "features"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema 版本，当前固定为 1"
+    },
+    "id": {
+      "$ref": "#/definitions/vector_version_id",
+      "description": "Vector version 唯一标识；none 是显式版本 id"
+    },
+    "description": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["none", "rvv", "custom"],
+      "description": "向量实现类别"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generator_path": {
+          "type": "string",
+          "description": "向量实现所在 generator 或源码根目录"
+        },
+        "scala_files": {
+          "$ref": "#/definitions/path_list",
+          "description": "定义该向量实现的 Scala 文件"
+        },
+        "scala_mixins": {
+          "$ref": "#/definitions/string_list",
+          "description": "Chipyard Config 中启用该向量实现的 mixin class"
+        },
+        "docs": {
+          "$ref": "#/definitions/path_list",
+          "description": "本地文档路径"
+        },
+        "tests": {
+          "$ref": "#/definitions/path_list",
+          "description": "可用于确认该向量实现的软件测试或 benchmark 路径"
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "required": ["vector_isa", "implementation", "ops"],
+      "additionalProperties": false,
+      "properties": {
+        "vector_isa": {
+          "type": "string",
+          "enum": ["none", "rvv", "custom"],
+          "description": "软件可见向量 ISA 家族"
+        },
+        "implementation": {
+          "type": "string",
+          "pattern": "^(none|[a-z][a-z0-9_]*)$",
+          "description": "具体实现名，如 saturn"
+        },
+        "spec": {
+          "type": "string",
+          "description": "向量 ISA/spec 版本，如 rvv_1_0"
+        },
+        "isa_extensions": {
+          "$ref": "#/definitions/token_list",
+          "description": "额外向量相关 ISA extension，如 zvbb"
+        },
+        "ops": {
+          "$ref": "#/definitions/token_list",
+          "description": "软件/验证层可使用的向量能力标签"
+        },
+        "config_dependent_fields": {
+          "$ref": "#/definitions/token_list",
+          "description": "由具体 Chipyard Config 决定、不能只由 VectorVersion 固定的字段"
+        },
+        "notes": {
+          "$ref": "#/definitions/string_list"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "vector_version_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "none",
+          "description": "无向量依赖或无向量实现要求"
+        },
+        {
+          "type": "string",
+          "pattern": "^(?!none$)[a-z][a-z0-9_]*$",
+          "description": "向量实现版本 id，如 saturn_rvv"
+        }
+      ]
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+    },
+    "token_list": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/token" },
+      "uniqueItems": true
+    },
+    "path_list": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "string_list": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    }
+  }
+}

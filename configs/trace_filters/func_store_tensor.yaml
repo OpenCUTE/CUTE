@@ -1,0 +1,5 @@
+version: 1
+name: func_store_tensor
+purpose: func
+description: Placeholder functional filter for D/store tensor extraction and tensor-op reconstruction.
+status: placeholder

@@ -1,0 +1,12 @@
+version: 1
+id: none
+description: No vector implementation is required by the project target.
+kind: none
+
+features:
+  vector_isa: none
+  implementation: none
+  ops: []
+  config_dependent_fields: []
+  notes:
+    - Use this when the project does not depend on vector helper kernels.

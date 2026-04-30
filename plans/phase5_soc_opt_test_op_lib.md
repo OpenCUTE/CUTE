@@ -50,7 +50,7 @@ tools/perf/
 ├── cute_perf_model.py                  # Roofline 模型
 └── cute_perf_report.py                 # 报告生成器
 
-tools/trace/perf/
+trace/perf/
 ├── timeline.py                         # 时间线模型
 ├── stage_model.py                      # Stage 分解模型
 ├── memory_model.py                     # 带宽模型
@@ -226,7 +226,7 @@ int main(void) {
 
 ## Task 5.3: 实现 Trace.perf 初步分析
 
-### 5.3.1 `tools/trace/perf/timeline.py`
+### 5.3.1 `trace/perf/timeline.py`
 
 ```python
 """
