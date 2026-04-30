@@ -167,14 +167,14 @@ Trace
 
 ### 2.1 HWConfig 不等于 CUTE Config
 
-当前已有 `HeaderGenerator` 能从 Chipyard Config 提取 `CuteParams`。为了避免在 HWConfig 中手抄 SoC/core/bus 字段，配置拆成两层：
+当前已有 `HeaderGenerator` 能从 Chipyard Config 提取 `CuteParams`。为了避免在 HWConfig 或 YAML manifest 中手抄 SoC/core/bus 字段，配置拆成“薄入口 + Chipyard 导出事实”两层：
 
 建议区分：
 
 | 层级 | 示例 | 作用 |
 |---|---|---|
-| `ChipyardConfig.CUTE` | `Tensor_M/N/K`、`ReduceWidthByte`、FPE version、ISA version、scale layout、instruction field | 决定 CUTE 本体 capability |
-| `ChipyardConfig.SOC` | `chipyard.CUTE2TopsSCP64Config`、core、bus、cache | 决定 SoC 集成形态和软件可见能力 |
+| `ChipyardConfig manifest` | `id/class/source_file/export/compatibility` | 人工维护入口，不手抄完整结构 |
+| `chipyard_config.extracted.json` | `Tensor_M/N/K`、`ReduceWidthByte`、core、bus、cache、vector facts、instruction/datatype facts | Chipyard 导出的结构事实 |
 | `HWConfig.memory` | `dramsim2_ini_32GB_per_s` | 决定 memory model 配置 |
 | `HWConfig.simulator` | Verilator binary、max cycles、wave/trace mode | 决定 run policy |
 
@@ -202,43 +202,36 @@ configs/memconfigs/dramsim2/
 └── dramsim2_ini_48GB_per_s/
 ```
 
-ChipyardConfig 示例：
+ChipyardConfig manifest 长期应是薄入口：
 
 ```yaml
 version: 1
 id: cute2tops_scp64
 class: chipyard.CUTE2TopsSCP64Config
 source_file: chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
-mode: existing_class
+mode: exported_from_chipyard
 
-cute:
-  params_symbol: CuteParams.CUTE_2Tops_64SCP
-  instances: [0]
+export:
+  artifact: build/chipyard_configs/cute2tops_scp64/chipyard_config.extracted.json
+  generated_headers:
+    output_dir: build/chipyard_configs/cute2tops_scp64/generated_headers
+    fingerprint: auto
+
+compatibility:
   fpe:
     version: cute_fpe_v1
   isa:
     version: cute_isa_v1
-  generated_headers:
-    output_dir: build/chipyard_configs/cute2tops_scp64/generated_headers
-    mode: generate_from_chipyard_config
-    fingerprint: auto
-
-soc:
-  core:
-    kind: shuttle
-    count: 1
-    shuttle_tile_beat_bytes: 64
-  bus:
-    system_bits: 512
-    memory_bits: 512
   vector:
     version: none
 
-capability:
-  tensor_ops: [matmul]
+capability_labels:
+  tensor_ops: [matmul, conv]
   layer_ops: []
   fused_ops: []
 ```
+
+在 exporter 完成前可以存在 `bootstrap_manual` 过渡字段，但它们只是跑通 target matcher 的临时输入，不是长期真相源。长期 SoC/core/bus/cache、CuteParams、vector config-dependent fields 都来自 Chipyard 导出的 `chipyard_config.extracted.json`。
 
 HWConfig 示例：
 
@@ -267,12 +260,14 @@ simulator:
 Chipyard Config
   -> HeaderGenerator.extractParamsFromConfig
   -> ChipyardConfig.generated_headers/*.generated
+  -> chipyard_config.extracted.json
 ```
 
 需要增强为：
 
 ```text
 ChipyardConfig
+  -> generated chipyard_config.extracted.json
   -> generated C headers under this ChipyardConfig
   -> generated capability json
   -> generated software constraints
@@ -282,6 +277,7 @@ ChipyardConfig
 
 ```text
 build/chipyard_configs/<chipyard-config-id>/
+├── chipyard_config.extracted.json
 ├── chipyard_config.resolved.yaml
 ├── cute_params.json
 ├── capability.json
@@ -736,7 +732,7 @@ Runner 不定义测试语义，也不定义硬件语义；它只做编排：
 给定 HWConfig + cute-sdk project + variant + Trace.filter
   -> 检查 target 是否匹配
   -> 解析 HWConfig.chipyard_config
-  -> 准备 ChipyardConfig.generated_headers
+  -> 准备 ChipyardConfig generated_headers 和 chipyard_config.extracted.json
   -> 编译 Test.code
   -> 选择 simulator
   -> 运行
@@ -779,9 +775,9 @@ RESOLVE_HWCONFIG
 
 | 阶段 | 做什么 | 对应对象 |
 |---|---|---|
-| `RESOLVE_HWCONFIG` | 解析 HWConfig，生成 resolved config、capability、headers | `HWConfig` |
+| `RESOLVE_HWCONFIG` | 解析 HWConfig，读取薄 ChipyardConfig manifest，并使用 Chipyard exporter 产物生成 resolved config、capability、headers | `HWConfig` |
 | `RESOLVE_TEST_TARGET` | 判断 Test.target 是否支持当前 HWConfig | `HWConfig + Test` |
-| `GENERATE_HEADERS` | 生成或复用该 HWConfig 的 generated headers | `HWConfig` |
+| `GENERATE_HEADERS` | 生成或复用该 HWConfig 的 generated headers，并同步生成/记录 `chipyard_config.extracted.json` | `HWConfig` |
 | `BUILD_TEST_CODE` | 用该 HWConfig 的 headers 编译 Test.code | `Test + HWConfig` |
 | `SELECT_OR_BUILD_SIMULATOR` | 找到或生成对应 simulator | `HWConfig.SOC` |
 | `RUN` | 运行二进制，产生 raw log/trace | `HWConfig + Test` |
@@ -815,6 +811,7 @@ Artifact 建议满足两个原则：
 build/cute-runs/<run-id>/
 ├── hwconfig/
 │   ├── hwconfig.resolved.yaml
+│   ├── chipyard_config.extracted.json
 │   ├── chipyard_config.resolved.yaml
 │   ├── capability.json
 │   ├── header_fingerprint.txt

@@ -31,6 +31,7 @@ scripts/
 
 build/
 ├── chipyard_configs/cute2tops_scp64/
+│   ├── chipyard_config.extracted.json
 │   ├── chipyard_config.resolved.yaml
 │   ├── capability.json
 │   ├── header_fingerprint.txt
@@ -343,17 +344,18 @@ Usage:
   1. 读取 hwconfig.yaml
   2. 解析 hwconfig.chipyard_config -> configs/chipyard_configs/<id>.yaml
   3. 提取 ChipyardConfig.class
-  4. 提取 ChipyardConfig.cute.generated_headers.output_dir
+  4. 提取 ChipyardConfig.export.generated_headers.output_dir
   5. 创建 output_dir
   6. 调用 scripts/generate-headers.sh <class> <output_dir>
   7. 计算 header fingerprint (sha256 of all .generated files)
-  8. 写 chipyard_config.resolved.yaml、capability.json、header_fingerprint.txt
+  8. 写 chipyard_config.extracted.json、chipyard_config.resolved.yaml、capability.json、header_fingerprint.txt
 ```
 
 ### 1.4.2 产物结构
 
 ```text
 build/chipyard_configs/cute2tops_scp64/
+├── chipyard_config.extracted.json  # Chipyard/Scala 侧导出的结构事实
 ├── chipyard_config.resolved.yaml
 ├── capability.json            # 从 CuteParams 推导的能力描述
 ├── header_fingerprint.txt     # 所有 .generated 文件的 sha256
@@ -425,6 +427,7 @@ tools/runner/cute-run.py \
 build/cute-runs/<timestamp>-rocc_hello-cute2tops_scp64_dramsim32/
 ├── hwconfig/
 │   ├── hwconfig.resolved.yaml
+│   ├── chipyard_config.extracted.json
 │   ├── chipyard_config.resolved.yaml
 │   ├── capability.json
 │   ├── header_fingerprint.txt

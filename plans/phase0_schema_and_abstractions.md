@@ -2,9 +2,9 @@
 
 ## 目标
 
-Phase 0 的目标不是跑通完整测试，而是先把核心对象的手写入口定下来：
+Phase 0 的目标不是跑通完整测试，而是先把核心对象的入口和边界定下来：
 
-- `ChipyardConfig`: 由 `configs/chipyard_configs/*.yaml` 描述，和现有 Chipyard Scala Config class 一一对应。
+- `ChipyardConfig`: 由 `configs/chipyard_configs/*.yaml` 作为薄 manifest/catalog 入口，和现有 Chipyard Scala Config class 一一对应；长期结构事实由 Chipyard exporter 导出，不靠手抄。
 - `CUTEFPEVersion`: 由 `configs/cute_fpe_versions/*.yaml` 描述，表示 CUTE/FPE 内部支持的计算格式版本。
 - `CUTEISAVersion`: 由 `configs/cute_isa_versions/*.yaml` 描述，表示 CUTE/YGJK 内部支持的指令集版本。
 - `VectorVersion`: 由 `configs/vector_versions/*.yaml` 描述，表示软件可见的向量实现版本和能力标签。
@@ -16,17 +16,18 @@ Phase 0 的目标不是跑通完整测试，而是先把核心对象的手写入
 
 - 某个 `cute-sdk` project 是否支持某个 `HWConfig`。
 - 某个 project 需要的 generated headers、capability、golden level、trace level 是什么。
-- 哪些字段是人工维护真相源，哪些字段是自动生成产物。
+- 哪些字段是人工维护入口，哪些字段必须由 Chipyard/runner 自动导出。
 
 ## 设计约束
 
 - 不恢复 `configs/tests/*.yaml` 作为人工维护入口。
 - `cute-sdk/**/project.yaml` 是 Test 的主真相源。
-- `generated_headers` 属于 `ChipyardConfig`，默认输出到 `build/chipyard_configs/<id>/generated_headers/`。
-- `HWConfig` 不手写 SoC/core/bus/capability；这些从引用的 `ChipyardConfig` 解析得到。
-- datatype 能力列表不在每个 `ChipyardConfig` 中重复维护；由 `cute.fpe.version` 引用 `configs/cute_fpe_versions/<version>.yaml`，再派生为 resolved software capability。
-- instruction set 不在每个 `ChipyardConfig` 中重复维护；由 `cute.isa.version` 引用 `configs/cute_isa_versions/<version>.yaml`，后续由 `cute-check-config.py` 对齐 `CuteInstConfigs` 和 `YGJKInstConfigs`。
-- vector 能力列表不放宽到 `Project` target；`ChipyardConfig.soc.vector.version` 引用 `configs/vector_versions/<version>.yaml`，`Project.target.requires.vector_versions` 只匹配这些 version id。
+- `generated_headers` 和 `chipyard_config.extracted.json` 都属于 ChipyardConfig 的生成产物，默认输出到 `build/chipyard_configs/<id>/`。
+- `HWConfig` 不手写 SoC/core/bus/capability；这些长期应从引用的 Chipyard exported JSON 解析得到。Phase 0 在 exporter 未完成前允许 `configs/chipyard_configs/*.yaml` 暂存 bootstrap 字段，但它们不是长期真相源。
+- datatype 能力列表不在每个 `ChipyardConfig` 中重复维护；由 FPE version manifest 和 Chipyard exporter 导出的 datatype facts 对齐后派生为 resolved software capability。
+- instruction set 不在每个 `ChipyardConfig` 中重复维护；由 ISA version manifest 和 Chipyard exporter 导出的 instruction facts 对齐后派生为 resolved software capability。
+- vector 能力列表不放宽到 `Project` target；`ChipyardConfig` manifest 只声明/引用 vector version id，具体 vector mixin/config-dependent 字段由 Chipyard exporter 输出，`Project.target.requires.vector_versions` 只匹配这些 version id。
+- `cute-check-config.py` 不负责反向解析完整 Chipyard Scala Config；它只校验 manifest、引用和 target match。Chipyard Config 的结构事实由后续 exporter 负责导出。
 - `none` 是一个真实的 `VectorVersion` manifest，不是缺省空值；无向量实现或无向量依赖时都显式写 `none`。
 - Trace 只保留边界定义：`filter`、`func model`、`perf model`，不在本阶段细化事件 schema。
 - catalog/index 如果需要，只能由工具扫描生成，不能作为人工维护真相源。
@@ -89,53 +90,66 @@ tools/perf/
 
 #### 2.1 设计边界
 
-`ChipyardConfig` 是现有 `CuteConfig.scala` 中一个 Scala Config class 的结构化 contract。本阶段只支持 `mode: existing_class`，不生成 Scala。
+`ChipyardConfig` manifest 是现有 `CuteConfig.scala` 中一个 Scala Config class 的**入口描述**，不是长期手抄结构事实。最终形态是：
 
-字段分组：
+```text
+configs/chipyard_configs/<id>.yaml        # 人工维护的薄入口
+Chipyard exporter                         # 从 class 实例化/参数中导出结构事实
+build/chipyard_configs/<id>/chipyard_config.extracted.json
+```
+
+在 exporter 完成前，Phase 0 可以保留 `bootstrap_manual`/`existing_class` 过渡 manifest，把 SoC/core/bus/capability 等字段暂时写进 YAML，用来跑通 schema 和 target matcher。但这些字段只用于 bootstrap，不作为长期真相源，也不要求 Python checker 用正则完整证明它们等于 Scala Config。
+
+长期薄 manifest 字段分组：
 
 ```text
 version                    # schema 版本，固定 1
 id                         # ChipyardConfig 唯一标识 (如 cute2tops_scp64)
 class                      # Chipyard Config 类全名 (如 chipyard.CUTE2TopsSCP64Config)
 source_file                # class 定义文件，相对 CUTE 根目录
-mode                       # existing_class
+mode                       # bootstrap_manual | exported_from_chipyard
 
-cute:
-  params_symbol            # CuteParams 符号，如 CuteParams.CUTE_2Tops_64SCP
-  instances                # WithCUTE(Seq(...)) 中挂载 CUTE 的 core id 列表
+export:
+  artifact                 # 默认 build/chipyard_configs/<id>/chipyard_config.extracted.json
+  generated_headers:
+    output_dir             # 默认 build/chipyard_configs/<id>/generated_headers
+    fingerprint            # auto | manual:<hash>
+
+compatibility:
   fpe:
     version                # CUTE/FPE 内部计算格式版本
   isa:
     version                # CUTE/YGJK 内部指令集版本
-  generated_headers:
-    output_dir             # 默认 build/chipyard_configs/<id>/generated_headers
-    mode                   # generate_from_chipyard_config | reuse_existing
-    fingerprint            # auto | manual:<hash>
-
-soc:
-  core:
-    kind                   # rocket | boom | shuttle | mixed
-    count                  # int
-    shuttle_tile_beat_bytes
-    clusters               # mixed core config 占位
-  bus:
-    system_bits            # WithSystemBusWidth
-    memory_bits            # WithNBitMemoryBus
-  cache:
-    inclusive_kb
-    outer_latency_cycles
-    banks
-    cache_hash
-    tl_monitors
   vector:
     version                # none | saturn_rvv | ...
 
-capability:                # 由 ChipyardConfig/CUTE params 导出的软件可见能力
+capability_labels:         # 若 Chipyard exporter 暂不能推导，允许人工维护的框架标签
   tensor_ops
   layer_ops
   fused_ops
 
-trace_capability:          # RTL trace 能力声明（占位，Phase 3 细化）
+bootstrap_manual:          # 仅 exporter 未完成前的过渡字段，后续由 extracted JSON 取代
+  cute.params_symbol
+  cute.instances
+  soc.core/bus/cache
+  trace_capability
+```
+
+Chipyard exporter 输出的 `chipyard_config.extracted.json` 承担结构事实：
+
+```text
+cute:
+  params_symbol
+  params                 # CuteParams 展开后的关键参数
+  instances
+  datatypes
+  instructions
+soc:
+  core
+  bus
+  cache
+  vector                 # 具体 mixin、vLen/dLen/mLen 等 config-dependent facts
+trace_capability:
     structured_trace       # bool
     d_store_data           # bool
     mem_req_rsp            # bool
@@ -147,13 +161,12 @@ trace_capability:          # RTL trace 能力声明（占位，Phase 3 细化）
 - `version` 必填，固定为 1。
 - `id` 必填，唯一。
 - `class` 必填，必须是现有 Scala Config class 全名。
-- `mode` 必填，本阶段固定为 `existing_class`。
-- `cute.params_symbol`、`cute.instances`、`cute.fpe.version`、`cute.isa.version`、`cute.generated_headers` 必填。
-- `soc.vector.version` 必填；无向量实现时写 `none`。
-- `soc.core.kind/count`、`soc.bus.system_bits/memory_bits` 必填。
-- `cute.fpe.version` 必须能解析到 `configs/cute_fpe_versions/<version>.yaml`。
-- `cute.isa.version` 必须能解析到 `configs/cute_isa_versions/<version>.yaml`。
-- `soc.vector.version` 必须能解析到 `configs/vector_versions/<version>.yaml`。
+- `mode` 必填；长期为 `exported_from_chipyard`，Phase 0 过渡可用 `bootstrap_manual`/`existing_class`。
+- `compatibility.fpe.version` 必须能解析到 `configs/cute_fpe_versions/<version>.yaml`。
+- `compatibility.isa.version` 必须能解析到 `configs/cute_isa_versions/<version>.yaml`。
+- `compatibility.vector.version` 必须能解析到 `configs/vector_versions/<version>.yaml`；无向量实现时写 `none`。
+- `export.artifact` 和 `export.generated_headers.output_dir` 是后续生成产物路径元数据；Phase 0 checker 不要求这些文件已存在。
+- `bootstrap_manual` 字段只用于 exporter 前的样板跑通；后续应删除或由 schema 限制在 legacy/bootstrap mode 下。
 
 #### 2.3 产物
 
@@ -172,7 +185,7 @@ version                    # schema 版本，固定 1
 id                         # FPE version id，如 cute_fpe_v1
 description                # 说明
 source:
-  generated_header         # 如 cutetest/include/datatype.h.generated
+  generated_header         # 如 cutetest/include/datatype.h.generated；后续生成产物路径元数据，Phase 0 checker 不读取
   scala_object             # 如 cute.ElementDataType
 datatypes                  # datatype name strings
 ```
@@ -197,7 +210,7 @@ description                # 说明
 source:
   scala_file               # 如 src/main/scala/CUTEParameters.scala
   scala_objects            # cute.CuteInstConfigs / cute.YGJKInstConfigs
-  generated_header         # 如 cutetest/include/instruction.h.generated
+  generated_header         # 如 cutetest/include/instruction.h.generated；后续生成产物路径元数据，Phase 0 checker 不读取
 rocc:
   opcode                   # RoCC opcode，当前为 0x0B
   cute_internal_offset     # CUTE internal 指令映射到 RoCC funct 时的 offset，当前为 64
@@ -302,50 +315,72 @@ configs/schemas/hwconfig.schema.json
 
 #### 3.5.1 `cute2tops_scp64.yaml`
 
-这个配置对应 `chipyard.CUTE2TopsSCP64Config`，是当前默认 Chipyard Config contract。
+这个配置对应 `chipyard.CUTE2TopsSCP64Config`，是当前默认 Chipyard Config 入口。
 
-参数来源（从 `validation.h.generated` 确认）：
-- Tensor_M=64, Tensor_N=64, Tensor_K=64
-- Matrix_M=4, Matrix_N=4
-- outsideDataWidth=512, VectorWidth=256
-- Shuttle core, 1 core, `WithShuttleTileBeatBytes(64)`
-- `WithSystemBusWidth(512)`、`WithNBitMemoryBus(512)`
+长期推荐的薄 manifest：
 
 ```yaml
 version: 1
 id: cute2tops_scp64
 class: chipyard.CUTE2TopsSCP64Config
 source_file: chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
-mode: existing_class
+mode: exported_from_chipyard
 
-cute:
-  params_symbol: CuteParams.CUTE_2Tops_64SCP
-  instances: [0]
+export:
+  artifact: build/chipyard_configs/cute2tops_scp64/chipyard_config.extracted.json
+  generated_headers:
+    output_dir: build/chipyard_configs/cute2tops_scp64/generated_headers
+    fingerprint: auto
+
+compatibility:
   fpe:
     version: cute_fpe_v1
   isa:
     version: cute_isa_v1
-  generated_headers:
-    output_dir: build/chipyard_configs/cute2tops_scp64/generated_headers
-    mode: generate_from_chipyard_config
-    fingerprint: auto
-
-soc:
-  core:
-    kind: shuttle
-    count: 1
-    shuttle_tile_beat_bytes: 64
-  bus:
-    system_bits: 512
-    memory_bits: 512
   vector:
     version: none
 
-capability:
+capability_labels:
   tensor_ops: [matmul, conv]
   layer_ops: []
   fused_ops: []
 ```
+
+Phase 0 若 exporter 尚未完成，可以临时保留 bootstrap 字段用于 target matcher：
+
+```yaml
+mode: bootstrap_manual
+bootstrap_manual:
+  cute:
+    params_symbol: CuteParams.CUTE_2Tops_64SCP
+    instances: [0]
+  soc:
+    core:
+      kind: shuttle
+      count: 1
+      shuttle_tile_beat_bytes: 64
+    bus:
+      system_bits: 512
+      memory_bits: 512
+    cache:
+      inclusive_kb: 512
+      outer_latency_cycles: 40
+      banks: 4
+      cache_hash: true
+      tl_monitors: false
+  trace_capability:
+    structured_trace: false
+    d_store_data: false
+    mem_req_rsp: false
+    perf_counter_snapshot: true
+```
+
+bootstrap 字段来源（基于现有 Scala Config/CuteParams 约定整理；`validation.h.generated` 只作为历史参考，不作为 Phase 0 checker 输入）：
+- Tensor_M=64, Tensor_N=64, Tensor_K=64
+- Matrix_M=4, Matrix_N=4
+- outsideDataWidth=512, VectorWidth=256
+- Shuttle core, 1 core, `WithShuttleTileBeatBytes(64)`
+- `WithSystemBusWidth(512)`、`WithNBitMemoryBus(512)`
 
 #### 3.5.2 `cute2tops_scp64_dramsim32.yaml`
 
@@ -402,16 +437,16 @@ configs/hwconfigs/cute4tops_scp128_dramsim48.yaml  (可选)
 |---|---|---|
 | HWConfig identity | `configs/hwconfigs/*.yaml` | `cute2tops_scp64_dramsim32`, `cute4tops_scp128_dramsim48` |
 | tags | `HWConfig.tags` | `cute_tensor_v1`, `shuttle`, `small` / `medium` |
-| ChipyardConfig | `HWConfig.chipyard_config` | `cute2tops_scp64`, `cute4tops_scp128` |
-| CuteParams | `ChipyardConfig.cute.params_symbol` | `CuteParams.CUTE_2Tops_64SCP`, `CuteParams.CUTE_4Tops_128SCP` |
-| FPE version | `ChipyardConfig.cute.fpe.version` | `cute_fpe_v1` |
-| ISA version | `ChipyardConfig.cute.isa.version` | `cute_isa_v1` |
-| vector version | `ChipyardConfig.soc.vector.version` + `configs/vector_versions/*.yaml` | `none` / `saturn_rvv` |
-| ops | `ChipyardConfig.capability` | `tensor_ops: [matmul, conv]` |
-| SoC | `ChipyardConfig.soc` | `shuttle x1`, `system_bits=512`, `memory_bits=512` |
+| ChipyardConfig entry | `HWConfig.chipyard_config` + `configs/chipyard_configs/*.yaml` | `cute2tops_scp64`, `cute4tops_scp128` |
+| CuteParams | Chipyard exporter；Phase 0 bootstrap 可来自 `bootstrap_manual.cute.params_symbol` | `CuteParams.CUTE_2Tops_64SCP`, `CuteParams.CUTE_4Tops_128SCP` |
+| FPE version | `ChipyardConfig.compatibility.fpe.version` | `cute_fpe_v1` |
+| ISA version | `ChipyardConfig.compatibility.isa.version` | `cute_isa_v1` |
+| vector version | `ChipyardConfig.compatibility.vector.version` + `configs/vector_versions/*.yaml` | `none` / `saturn_rvv` |
+| ops | `ChipyardConfig.capability_labels`；后续可由 exporter/capability JSON 取代 | `tensor_ops: [matmul, conv]` |
+| SoC | Chipyard exporter；Phase 0 bootstrap 可来自 `bootstrap_manual.soc` | `shuttle x1`, `system_bits=512`, `memory_bits=512` |
 | memory | `HWConfig.memory` | `dramsim2_ini_32GB_per_s`, `dramsim2_ini_48GB_per_s` |
 | simulator | `HWConfig.simulator` | `verilator`, `max_cycles=800000000` |
-| trace capability | `ChipyardConfig.trace_capability` | `perf_counter_snapshot=true`, other trace switches false |
+| trace capability | Chipyard exporter；Phase 0 bootstrap 可来自 `bootstrap_manual.trace_capability` | `perf_counter_snapshot=true`, other trace switches false |
 
 后续可能需要重新设计 `hwconfigs` selector，比如是否按 family、size、memory preset、sim backend 或 explicit name 选择。Phase 0 先只保留 tag include/exclude。
 
@@ -642,9 +677,60 @@ configs/trace_filters/perf_task_stage.yaml
 
 ### Task 7: 实现 `tools/runner/cute-check-config.py`
 
-#### 7.1 职责
+#### 7.1 Phase 0 边界
 
-极简静态检查工具，不做编译/运行，只做 YAML 校验和 target 匹配。
+`cute-check-config.py` 是 Phase 0 的极简静态检查工具，不做编译、运行、Chipyard elaboration、Verilog 生成、header 生成或 Scala Config 实例化 dump。
+
+Phase 0 的输入真相源只包括：
+
+```text
+1. 人工维护 manifests:
+   configs/chipyard_configs/*.yaml
+   configs/cute_fpe_versions/*.yaml
+   configs/cute_isa_versions/*.yaml
+   configs/vector_versions/*.yaml
+   configs/hwconfigs/*.yaml
+   cute-sdk/**/project.yaml
+   configs/trace_filters/*.yaml
+
+2. JSON Schema:
+   configs/schemas/*.schema.json
+
+3. 静态 Scala 源码文本:
+   ChipyardConfig.source_file 指向的 CuteConfig.scala（只做 class 存在性 sanity check）
+   CUTEISAVersion.source.scala_file 指向的 CUTEParameters.scala（用于 FPE/ISA version manifest 的源码对齐）
+
+4. 文件系统存在性:
+   memory config 目录
+   VectorVersion.source 中列出的本地文件/目录
+   trace/format_spec.md
+```
+
+Phase 0 明确不读取、不比较、不要求存在：
+
+```text
+instruction.h.generated
+datatype.h.generated
+validation.h.generated
+build/chipyard_configs/**
+chipyard_config.extracted.json
+任何由 HeaderGenerator、Chipyard elaboration 或 runner 后续流程产生的文件
+```
+
+原因：`.h.generated` 和 extracted JSON 都是后续生成流程的产物。`cute-check-config.py` 第一版只能回答“当前人工 manifest 的 schema、引用、版本标签和轻量源码引用是否自洽”，不能反向依赖后续 build artifact。
+
+后续 Phase 1/独立任务可以在 Chipyard 侧复用 HeaderGenerator 的参数提取思路，生成结构化 `chipyard_config.extracted.json`，再新增强一致性检查：
+
+```text
+manifest YAML
+  vs 静态 Scala source contract
+  vs Chipyard 实例化后 extracted JSON
+  vs generated header fingerprint
+```
+
+这部分不属于 Task 7 第一版。
+
+#### 7.2 职责和 CLI
 
 ```text
 Usage:
@@ -654,7 +740,7 @@ Usage:
 
   tools/runner/cute-check-config.py --chipyard-config <path>
     校验单个 chipyard_config yaml 是否符合 schema，
-    并检查 id/class/source_file 与现有 CuteConfig.scala contract 是否一致
+    并检查 id/class/source_file、compatibility 版本引用和 export 路径声明
 
   tools/runner/cute-check-config.py --project <path>
     校验单个 project.yaml 是否符合 schema
@@ -668,67 +754,161 @@ Usage:
     输出所有 project × variant × hwconfig 的 target 匹配矩阵
 ```
 
-#### 7.2 引用解析逻辑
+#### 7.3 引用解析逻辑
 
 ```text
 解析步骤：
   1. 读取 HWConfig.chipyard_config = <id>
   2. 加载 configs/chipyard_configs/<id>.yaml
-  3. 读取 ChipyardConfig.cute.fpe.version = <version>
+  3. 读取 ChipyardConfig.compatibility.fpe.version = <version>
   4. 加载 configs/cute_fpe_versions/<version>.yaml，派生并展开 resolved capability.datatypes
-  5. 读取 ChipyardConfig.cute.isa.version = <version>
+  5. 读取 ChipyardConfig.compatibility.isa.version = <version>
   6. 加载 configs/cute_isa_versions/<version>.yaml，派生并展开 resolved capability.instructions
-  7. 读取 ChipyardConfig.soc.vector.version = <version>
+  7. 读取 ChipyardConfig.compatibility.vector.version = <version>
   8. 加载 configs/vector_versions/<version>.yaml，派生并展开 resolved vector features
   9. 如果 HWConfig.memory.model = dramsim2，
      检查 configs/memconfigs/dramsim2/<config>/system.ini 等必要文件存在
   10. 形成 resolved HWConfig:
      tags 来自 HWConfig
-     capability.tensor_ops/layer_ops/fused_ops、trace_capability、generated_headers、soc 来自 ChipyardConfig
+     capability.tensor_ops/layer_ops/fused_ops 来自 ChipyardConfig.capability_labels 或 exporter capability
+     generated_headers 路径来自 ChipyardConfig.export
+     soc/trace_capability 长期来自 chipyard_config.extracted.json；Phase 0 bootstrap 可来自 bootstrap_manual
      capability.datatypes 来自 CUTEFPEVersion
      capability.instructions 来自 CUTEISAVersion
-     soc.vector.version / soc.vector.features 来自 VectorVersion
+     compatibility.vector.version / resolved vector features 来自 VectorVersion
      memory / simulator 来自 HWConfig
 ```
 
-#### 7.3 ChipyardConfig contract 检查（Phase 0 TODO）
+#### 7.4 静态 Contract 检查
 
-本阶段脚本只做静态检查，不编译、不生成 Verilog。需要预留以下检查：
+本阶段脚本只做静态检查，不编译、不生成 Verilog、不读取 generated headers。需要预留以下检查：
 
 ```text
-existing_class 检查：
+ChipyardConfig manifest 检查：
   1. source_file 存在
-  2. class 能在 source_file 中找到 class <Name> extends Config
-  3. cute.params_symbol 能在该 class 的 WithCuteCoustomParams(...) 中找到
-  4. cute.instances 与 WithCUTE(Seq(...)) 一致
-  5. soc.bus.system_bits 与 WithSystemBusWidth(...) 一致
-  6. soc.bus.memory_bits 与 WithNBitMemoryBus(...) 一致
-  7. soc.core.kind/count 与 WithNShuttleCores / WithNSmallBooms / WithNSmallCores 等片段一致
-  8. cache 字段与 WithInclusiveCache / WithNBanks / WithCacheHash / WithoutTLMonitors 一致
-  9. cute.fpe.version 能解析到 configs/cute_fpe_versions/<version>.yaml
-  10. cute.isa.version 能解析到 configs/cute_isa_versions/<version>.yaml
-  11. soc.vector.version 能解析到 configs/vector_versions/<version>.yaml
+  2. class 能在 source_file 中找到 class <Name> extends Config（sanity check）
+  3. export.artifact / generated_headers.output_dir 路径声明合法
+  4. compatibility.fpe.version 能解析到 configs/cute_fpe_versions/<version>.yaml
+  5. compatibility.isa.version 能解析到 configs/cute_isa_versions/<version>.yaml
+  6. compatibility.vector.version 能解析到 configs/vector_versions/<version>.yaml
+  7. 不用 Python 正则校验 WithCuteCoustomParams/WithCUTE/bus/core/cache；这些结构事实由后续 Chipyard exporter 输出
 
 CUTEFPEVersion 检查：
-  1. CUTEFPEVersion.datatypes 与 ElementDataType/header 导出的 datatype set 一致
+  1. CUTEFPEVersion.datatypes 与 CUTEParameters.scala 中 ElementDataType 静态定义一致
+  2. 只比较静态源码中能解析出的 datatype 名称/枚举，不比较 datatype.h.generated
 
 CUTEISAVersion 检查：
   1. groups.cute.instructions 的 name/funct/description/return_description 集合与 CuteInstConfigs.allInsts 一致
   2. groups.ygjk.instructions 的 name/funct/description/return_description 集合与 YGJKInstConfigs.allInsts 一致
   3. groups.cute.instructions[*].rocc_funct = funct + cute_internal_offset
   4. groups.ygjk.instructions[*].rocc_funct = funct + rocc_funct_offset
-  5. instruction.h.generated 中 CUTE_INST_FUNCT_<name> 宏值与 rocc_funct 一致
+  5. 不比较 instruction.h.generated；header 是后续生成流程产物
 
 VectorVersion 检查：
   1. 文件名、id、Project.target.requires.vector_versions 引用一致
   2. none.yaml 的 kind/features 必须表示无向量实现
   3. saturn_rvv.yaml 中的 source.scala_files/source.scala_mixins 必须能在源码中找到
-  4. 后续如果某个 ChipyardConfig.soc.vector.version != none，需要检查其 Config class 是否包含对应 VectorVersion.source.scala_mixins
+  4. 后续如果某个 ChipyardConfig.compatibility.vector.version != none，应由 Chipyard exporter 检查其 Config class 是否包含对应 VectorVersion.source.scala_mixins
 ```
 
-后续可选增强：调用 `HeaderGenerator`/参数 extractor 生成临时 headers，确认 `CUTEFPEVersion.datatypes`、`CUTEISAVersion.instructions`、`VectorVersion` 的 config-dependent 字段和 CUTE 参数确实来自真实 Config。
+#### 7.5 函数分层
 
-#### 7.4 Target 匹配逻辑
+第一版按下面的层次组织。这里是设计边界，不要求立即拆成多个 Python 模块；单文件实现也应保持这些职责边界。
+
+```text
+基础 IO / Schema:
+  find_cute_root() -> Path
+  load_yaml(path: Path) -> dict
+  load_json(path: Path) -> dict
+  validate_schema(doc: dict, schema_path: Path) -> list[Issue]
+  resolve_manifest_path(kind: str, id: str) -> Path
+
+Manifest 加载 / 引用展开:
+  load_chipyard_config(path_or_id) -> dict
+  load_fpe_version(version_id) -> dict
+  load_isa_version(version_id) -> dict
+  load_vector_version(version_id) -> dict
+  resolve_hwconfig(hwconfig_path) -> ResolvedHWConfig
+
+静态 Scala 文本提取:
+  check_scala_class_declared(scala_file: Path, class_name: str) -> list[Issue]
+  extract_scala_instruction_sets(scala_file: Path) -> dict
+  extract_scala_datatypes(scala_file: Path) -> dict
+
+Contract 检查:
+  check_chipyard_config_manifest(chipyard_yaml: dict) -> list[Issue]
+  check_fpe_contract(fpe_yaml: dict) -> list[Issue]
+  check_isa_contract(isa_yaml: dict) -> list[Issue]
+  check_vector_version_contract(vector_yaml: dict) -> list[Issue]
+  check_hwconfig_references(hwconfig_yaml: dict) -> list[Issue]
+  check_project_trace(project_yaml: dict) -> list[Issue]
+
+Target 匹配:
+  merge_variant_target(project_target: dict, variant_target: dict | None) -> dict
+  match_project_variant(project: dict, variant: dict, resolved_hw: ResolvedHWConfig) -> MatchResult
+
+CLI 编排:
+  check_chipyard_config_cli(path: Path) -> int
+  check_hwconfig_cli(path: Path) -> int
+  check_project_cli(path: Path) -> int
+  check_hw_project_cli(hw_path: Path, project_path: Path) -> int
+  scan_cli() -> int
+  main() -> int
+```
+
+不设置 `extract_header_instruction_functs()`、`extract_header_datatypes()`、`extract_chipyard_config_contract()` 或 `dump_chipyard_config_json()`。这些属于后续生成/强一致性阶段。
+
+#### 7.6 调用关系
+
+```text
+--chipyard-config <path>
+  load_yaml
+  validate_schema(chipyard_config.schema.json)
+  check_chipyard_config_manifest
+    -> check_scala_class_declared
+    -> load/check referenced FPE/ISA/Vector manifests
+
+--hwconfig <path>
+  load_yaml
+  validate_schema(hwconfig.schema.json)
+  check_hwconfig_references
+  resolve_hwconfig
+    -> load_chipyard_config
+    -> load_fpe_version
+    -> load_isa_version
+    -> load_vector_version
+  check_chipyard_config_manifest
+  check_fpe_contract
+    -> extract_scala_datatypes
+  check_isa_contract
+    -> extract_scala_instruction_sets
+  check_vector_version_contract
+
+--project <path>
+  load_yaml
+  validate_schema(project.schema.json)
+  check_project_trace
+    -> trace/format_spec.md
+    -> configs/trace_filters/*.yaml
+
+--hwconfig <path> --project <path>
+  run --hwconfig checks
+  run --project checks
+  resolve_hwconfig
+  for each project.code.variants[*]:
+    merge_variant_target
+    match_project_variant
+
+--scan
+  scan configs/hwconfigs/*.yaml
+  scan cute-sdk/**/project.yaml
+  for each hwconfig:
+    resolve_hwconfig once
+  for each project variant × resolved hwconfig:
+    match_project_variant
+```
+
+#### 7.7 Target 匹配逻辑
 
 ```text
 匹配条件（全部满足才为 MATCH）：
@@ -738,9 +918,9 @@ VectorVersion 检查：
      - HWConfig.tags 命中任一 exclude_tags 即排除
   2. 对每个 variant，合并 project.target.requires 与 variant.target.requires
   3. CUTE/Vector 版本要求：
-     - resolved cute.fpe.version ∈ requires.fpe_versions
-     - resolved cute.isa.version ∈ requires.isa_versions
-     - resolved ChipyardConfig.soc.vector.version ∈ requires.vector_versions；没有向量支持或依赖时为 none
+     - resolved compatibility.fpe.version ∈ requires.fpe_versions
+     - resolved compatibility.isa.version ∈ requires.isa_versions
+     - resolved ChipyardConfig.compatibility.vector.version ∈ requires.vector_versions；没有向量支持或依赖时为 none
 
 输出:
   MATCH            — 全部满足
@@ -750,18 +930,18 @@ VectorVersion 检查：
   VECTOR_VERSION_MISS — vector version 不满足
 ```
 
-#### 7.5 Trace Level 检查
+#### 7.8 Trace Level 检查
 
 读取 `trace/format_spec.md` 中定义的占位 level 名称集合，检查 `project.trace.required_func_level` 和 `project.trace.required_perf_level` 是否在集合内。输出 `TRACE_LEVEL_KNOWN` 或 `TRACE_LEVEL_UNKNOWN`。
 
-#### 7.6 依赖
+#### 7.9 依赖
 
 - Python 3.8+
 - `jsonschema` (pip)
 - `pyyaml` (pip)
 - 无其他外部依赖
 
-#### 7.7 产物
+#### 7.10 产物
 
 ```
 tools/runner/cute-check-config.py
@@ -847,16 +1027,16 @@ tools/runner/cute-check-config.py
 
 ## 验收标准
 
-- [ ] `cute-check-config.py --chipyard-config configs/chipyard_configs/cute2tops_scp64.yaml` 通过校验
-- [ ] `cute-check-config.py` 能解析 `cute.fpe.version` 并展开 datatype set
-- [ ] `cute-check-config.py` 能解析 `cute.isa.version` 并确认 instruction set 与 `CuteInstConfigs` / `YGJKInstConfigs` 一致
-- [ ] `cute-check-config.py` 能解析 `soc.vector.version` 并展开 VectorVersion features
+- [ ] `cute-check-config.py --chipyard-config configs/chipyard_configs/cute2tops_scp64.yaml` 通过 manifest/reference 校验
+- [ ] `cute-check-config.py` 能解析 `compatibility.fpe.version` 并展开 datatype set
+- [ ] `cute-check-config.py` 能解析 `compatibility.isa.version` 并确认 instruction set 与 `CuteInstConfigs` / `YGJKInstConfigs` 一致
+- [ ] `cute-check-config.py` 能解析 `compatibility.vector.version` 并展开 VectorVersion features
 - [ ] `cute-check-config.py --hwconfig configs/hwconfigs/cute2tops_scp64_dramsim32.yaml` 通过校验
 - [ ] `cute-check-config.py --project cute-sdk/runtime/cute_runtime/project.yaml` 通过校验
 - [ ] `cute-check-config.py --project cute-sdk/tensor_ops/matmul/project.yaml` 通过校验
 - [ ] `cute-check-config.py --hwconfig <hw> --project <proj>` 输出 MATCH 且理由正确
 - [ ] `cute-check-config.py --scan` 输出 project × variant × hwconfig 匹配矩阵
-- [ ] `HWConfig`、`ChipyardConfig` 和 `project.yaml` 的字段边界清楚，人工字段和自动生成字段有文档区分
+- [ ] `HWConfig`、薄 `ChipyardConfig` manifest、Chipyard exported JSON 和 `project.yaml` 的字段边界清楚，人工入口和自动导出字段有文档区分
 - [ ] Trace level 名称（F0-F5）已作为占位冻结，但具体 event schema 未承诺
 - [ ] 文档明确：`configs/tests` 不作为人工维护入口
 
@@ -864,6 +1044,7 @@ tools/runner/cute-check-config.py
 
 ## 后续 TODO
 
+- Chipyard exporter：在 Chipyard/Scala 侧复用 `HeaderGenerator.extractParamsFromConfig` 的思路，导出 `build/chipyard_configs/<id>/chipyard_config.extracted.json`。该 JSON 应包含 SoC/core/bus/cache、CuteParams、datatype facts、instruction facts、vector config-dependent facts、trace capability 和 fingerprint。完成后，`configs/chipyard_configs/*.yaml` 应瘦身为 `id/class/source_file/export/compatibility/capability_labels`，不再手写结构字段。
 - 高级模板/模版编程：后续在 `cute-sdk/templates/` 和 tensor/runtime lib 稳定后，评估引入更强的模板机制，用于生成重复的 test driver、datatype/layout dispatch、variant 专用代码和 tensor/layer op wrapper。Phase 0 先不把它放进 `project.schema.json`；当前 `project.yaml` 只描述 `code.entry/build/variants`，未来如确有需要再讨论 `code.template`、`code.generator` 或模板参数 schema。
 
 ---
@@ -886,7 +1067,7 @@ tools/runner/cute-check-config.py
 | Schema 过早复杂化 | 本阶段只保留 Phase 1/2 需要的字段；不确定的字段用 `*_TODO` 标注或直接省略 |
 | Trace 过早展开 | 只做占位；level 名称冻结但内容为空 |
 | project.yaml 过于自由 | schema 约束最小必填字段；variant 参数统一放入 `params`，只有 `params` 内允许自由键值 |
-| HWConfig 字段与 CUTEParameters 不对齐 | HWConfig 不承载 CUTE 参数；`ChipyardConfig` contract 后续由 `cute-check-config.py` 对齐 `CuteConfig.scala` 和 generated headers；datatype set 由 `CUTEFPEVersion` 统一维护；instruction set 由 `CUTEISAVersion` 统一维护；vector feature set 由 `VectorVersion` 统一维护 |
+| HWConfig 字段与 CUTEParameters 不对齐 | HWConfig 不承载 CUTE 参数；薄 `ChipyardConfig` manifest 只承载 class/export/compatibility 入口；结构事实由后续 Chipyard exporter 导出；datatype set 由 `CUTEFPEVersion` 统一维护；instruction set 由 `CUTEISAVersion` 统一维护；vector feature set 由 `VectorVersion` 统一维护 |
 
 ---
 
@@ -895,7 +1076,7 @@ tools/runner/cute-check-config.py
 Phase 0 完成后，Phase 1 可以直接：
 
 1. 读取 `configs/hwconfigs/cute2tops_scp64_dramsim32.yaml` 中的 `chipyard_config`，解析到 `configs/chipyard_configs/cute2tops_scp64.yaml`。
-2. 使用 `ChipyardConfig.class` 调用 `generate-headers.sh`。
+2. 使用 `ChipyardConfig.class` 调用 `generate-headers.sh` / Chipyard exporter，生成 headers 和 `chipyard_config.extracted.json`。
 3. 读取 `cute-sdk/runtime/cute_runtime/project.yaml` 知道 entry file 和 target。
 4. 用 `cute-check-config.py` 确认 target match 后进入 build/run 流程。
 5. 在 artifact 中保存 `hwconfig.resolved.yaml` 和 `target_match.json`。
