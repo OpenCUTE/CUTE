@@ -53,6 +53,15 @@ trace/
     catalogs/
     logs/
     golden/
+  cutetrace/
+    build.sbt
+    src/main/scala/trace/
+      CUTETraceContext.scala
+      CUTETracePrintf.scala
+      CUTETraceParams.scala
+      generated/
+        CUTETrace.scala
+        CUTETraceIds.scala
 
 configs/
   schemas/
@@ -68,14 +77,6 @@ tools/
   trace/
     gen_cute_trace.py
     check_cute_trace.py
-
-src/main/scala/trace/
-  CUTETraceContext.scala
-  CUTETracePrintf.scala
-  CUTETraceParams.scala
-  generated/
-    CUTETrace.scala
-    CUTETraceIds.scala
 ```
 
 ### 文件职责
@@ -119,11 +120,11 @@ Scala 侧：
 
 | 文件 | 职责 |
 |---|---|
-| `src/main/scala/trace/CUTETraceContext.scala` | 保存 trace 输出需要的上下文，例如 cycle 和 `CUTETraceParams`。 |
-| `src/main/scala/trace/CUTETraceParams.scala` | 定义 trace 开关、`Compact/Human/Both` 打印模式和 category 过滤参数。 |
-| `src/main/scala/trace/CUTETracePrintf.scala` | 提供统一 printf runtime，根据参数选择 compact、human 或 both 输出。 |
-| `src/main/scala/trace/generated/CUTETrace.scala` | 由 catalog 生成的 typed trace API，例如 `CUTETrace.AMLLoad.mmuReq(...)`。 |
-| `src/main/scala/trace/generated/CUTETraceIds.scala` | 由 catalog 生成的 category/task/event id 常量。 |
+| `trace/cutetrace/src/main/scala/trace/CUTETraceContext.scala` | 保存 trace 输出需要的上下文，例如 cycle 和 `CUTETraceParams`。 |
+| `trace/cutetrace/src/main/scala/trace/CUTETraceParams.scala` | 定义 trace 开关、`Compact/Human/Both` 打印模式和 category 过滤参数。 |
+| `trace/cutetrace/src/main/scala/trace/CUTETracePrintf.scala` | 提供统一 printf runtime，根据参数选择 compact、human 或 both 输出。 |
+| `trace/cutetrace/src/main/scala/trace/generated/CUTETrace.scala` | 由 catalog 生成的 typed trace API，例如 `CUTETrace.AMLLoad.mmuReq(...)`。 |
+| `trace/cutetrace/src/main/scala/trace/generated/CUTETraceIds.scala` | 由 catalog 生成的 category/task/event id 常量。 |
 
 ### 第一版生成策略
 
@@ -132,7 +133,7 @@ Scala 侧：
 ```bash
 python3 tools/trace/gen_cute_trace.py \
   --catalog trace/catalogs/cute_trace.json \
-  --scala-out src/main/scala/trace/generated \
+  --scala-out trace/cutetrace/src/main/scala/trace/generated \
   --python-out trace/python/cutetrace/generated \
   --build-out trace/generated
 ```
@@ -141,8 +142,8 @@ python3 tools/trace/gen_cute_trace.py \
 
 ```scala
 Compile / sourceGenerators += Def.task {
-  val catalog = baseDirectory.value / "trace" / "catalogs" / "cute_trace.json"
-  val outDir = (Compile / sourceManaged).value / "cute" / "trace" / "generated"
+  val catalog = baseDirectory.value.getParentFile / "catalogs" / "cute_trace.json"
+  val outDir = baseDirectory.value / "src" / "main" / "scala" / "trace" / "generated"
   val generated = CUTETraceCodegen.generate(catalog, outDir)
   generated
 }.taskValue
@@ -433,7 +434,7 @@ object CUTETracePrintf {
 ```bash
 python3 tools/trace/gen_cute_trace.py \
   --catalog trace/catalogs/cute_trace.json \
-  --scala-out src/main/scala/trace/generated \
+  --scala-out trace/cutetrace/src/main/scala/trace/generated \
   --python-out trace/python/cutetrace/generated \
   --build-out trace/generated
 ```
@@ -443,7 +444,7 @@ python3 tools/trace/gen_cute_trace.py \
 ```bash
 python3 tools/trace/gen_cute_trace.py \
   --catalog trace/catalogs/cute_trace.json \
-  --scala-out src/main/scala/trace/generated \
+  --scala-out trace/cutetrace/src/main/scala/trace/generated \
   --python-out trace/python/cutetrace/generated \
   --build-out trace/generated \
   --check
@@ -702,8 +703,8 @@ result fragment 对齐
 Scala 源码路径可以是：
 
 ```text
-src/main/scala/trace/CUTETraceContext.scala
-src/main/scala/trace/generated/CUTETrace.scala
+trace/cutetrace/src/main/scala/trace/CUTETraceContext.scala
+trace/cutetrace/src/main/scala/trace/generated/CUTETrace.scala
 ```
 
 实际 package 由文件内声明决定：
@@ -815,8 +816,8 @@ tools/trace/check_cute_trace.py
 
 ```text
 tools/trace/gen_cute_trace.py
-src/main/scala/trace/generated/CUTETrace.scala
-src/main/scala/trace/generated/CUTETraceIds.scala
+trace/cutetrace/src/main/scala/trace/generated/CUTETrace.scala
+trace/cutetrace/src/main/scala/trace/generated/CUTETraceIds.scala
 trace/python/cutetrace/generated/cute_trace_catalog.py
 trace/generated/cute_trace_catalog.normalized.json
 ```
@@ -833,9 +834,9 @@ trace/generated/cute_trace_catalog.normalized.json
 产物：
 
 ```text
-src/main/scala/trace/CUTETraceContext.scala
-src/main/scala/trace/CUTETraceParams.scala
-src/main/scala/trace/CUTETracePrintf.scala
+trace/cutetrace/src/main/scala/trace/CUTETraceContext.scala
+trace/cutetrace/src/main/scala/trace/CUTETraceParams.scala
+trace/cutetrace/src/main/scala/trace/CUTETracePrintf.scala
 ```
 
 验收：
@@ -912,7 +913,7 @@ Makefile 或 tools/trace/README.md
 推荐命令：
 
 ```bash
-python3 tools/trace/gen_cute_trace.py --catalog trace/catalogs/cute_trace.json --scala-out src/main/scala/trace/generated --python-out trace/python/cutetrace/generated --build-out trace/generated
+python3 tools/trace/gen_cute_trace.py --catalog trace/catalogs/cute_trace.json --scala-out trace/cutetrace/src/main/scala/trace/generated --python-out trace/python/cutetrace/generated --build-out trace/generated
 python3 tools/trace/check_cute_trace.py --catalog trace/catalogs/cute_trace.json --filters configs/trace_filters
 ```
 

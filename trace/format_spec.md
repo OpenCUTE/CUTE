@@ -191,7 +191,7 @@ trace/
 ```
 
 ```text
-src/main/scala/trace/
+trace/cutetrace/src/main/scala/trace/
   CUTETraceContext.scala
   CUTETracePrintf.scala
   CUTETraceParams.scala
@@ -216,8 +216,8 @@ src/main/scala/trace/
 | `configs/trace_filters/*.yaml` | trace 过滤器 manifest。 |
 | `tools/trace/gen_cute_trace.py` | catalog 到 Scala/Python 生成产物的代码生成入口。 |
 | `tools/trace/check_cute_trace.py` | catalog、filter、生成产物的一致性检查入口。 |
-| `src/main/scala/trace/CUTETraceContext.scala` | Chisel trace 上下文。 |
-| `src/main/scala/trace/CUTETraceParams.scala` | trace 开关、打印模式和类别过滤参数。 |
-| `src/main/scala/trace/CUTETracePrintf.scala` | 统一 printf runtime。 |
-| `src/main/scala/trace/generated/CUTETrace.scala` | 生成的 typed trace API。 |
-| `src/main/scala/trace/generated/CUTETraceIds.scala` | 生成的 id 常量。 |
+| `trace/cutetrace/src/main/scala/trace/CUTETraceContext.scala` | Chisel trace 上下文。 |
+| `trace/cutetrace/src/main/scala/trace/CUTETraceParams.scala` | trace 开关、打印模式和类别过滤参数。 |
+| `trace/cutetrace/src/main/scala/trace/CUTETracePrintf.scala` | 统一 printf runtime。 |
+| `trace/cutetrace/src/main/scala/trace/generated/CUTETrace.scala` | 生成的 typed trace API。 |
+| `trace/cutetrace/src/main/scala/trace/generated/CUTETraceIds.scala` | 生成的 id 常量。 |

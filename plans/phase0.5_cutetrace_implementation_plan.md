@@ -849,8 +849,8 @@ Phase 0.5 记录该 config 的接口形态和参数含义；实际实现进入 F
 ### Verilator Trace
 
 ```text
-src/main/scala/trace/CUTETraceIds.scala
-src/main/scala/trace/CUTETracePrintf.scala
+trace/cutetrace/src/main/scala/trace/CUTETraceIds.scala
+trace/cutetrace/src/main/scala/trace/CUTETracePrintf.scala
 trace/catalogs/cute_trace.json
 trace/python/cutetrace/catalog.py
 trace/python/cutetrace/parser.py
@@ -867,8 +867,8 @@ trace/python/cutetrace/render.py
 | `trace/python/cutetrace/parser.py` | 解析 compact trace 行。 |
 | `trace/python/cutetrace/decoder.py` | 结合 catalog 解码 trace 事件。 |
 | `trace/python/cutetrace/render.py` | 输出可读文本、JSONL 或检查器输入。 |
-| `src/main/scala/trace/CUTETraceIds.scala` | 生成或维护 trace id 常量。 |
-| `src/main/scala/trace/CUTETracePrintf.scala` | Chisel 侧统一 printf runtime。 |
+| `trace/cutetrace/src/main/scala/trace/CUTETraceIds.scala` | 生成或维护 trace id 常量。 |
+| `trace/cutetrace/src/main/scala/trace/CUTETracePrintf.scala` | Chisel 侧统一 printf runtime。 |
 
 ### Status
 
@@ -916,8 +916,8 @@ trace/status_spec.md
 ```text
 trace/catalogs/cute_trace.json
 tools/trace/gen_cute_trace.py
-src/main/scala/trace/CUTETraceIds.scala
-src/main/scala/trace/CUTETracePrintf.scala
+trace/cutetrace/src/main/scala/trace/CUTETraceIds.scala
+trace/cutetrace/src/main/scala/trace/CUTETracePrintf.scala
 ```
 
 验收：

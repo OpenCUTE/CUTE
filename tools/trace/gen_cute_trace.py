@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--scala-out",
         type=Path,
-        default=REPO_ROOT / "src" / "main" / "scala" / "trace" / "generated",
+        default=REPO_ROOT / "trace" / "cutetrace" / "src" / "main" / "scala" / "trace" / "generated",
         help="Directory for generated Scala files.",
     )
     parser.add_argument(
