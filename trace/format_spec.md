@@ -214,8 +214,8 @@ src/main/scala/trace/
 | `trace/python/func/*.py` | 功能验证等级检查器。 |
 | `configs/schemas/cute_trace_catalog.schema.json` | catalog JSON Schema。 |
 | `configs/trace_filters/*.yaml` | trace 过滤器 manifest。 |
-| `scripts/trace/gen_cute_trace.py` | catalog 到 Scala/Python 生成产物的代码生成入口。 |
-| `scripts/trace/check_cute_trace.py` | catalog、filter、生成产物的一致性检查入口。 |
+| `tools/trace/gen_cute_trace.py` | catalog 到 Scala/Python 生成产物的代码生成入口。 |
+| `tools/trace/check_cute_trace.py` | catalog、filter、生成产物的一致性检查入口。 |
 | `src/main/scala/trace/CUTETraceContext.scala` | Chisel trace 上下文。 |
 | `src/main/scala/trace/CUTETraceParams.scala` | trace 开关、打印模式和类别过滤参数。 |
 | `src/main/scala/trace/CUTETracePrintf.scala` | 统一 printf runtime。 |

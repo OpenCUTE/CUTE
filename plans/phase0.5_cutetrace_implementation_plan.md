@@ -915,7 +915,7 @@ trace/status_spec.md
 
 ```text
 trace/catalogs/cute_trace.json
-scripts/trace/gen_cute_trace.py
+tools/trace/gen_cute_trace.py
 src/main/scala/trace/CUTETraceIds.scala
 src/main/scala/trace/CUTETracePrintf.scala
 ```

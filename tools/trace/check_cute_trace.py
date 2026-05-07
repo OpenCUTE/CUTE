@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
+sys.dont_write_bytecode = True
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TRACE_PYTHON = REPO_ROOT / "trace" / "python"
 if str(TRACE_PYTHON) not in sys.path:
