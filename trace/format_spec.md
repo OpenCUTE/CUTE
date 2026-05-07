@@ -199,3 +199,25 @@ src/main/scala/trace/
     CUTETrace.scala
     CUTETraceIds.scala
 ```
+
+关键文件职责：
+
+| 文件 | 职责 |
+|---|---|
+| `trace/catalogs/cute_trace.json` | trace catalog 唯一真相源。 |
+| `trace/generated/cute_trace_catalog.normalized.json` | 生成器输出的归一化 catalog，用于 review、diff 和工具输入。 |
+| `trace/python/cutetrace/catalog.py` | catalog 加载、校验和查询索引。 |
+| `trace/python/cutetrace/parser.py` | 解析 compact `CT,...` 行，得到 raw trace record。 |
+| `trace/python/cutetrace/decoder.py` | 结合 catalog 把 raw record 解码成带名字和字段的事件。 |
+| `trace/python/cutetrace/render.py` | 把 decoded event 渲染成可读文本、JSONL 或检查器输入。 |
+| `trace/python/cutetrace/generated/cute_trace_catalog.py` | 生成的 Python catalog 常量和静态索引。 |
+| `trace/python/func/*.py` | 功能验证等级检查器。 |
+| `configs/schemas/cute_trace_catalog.schema.json` | catalog JSON Schema。 |
+| `configs/trace_filters/*.yaml` | trace 过滤器 manifest。 |
+| `scripts/trace/gen_cute_trace.py` | catalog 到 Scala/Python 生成产物的代码生成入口。 |
+| `scripts/trace/check_cute_trace.py` | catalog、filter、生成产物的一致性检查入口。 |
+| `src/main/scala/trace/CUTETraceContext.scala` | Chisel trace 上下文。 |
+| `src/main/scala/trace/CUTETraceParams.scala` | trace 开关、打印模式和类别过滤参数。 |
+| `src/main/scala/trace/CUTETracePrintf.scala` | 统一 printf runtime。 |
+| `src/main/scala/trace/generated/CUTETrace.scala` | 生成的 typed trace API。 |
+| `src/main/scala/trace/generated/CUTETraceIds.scala` | 生成的 id 常量。 |

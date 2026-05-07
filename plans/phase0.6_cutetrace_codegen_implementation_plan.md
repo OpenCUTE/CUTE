@@ -78,6 +78,53 @@ src/main/scala/trace/
     CUTETraceIds.scala
 ```
 
+### 文件职责
+
+Catalog 与生成产物：
+
+| 文件 | 职责 |
+|---|---|
+| `trace/catalogs/cute_trace.json` | 手写维护的 trace catalog，是 category、module、task、event、field、id 的唯一真相源。 |
+| `trace/generated/cute_trace_catalog.normalized.json` | 由生成器输出的归一化 catalog，用于 review、diff、CI 检查和解码器稳定输入。 |
+| `trace/python/cutetrace/generated/cute_trace_catalog.py` | 由 catalog 生成的 Python 常量和静态索引，供 Python 工具快速引用 id、名称和字段定义。 |
+
+Python 工具库：
+
+| 文件 | 职责 |
+|---|---|
+| `trace/python/cutetrace/catalog.py` | 读取 catalog，做结构校验、引用校验、id 唯一性校验，并建立按 id/name 查询的索引。 |
+| `trace/python/cutetrace/parser.py` | 解析 compact `CT,...` 日志行，输出只包含 version、cycle、task_id、event_id、raw values 的原始记录。 |
+| `trace/python/cutetrace/decoder.py` | 用 `catalog.py` 提供的字典把原始记录解码成带 category、module、task、event、field name 的 decoded event。 |
+| `trace/python/cutetrace/render.py` | 把 decoded event 渲染成离线可读文本、JSONL 或功能验证检查器需要的输入格式。 |
+
+功能验证检查器：
+
+| 文件 | 职责 |
+|---|---|
+| `trace/python/func/level1_inst.py` | 检查 CUTE 指令、程序退出、task 生命周期。 |
+| `trace/python/func/level2_mem_cute.py` | 在 Level1 正常的基础上检查 CUTE 内部 load/store 访存事件。 |
+| `trace/python/func/level2ex_all_cute.py` | 检查 CUTE 计算路径，用于定位包含计算结果的问题。 |
+| `trace/python/func/level3_mem_vector.py` | 检查 vector 与 CUTE 配合时的访存事件。 |
+
+配置与脚本：
+
+| 文件 | 职责 |
+|---|---|
+| `configs/schemas/cute_trace_catalog.schema.json` | JSON Schema，校验 catalog 的基础结构和字段类型。 |
+| `configs/trace_filters/*.yaml` | 功能验证或 profile 工具使用的 trace 选择规则。 |
+| `scripts/trace/gen_cute_trace.py` | 从 catalog 生成 Scala typed API、Scala id 常量、Python generated catalog 和 normalized catalog。 |
+| `scripts/trace/check_cute_trace.py` | 校验 catalog、filter、生成文件之间的一致性。 |
+
+Scala 侧：
+
+| 文件 | 职责 |
+|---|---|
+| `src/main/scala/trace/CUTETraceContext.scala` | 保存 trace 输出需要的上下文，例如 cycle 和 `CUTETraceParams`。 |
+| `src/main/scala/trace/CUTETraceParams.scala` | 定义 trace 开关、`Compact/Human/Both` 打印模式和 category 过滤参数。 |
+| `src/main/scala/trace/CUTETracePrintf.scala` | 提供统一 printf runtime，根据参数选择 compact、human 或 both 输出。 |
+| `src/main/scala/trace/generated/CUTETrace.scala` | 由 catalog 生成的 typed trace API，例如 `CUTETrace.AMLLoad.mmuReq(...)`。 |
+| `src/main/scala/trace/generated/CUTETraceIds.scala` | 由 catalog 生成的 category/task/event id 常量。 |
+
 ### 第一版生成策略
 
 第一版采用显式脚本生成：
@@ -882,7 +929,7 @@ python3 scripts/trace/check_cute_trace.py --catalog trace/catalogs/cute_trace.js
 1. 写 cute_trace_catalog.schema.json
 2. 写 cute_trace.json 的 cute_inst/cute_task seed
 3. 写 catalog.py loader + validator
-4. 写 gen_cute_trace.py 生成 Scala ids / hash / API
+4. 写 gen_cute_trace.py 生成 Scala ids / API / Python generated catalog
 5. 写 CUTETraceContext/Params/Printf runtime
 6. 在 TaskController 插第一批 cute_inst/cute_task trace
 7. 写 parser / decoder / render
