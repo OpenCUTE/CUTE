@@ -112,8 +112,8 @@ Python 工具库：
 |---|---|
 | `configs/schemas/cute_trace_catalog.schema.json` | JSON Schema，校验 catalog 的基础结构和字段类型。 |
 | `configs/trace_filters/*.yaml` | 功能验证或 profile 工具使用的 trace 选择规则。 |
-| `scripts/trace/gen_cute_trace.py` | 从 catalog 生成 Scala typed API、Scala id 常量、Python generated catalog 和 normalized catalog。 |
-| `scripts/trace/check_cute_trace.py` | 校验 catalog、filter、生成文件之间的一致性。 |
+| `tools/trace/gen_cute_trace.py` | 从 catalog 生成 Scala typed API、Scala id 常量、Python generated catalog 和 normalized catalog。 |
+| `tools/trace/check_cute_trace.py` | 校验 catalog、filter、生成文件之间的一致性。 |
 
 Scala 侧：
 
@@ -130,7 +130,7 @@ Scala 侧：
 第一版采用显式脚本生成：
 
 ```bash
-python3 scripts/trace/gen_cute_trace.py \
+python3 tools/trace/gen_cute_trace.py \
   --catalog trace/catalogs/cute_trace.json \
   --scala-out src/main/scala/trace/generated \
   --python-out trace/python/cutetrace/generated \
@@ -431,7 +431,7 @@ object CUTETracePrintf {
 ### 命令行入口
 
 ```bash
-python3 scripts/trace/gen_cute_trace.py \
+python3 tools/trace/gen_cute_trace.py \
   --catalog trace/catalogs/cute_trace.json \
   --scala-out src/main/scala/trace/generated \
   --python-out trace/python/cutetrace/generated \
@@ -441,7 +441,7 @@ python3 scripts/trace/gen_cute_trace.py \
 可选检查模式：
 
 ```bash
-python3 scripts/trace/gen_cute_trace.py \
+python3 tools/trace/gen_cute_trace.py \
   --catalog trace/catalogs/cute_trace.json \
   --scala-out src/main/scala/trace/generated \
   --python-out trace/python/cutetrace/generated \
@@ -510,7 +510,7 @@ exclude:
 
 ### 校验规则
 
-`scripts/trace/check_cute_trace.py` 读取：
+`tools/trace/check_cute_trace.py` 读取：
 
 ```text
 trace/catalogs/cute_trace.json
@@ -798,7 +798,7 @@ trace/catalogs/cute_trace.json
 
 ```text
 trace/python/cutetrace/catalog.py
-scripts/trace/check_cute_trace.py
+tools/trace/check_cute_trace.py
 ```
 
 验收：
@@ -814,7 +814,7 @@ scripts/trace/check_cute_trace.py
 产物：
 
 ```text
-scripts/trace/gen_cute_trace.py
+tools/trace/gen_cute_trace.py
 src/main/scala/trace/generated/CUTETrace.scala
 src/main/scala/trace/generated/CUTETraceIds.scala
 trace/python/cutetrace/generated/cute_trace_catalog.py
@@ -892,7 +892,7 @@ configs/trace_filters/func_level2_mem_cute.yaml
 configs/trace_filters/func_level2ex_all_cute.yaml
 configs/trace_filters/func_level3_mem_vector.yaml
 configs/trace_filters/perf_topdown_status.yaml
-scripts/trace/check_cute_trace.py
+tools/trace/check_cute_trace.py
 ```
 
 验收：
@@ -906,14 +906,14 @@ scripts/trace/check_cute_trace.py
 产物：
 
 ```text
-Makefile 或 scripts/trace/README.md
+Makefile 或 tools/trace/README.md
 ```
 
 推荐命令：
 
 ```bash
-python3 scripts/trace/gen_cute_trace.py --catalog trace/catalogs/cute_trace.json --scala-out src/main/scala/trace/generated --python-out trace/python/cutetrace/generated --build-out trace/generated
-python3 scripts/trace/check_cute_trace.py --catalog trace/catalogs/cute_trace.json --filters configs/trace_filters
+python3 tools/trace/gen_cute_trace.py --catalog trace/catalogs/cute_trace.json --scala-out src/main/scala/trace/generated --python-out trace/python/cutetrace/generated --build-out trace/generated
+python3 tools/trace/check_cute_trace.py --catalog trace/catalogs/cute_trace.json --filters configs/trace_filters
 ```
 
 验收：
