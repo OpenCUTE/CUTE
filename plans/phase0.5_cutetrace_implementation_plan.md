@@ -134,7 +134,7 @@ CUTE Trace 采用 Verilator printf + 字典机制。
 - 替代散落的长字符串 `printf`。
 - 用 `task_id/event_id/field_id` 字典机制减少日志字符量。
 - 保留可解析性，parser 可以还原漂亮日志。
-- 服务 F0/F1/F2 功能验证。
+- 服务 F0_task / F1_loadstore / F2_compute 功能验证。
 - 综合边界限定在 Verilator/仿真。
 
 示例：
@@ -222,7 +222,7 @@ events:
   AML_MmuReq:
     task: AMLLoad
     id: 0x02
-    level: F0_event
+    level: F1_loadstore
     fields:
       - { name: ih, width: 16, fmt: dec }
       - { name: iw, width: 16, fmt: dec }
@@ -277,20 +277,20 @@ CUTETracePrintMode.Both
 
 ### Trace levels
 
-沿用 Phase 0 的功能等级：
+Trace level 按 CUTE 内部验证语义分层：
 
 ```text
-F0_event:
-  基础事件顺序、任务生命周期、MMU req/rsp。
+F0_task:
+  关注 CUTE 内部各模块的任务起始和结束。
+  目标是还原 task lifecycle，并检查 task 的发射、执行、完成顺序。
 
-F1_store:
-  D/store tensor 提取和重建。
+F1_loadstore:
+  关注每次发生的 load 读取和 store 写回。
+  目标是重建 CUTE 与内存/LocalMMU/scratchpad 之间的数据流。
 
-F2_tensor_op:
-  tensor op 级功能验证。
-
-F3_layer/F4_fused/F5_model:
-  后续由软件模型聚合。
+F2_compute:
+  关注每次 MTE 的计算输入、输出和计算结果。
+  目标是对 MTE compute result 做功能验证，并和参考模型对齐。
 ```
 
 ### 第一批 Trace 事件
@@ -298,29 +298,93 @@ F3_layer/F4_fused/F5_model:
 优先迁移现有 printf 中最有功能验证价值的事件：
 
 ```text
-TaskController:
-  macro_inst_insert
-  macro_inst_decode_start
-  macro_inst_decode_end
-  micro_task_issue
-  micro_task_commit
+F0_task:
+  TaskController macro_inst_insert
+  TaskController macro_inst_decode_start
+  TaskController macro_inst_decode_end
+  TaskController micro_task_issue
+  TaskController micro_task_commit
+  AML/BML/CML/MTE task_start
+  AML/BML/CML/MTE task_end
 
-LocalMMU / Cute2TL:
-  mmu_req
-  mmu_rsp
-  source_id_alloc
-  source_id_free
+F1_loadstore:
+  AML/BML load_req
+  AML/BML load_rsp
+  AML/BML load_data
+  CML store_req
+  CML store_data
+  CML store_ack
+  LocalMMU mmu_req
+  LocalMMU mmu_rsp
 
-AML/BML/CML:
+F2_compute:
+  MTE compute_start
+  MTE compute_input
+  MTE compute_result
+  MTE compute_end
+```
+
+### Trace event 字段建议
+
+#### F0_task
+
+```text
+common:
+  module_id
+  task_id
+  macro_id
+  micro_id
+  opcode
+  task_state
+
+events:
   task_start
   task_end
-  mmu_req
-  mmu_rsp
+  task_issue
+  task_commit
+```
 
-CML:
-  d_store_start
-  d_store_data
-  d_store_end
+#### F1_loadstore
+
+```text
+common:
+  module_id
+  task_id
+  tensor_id
+  addr
+  bytes
+  element_type
+  tile_m
+  tile_n
+  tile_k
+
+events:
+  load_req
+  load_rsp
+  load_data
+  store_req
+  store_data
+  store_ack
+```
+
+#### F2_compute
+
+```text
+common:
+  module_id
+  task_id
+  compute_id
+  tile_m
+  tile_n
+  tile_k
+  accum_type
+  result_fragment
+
+events:
+  compute_start
+  compute_input
+  compute_result
+  compute_end
 ```
 
 ### Trace parser
@@ -345,7 +409,7 @@ trace/python/cutetrace/
 - 解码 task/event/payload。
 - 输出漂亮 text。
 - 输出 JSONL。
-- 给 F0/F1/F2 功能模型提供结构化输入。
+- 给 F0_task / F1_loadstore / F2_compute checker 提供结构化输入。
 
 ---
 
@@ -748,7 +812,7 @@ render top-down graph
 case class CUTETraceParams(
   enable: Boolean = false,
   mode: CUTETraceMode = CUTETraceMode.CompactPrintf,
-  levels: Set[CUTETraceLevel] = Set(F0Event),
+  levels: Set[CUTETraceLevel] = Set(F0Task),
   catalogHash: BigInt = 0
 )
 ```
@@ -880,7 +944,7 @@ trace/python/cutetrace/render.py
 
 - compact printf 能还原成漂亮日志。
 - 能输出 JSONL。
-- 能为 F0/F1/F2 模型提供结构化事件。
+- 能为 F0_task / F1_loadstore / F2_compute checker 提供结构化事件。
 
 ### Task 4: CUTE 关键 Trace 事件 PoC
 
@@ -888,16 +952,18 @@ trace/python/cutetrace/render.py
 
 ```text
 TaskController macro/micro lifecycle
-LocalMMU req/rsp
-CML d_store_data
+AML/BML load_data
+CML store_data
+MTE compute_result
 ```
 
 验收：
 
 - 旧 printf 保留到 compact trace 覆盖同等信息。
 - 新 compact trace 与旧 printf 可交叉确认。
-- F0_event 能做最小顺序检查。
-- F1_store 能重建最小 D tensor。
+- F0_task 能检查 CUTE 内部关键模块 task_start/task_end 顺序。
+- F1_loadstore 能重建最小 load/store 数据流。
+- F2_compute 能记录并校验最小 MTE compute result。
 
 ### Task 5: Status enum 草案
 
@@ -1078,10 +1144,11 @@ Phase 0.5 完成时，应满足：
 1. 文档明确 Trace 是 Verilator-only printf，Status 是 profile/top-down 归因主线。
 2. CUTE 关键模块可以输出 compact trace printf。
 3. Trace decoder 可以把 compact printf 还原成漂亮日志和 JSONL。
-4. F0_event 可以做最小任务/MMU 顺序检查。
-5. F1_store 可以重建最小 D tensor。
-6. AML/BML/CML/MTE/LocalMMU 至少有初版 status 枚举。
-7. CUTE top 可以聚合出 `CUTEStatus`。
-8. 仿真中可以 printf ChipTop/DigitalTop 聚合好的 `TopDownStatus`。
-9. 离线归因解释器可以读取全量 Verilator trace/status 日志，反复重放并比较不同 top-down 归因规则。
-10. FPGA/XDMA/status logging 明确后置，并有可行性分析和成熟条件。
+4. F0_task 可以检查 CUTE 内部关键模块的任务起始和结束顺序。
+5. F1_loadstore 可以重建最小 load/store 数据流。
+6. F2_compute 可以记录并校验最小 MTE compute result。
+7. AML/BML/CML/MTE/LocalMMU 至少有初版 status 枚举。
+8. CUTE top 可以聚合出 `CUTEStatus`。
+9. 仿真中可以 printf ChipTop/DigitalTop 聚合好的 `TopDownStatus`。
+10. 离线归因解释器可以读取全量 Verilator trace/status 日志，反复重放并比较不同 top-down 归因规则。
+11. FPGA/XDMA/status logging 明确后置，并有可行性分析和成熟条件。

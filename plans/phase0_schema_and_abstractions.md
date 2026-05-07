@@ -29,7 +29,7 @@ Phase 0 的目标不是跑通完整测试，而是先把核心对象的入口和
 - vector 能力列表不放宽到 `Project` target；`ChipyardConfig` manifest 只声明/引用 vector version id，具体 vector mixin/config-dependent 字段由 Chipyard exporter 输出，`Project.target.requires.vector_versions` 只匹配这些 version id。
 - `cute-check-config.py` 不负责反向解析完整 Chipyard Scala Config；它只校验 manifest、引用和 target match。Chipyard Config 的结构事实由后续 exporter 负责导出。
 - `none` 是一个真实的 `VectorVersion` manifest，不是缺省空值；无向量实现或无向量依赖时都显式写 `none`。
-- Trace 只保留边界定义：`filter`、`func model`、`perf model`，不在本阶段细化事件 schema。
+- Trace 保留边界定义：`filter`、`func checker`、`status/profile model`，本阶段冻结 level 名称和 project 引用方式。
 - catalog/index 如果需要，只能由工具扫描生成，不能作为人工维护真相源。
 
 ### Config manifest 的定位
@@ -178,10 +178,11 @@ soc:
   cache
   vector                 # 具体 mixin、vLen/dLen/mLen 等 config-dependent facts
 trace_capability:
-    structured_trace       # bool
-    d_store_data           # bool
-    mem_req_rsp            # bool
-    perf_counter_snapshot  # bool
+    cute_trace_printf      # bool
+    f0_task                # bool
+    f1_loadstore           # bool
+    f2_compute             # bool
+    topdown_status_printf  # bool
 ```
 
 #### 2.2 Schema 校验规则
@@ -398,10 +399,11 @@ bootstrap_manual:
       cache_hash: true
       tl_monitors: false
   trace_capability:
-    structured_trace: false
-    d_store_data: false
-    mem_req_rsp: false
-    perf_counter_snapshot: true
+    cute_trace_printf: false
+    f0_task: false
+    f1_loadstore: false
+    f2_compute: false
+    topdown_status_printf: false
 ```
 
 bootstrap 字段来源（基于现有 Scala Config/CuteParams 约定整理；`validation.h.generated` 只作为历史参考，不作为 Phase 0 checker 输入）：
@@ -475,7 +477,7 @@ configs/hwconfigs/cute4tops_scp128_dramsim48.yaml  (可选)
 | SoC | Chipyard exporter；Phase 0 bootstrap 可来自 `bootstrap_manual.soc` | `shuttle x1`, `system_bits=512`, `memory_bits=512` |
 | memory | `HWConfig.memory` | `dramsim2_ini_32GB_per_s`, `dramsim2_ini_48GB_per_s` |
 | simulator | `HWConfig.simulator` | `verilator`, `max_cycles=800000000` |
-| trace capability | Chipyard exporter；Phase 0 bootstrap 可来自 `bootstrap_manual.trace_capability` | `perf_counter_snapshot=true`, other trace switches false |
+| trace capability | Chipyard exporter；Phase 0 bootstrap 可来自 `bootstrap_manual.trace_capability` | `cute_trace_printf`, `f0_task`, `f1_loadstore`, `f2_compute`, `topdown_status_printf` |
 
 后续可能需要重新设计 `hwconfigs` selector，比如是否按 family、size、memory preset、sim backend 或 explicit name 选择。Phase 0 先只保留 tag include/exclude。
 
@@ -510,7 +512,7 @@ code:
         requires           # 可选，variant 级 FPE/ISA/vector version 约束
 
 golden:
-  level                    # event | store_tensor | tensor_op | layer | fused_layer | model
+  level                    # task | loadstore | compute | layer | fused_layer | model
   source                   # python_reference | c_reference | existing_checker | external
   compare:
     mode                   # exact | tolerance | semantic
@@ -518,7 +520,7 @@ golden:
     rel_err                # float (tolerance mode)
 
 trace:
-  required_func_level      # 占位 level 名称
+  required_func_level      # F0_task | F1_loadstore | F2_compute
   required_perf_level      # 可选，占位 level 名称
   default_filters          # 占位 filter 名称 list
   required_events          # 可选，占位 event 名称 list
@@ -577,14 +579,14 @@ code:
       params: {}
 
 golden:
-  level: event
+  level: task
   source: existing_checker
   compare:
     mode: exact
 
 trace:
-  required_func_level: F0_event
-  default_filters: [func_event]
+  required_func_level: F0_task
+  default_filters: [func_task]
 ```
 
 #### 5.2 `cute-sdk/tensor_ops/matmul/project.yaml`
@@ -626,14 +628,14 @@ code:
         bias_type: zero
 
 golden:
-  level: tensor_op
+  level: compute
   source: python_reference
   compare:
     mode: exact
 
 trace:
-  required_func_level: F2_tensor_op
-  default_filters: [func_store_tensor]
+  required_func_level: F2_compute
+  default_filters: [func_compute]
 ```
 
 #### 5.3 产物
@@ -672,11 +674,11 @@ cute-sdk/tensor_ops/matmul/project.yaml
 只记录以下内容：
 
 - Trace 是一级抽象，和 HWConfig、Test 并列。
-- `Trace.filter`、`Trace.func`、`Trace.perf` 待后续专题展开。
+- `Trace.filter`、`Trace.func checker`、`Trace.status/profile` 待后续专题展开。
 - 本阶段所有 trace level 名称只作为接口占位：
-  - `F0_event` — 基础事件顺序检查
-  - `F1_store` — D_STORE_DATA 提取
-  - `F2_tensor_op` — tensor op 级功能验证
+  - `F0_task` — CUTE 内部各模块的任务起始和结束
+  - `F1_loadstore` — 每次发生的 load 读取和 store 写回
+  - `F2_compute` — 每次 MTE 的计算结果
   - `F3_layer` — layer 级
   - `F4_fused_layer` — fused layer 级
   - `F5_model` — model 级
@@ -685,9 +687,10 @@ cute-sdk/tensor_ops/matmul/project.yaml
 #### 6.3 占位 filter 文件
 
 ```
-configs/trace_filters/func_event.yaml        # purpose: func, status: placeholder
-configs/trace_filters/func_store_tensor.yaml  # purpose: func, status: placeholder
-configs/trace_filters/perf_task_stage.yaml    # purpose: perf, status: placeholder
+configs/trace_filters/func_task.yaml        # purpose: func, status: placeholder
+configs/trace_filters/func_loadstore.yaml   # purpose: func, status: placeholder
+configs/trace_filters/func_compute.yaml     # purpose: func, status: placeholder
+configs/trace_filters/perf_topdown_status.yaml  # purpose: perf, status: placeholder
 ```
 
 每个文件只包含最小字段（version, name, purpose, description, status: placeholder），不定义实际 filter 逻辑。
@@ -697,9 +700,10 @@ configs/trace_filters/perf_task_stage.yaml    # purpose: perf, status: placehold
 ```
 configs/schemas/trace_filter.schema.json
 trace/format_spec.md
-configs/trace_filters/func_event.yaml
-configs/trace_filters/func_store_tensor.yaml
-configs/trace_filters/perf_task_stage.yaml
+configs/trace_filters/func_task.yaml
+configs/trace_filters/func_loadstore.yaml
+configs/trace_filters/func_compute.yaml
+configs/trace_filters/perf_topdown_status.yaml
 ```
 
 ---
@@ -973,21 +977,20 @@ tools/runner/cute-check-config.py
 
 ### Task 8: Trace 实现任务占位（后续专题讨论）
 
-Task 8 暂不在本轮实现，只把 Trace 实现从 Task 7 中剥离出来，后续单独讨论 `trace/func` 和 `trace/perf` 的边界、输入格式和模型责任。
+Task 8 暂不在本轮实现，把 Trace 实现从 Task 7 中剥离出来，后续单独讨论 `trace/func checker` 和 `trace/status profile` 的边界、输入格式和模型责任。
 
 候选实现范围：
 
 ```text
-trace/parser.py                 # raw/legacy trace parser
-trace/filter.py                 # filter manifest 到事件筛选逻辑
-trace/func/event_model.py       # F0_event
-trace/func/tensor_model.py      # F1_store / F2_tensor_op
-trace/func/layer_model.py       # F3_layer
-trace/func/fused_model.py       # F4_fused_layer
-trace/perf/timeline.py          # task/stage timeline
-trace/perf/stage_model.py       # stage breakdown
-trace/perf/memory_model.py      # memory bandwidth model
-trace/perf/utilization.py       # utilization model
+trace/python/cutetrace/parser.py        # compact printf parser
+trace/python/cutetrace/decoder.py       # task/event/field dictionary decoder
+trace/python/cutetrace/render.py        # pretty text / JSONL renderer
+trace/python/func/task_model.py         # F0_task checker
+trace/python/func/loadstore_model.py    # F1_loadstore checker
+trace/python/func/compute_model.py      # F2_compute checker
+trace/python/status/status_parser.py    # TopDownStatus printf parser
+trace/python/status/topdown.py          # offline top-down attribution
+trace/python/status/rule_compare.py     # attribution rule comparison
 ```
 
 本阶段只要求 Task 7 的 `cute-check-config.py` 能读取 `trace/format_spec.md` 和 `configs/trace_filters/*.yaml` 做名称存在性检查；不实现 parser/filter/model。
@@ -1034,9 +1037,10 @@ cute-sdk/tensor_ops/matmul/project.yaml
 
 # Trace 占位
 trace/format_spec.md
-configs/trace_filters/func_event.yaml
-configs/trace_filters/func_store_tensor.yaml
-configs/trace_filters/perf_task_stage.yaml
+configs/trace_filters/func_task.yaml
+configs/trace_filters/func_loadstore.yaml
+configs/trace_filters/func_compute.yaml
+configs/trace_filters/perf_topdown_status.yaml
 
 # 工具
 tools/runner/cute-check-config.py
@@ -1059,7 +1063,7 @@ tools/runner/cute-check-config.py
 - [ ] `cute-check-config.py --hwconfig <hw> --project <proj>` 输出 MATCH 且理由正确
 - [ ] `cute-check-config.py --scan` 输出 project × variant × hwconfig 匹配矩阵
 - [ ] `HWConfig`、薄 `ChipyardConfig` manifest、Chipyard exported JSON 和 `project.yaml` 的字段边界清楚，人工入口和自动导出字段有文档区分
-- [ ] Trace level 名称（F0-F5）已作为占位冻结，但具体 event schema 未承诺
+- [ ] Trace level 名称（F0_task / F1_loadstore / F2_compute / F3_layer / F4_fused_layer / F5_model）已作为占位冻结，但具体 event schema 未承诺
 - [ ] 文档明确：`configs/tests` 不作为人工维护入口
 
 ---
