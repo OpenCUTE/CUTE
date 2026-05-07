@@ -64,7 +64,7 @@ configs/
     func_level3_mem_vector.yaml
     perf_topdown_status.yaml
 
-scripts/
+tools/
   trace/
     gen_cute_trace.py
     check_cute_trace.py
