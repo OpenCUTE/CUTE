@@ -12,7 +12,7 @@ Phase 0.5 实施范围：
 
 ```text
 Verilator Trace:
-  用 task_id/event_id/field dictionary 降低日志字符量
+  用 task_id/event_id dictionary 降低日志字符量
   保留可读/可解析的 printf
   支持解析器 / 解码器做功能验证
 
@@ -195,7 +195,7 @@ backend:
 
 encoding:
   task_id
-  event_id
+  global event_id
   catalog field order
 
 software:

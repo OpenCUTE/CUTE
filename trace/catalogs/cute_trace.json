@@ -71,35 +71,35 @@
     },
     {
       "name": "AMLLoad",
-      "id": 33,
+      "id": 2,
       "module": "AML",
       "method_group": "AMLLoad",
       "description": "A 张量加载任务 trace 组。"
     },
     {
       "name": "BMLLoad",
-      "id": 34,
+      "id": 3,
       "module": "BML",
       "method_group": "BMLLoad",
       "description": "B 张量加载任务 trace 组。"
     },
     {
       "name": "CMLLoad",
-      "id": 35,
+      "id": 4,
       "module": "CML",
       "method_group": "CMLLoad",
       "description": "C 张量加载任务 trace 组。"
     },
     {
       "name": "CMLStore",
-      "id": 36,
+      "id": 5,
       "module": "CML",
       "method_group": "CMLStore",
       "description": "D 张量 store 任务 trace 组。"
     },
     {
       "name": "MTECompute",
-      "id": 48,
+      "id": 6,
       "module": "MTE",
       "method_group": "MTECompute",
       "description": "MTE 计算任务 trace 组。"
@@ -234,7 +234,7 @@
     {
       "name": "AMLLoad.taskStart",
       "method": "taskStart",
-      "id": 1,
+      "id": 6,
       "task": "AMLLoad",
       "category": "cute_task",
       "description": "AML 开始一个加载微任务。",
@@ -260,7 +260,7 @@
     {
       "name": "AMLLoad.taskEnd",
       "method": "taskEnd",
-      "id": 2,
+      "id": 7,
       "task": "AMLLoad",
       "category": "cute_task",
       "description": "AML 完成一个加载微任务。",
@@ -286,7 +286,7 @@
     {
       "name": "BMLLoad.taskStart",
       "method": "taskStart",
-      "id": 1,
+      "id": 8,
       "task": "BMLLoad",
       "category": "cute_task",
       "description": "BML 开始一个加载微任务。",
@@ -312,7 +312,7 @@
     {
       "name": "BMLLoad.taskEnd",
       "method": "taskEnd",
-      "id": 2,
+      "id": 9,
       "task": "BMLLoad",
       "category": "cute_task",
       "description": "BML 完成一个加载微任务。",
@@ -338,7 +338,7 @@
     {
       "name": "CMLLoad.taskStart",
       "method": "taskStart",
-      "id": 1,
+      "id": 10,
       "task": "CMLLoad",
       "category": "cute_task",
       "description": "CML 开始一个加载 C 张量的微任务。",
@@ -364,7 +364,7 @@
     {
       "name": "CMLLoad.taskEnd",
       "method": "taskEnd",
-      "id": 2,
+      "id": 11,
       "task": "CMLLoad",
       "category": "cute_task",
       "description": "CML 完成一个加载 C 张量的微任务。",
@@ -390,7 +390,7 @@
     {
       "name": "CMLStore.taskStart",
       "method": "taskStart",
-      "id": 1,
+      "id": 12,
       "task": "CMLStore",
       "category": "cute_task",
       "description": "CML 开始一个写回 D 张量的微任务。",
@@ -416,7 +416,7 @@
     {
       "name": "CMLStore.taskEnd",
       "method": "taskEnd",
-      "id": 2,
+      "id": 13,
       "task": "CMLStore",
       "category": "cute_task",
       "description": "CML 完成一个写回 D 张量的微任务。",
@@ -442,7 +442,7 @@
     {
       "name": "MTECompute.taskStart",
       "method": "taskStart",
-      "id": 1,
+      "id": 14,
       "task": "MTECompute",
       "category": "cute_task",
       "description": "MTE 开始一个计算微任务。",
@@ -478,7 +478,7 @@
     {
       "name": "MTECompute.taskEnd",
       "method": "taskEnd",
-      "id": 2,
+      "id": 15,
       "task": "MTECompute",
       "category": "cute_task",
       "description": "MTE 完成一个计算微任务。",

@@ -240,7 +240,7 @@
         },
         "id": {
           "$ref": "#/definitions/uint_id",
-          "description": "event 的 id。语义上的唯一性按 task 维度校验。"
+          "description": "event 的全局唯一稳定 id。"
         },
         "task": {
           "$ref": "#/definitions/task_name",

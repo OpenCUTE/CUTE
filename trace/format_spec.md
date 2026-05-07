@@ -72,7 +72,7 @@ CTH c=<cycle_dec> task=<task_name> event=<event_name> field=value ...
 | `1` | trace printf 格式版本 |
 | `<cycle_hex>` | 产生 trace 的 cycle |
 | `<task_id_hex>` | task id |
-| `<event_id_hex>` | event id |
+| `<event_id_hex>` | 全局唯一 event id |
 | `<field*_hex>` | 按 catalog 字段顺序打印的字段值 |
 | `CTH` | human trace 行前缀 |
 | `task=<task_name>` | catalog 中的 task 名 |

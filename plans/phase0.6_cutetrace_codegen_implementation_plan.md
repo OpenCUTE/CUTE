@@ -199,7 +199,7 @@ task.id:
   紧凑 printf 中使用的稳定 UInt id
 
 event.id:
-  在 task 内保持稳定
+  全局唯一，保持稳定
 
 field order:
   compact 日志中的字段值顺序
@@ -212,7 +212,7 @@ ID 管理策略：
 - 旧 event 退出使用时标记 `deprecated: true`。
 - event 字段语义变化时新增 event 名称和 id。
 - field 顺序作为日志 ABI 的一部分。日志里不打印字段名，解码器用 catalog field 顺序还原字段名。
-- catalog schema 校验 id 唯一性、field 名唯一性、method 名合法性。
+- catalog schema 和检查脚本校验 category/module/task/event id 唯一性、field 名唯一性、method 名合法性。
 
 ---
 
