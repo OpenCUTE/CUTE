@@ -1,4 +1,4 @@
-# Phase 0.6 Plan: CUTETrace Catalog Codegen 开工计划
+# Phase 0.6 Plan: CUTETrace Catalog 代码生成开工计划
 
 ## 目标
 
@@ -6,23 +6,23 @@ Phase 0.6 开始实现 Verilator CUTETrace 的第一版工程闭环：
 
 ```text
 trace/catalogs/cute_trace.json
-  -> Python codegen
-  -> generated Scala typed trace API
-  -> Verilator compact printf
-  -> Python parser/decoder/renderer/checker
-  -> trace filter validation
+  -> Python 代码生成
+  -> 生成 Scala typed trace API
+  -> Verilator trace printf
+  -> Python 解析 / 解码 / 渲染 / 检查
+  -> trace 过滤器校验
 ```
 
 核心产物：
 
-- catalog JSON 是 trace event / task / field / id 的唯一真相源。
-- Python generator 从 catalog 生成 Scala typed API。
+- catalog JSON 是 trace event、task、field、id 的唯一真相源。
+- Python 生成器从 catalog 生成 Scala typed API。
 - CUTE 模块通过 `CUTETrace.AMLLoad.mmuReq(...)` 这种 API 打 trace。
-- Python decoder 读取同一份 catalog 解码 compact printf。
-- trace filter 通过 checker 校验引用的 level/module/task/event。
-- Verilator 日志携带 `catalog_hash`，解码时校验 catalog 版本。
+- Python 解码器读取同一份 catalog 解码逗号分隔紧凑 printf。
+- trace 过滤器通过检查器校验引用的 category、module、task、event。
+- 解码时由命令行或 runner 显式指定 catalog。
 
-Phase 0.6 的目标是把 `F0_task` 跑通，再给 `F1_loadstore` 和 `F2_compute` 留好稳定扩展路径。
+Phase 0.6 的目标是把 `Level1_Inst` 跑通，并为 `Level2_mem_cute`、`Level2ex_all_cute`、`Level3_mem_vector` 留好稳定扩展路径。
 
 ---
 
@@ -35,7 +35,6 @@ trace/
   catalogs/
     cute_trace.json
   generated/
-    cute_trace_catalog_hash.txt
     cute_trace_catalog.normalized.json
   python/
     cutetrace/
@@ -46,9 +45,10 @@ trace/
       generated/
         cute_trace_catalog.py
     func/
-      task_model.py
-      loadstore_model.py
-      compute_model.py
+      level1_inst.py
+      level2_mem_cute.py
+      level2ex_all_cute.py
+      level3_mem_vector.py
   tests/
     catalogs/
     logs/
@@ -58,9 +58,10 @@ configs/
   schemas/
     cute_trace_catalog.schema.json
   trace_filters/
-    func_task.yaml
-    func_loadstore.yaml
-    func_compute.yaml
+    func_level1_inst.yaml
+    func_level2_mem_cute.yaml
+    func_level2ex_all_cute.yaml
+    func_level3_mem_vector.yaml
     perf_topdown_status.yaml
 
 scripts/
@@ -75,7 +76,6 @@ src/main/scala/trace/
   generated/
     CUTETrace.scala
     CUTETraceIds.scala
-    CUTETraceCatalogHash.scala
 ```
 
 ### 第一版生成策略
@@ -101,7 +101,7 @@ Compile / sourceGenerators += Def.task {
 }.taskValue
 ```
 
-Phase 0.6 先使用 Python codegen 和 checked generated Scala，保证 Chipyard 当前构建路径容易接入。sbt `sourceManaged` 进入第二步优化。
+Phase 0.6 先使用 Python 代码生成和 checked generated Scala，保证 Chipyard 当前构建路径容易接入。sbt `sourceManaged` 进入第二步优化。
 
 ---
 
@@ -113,10 +113,12 @@ Phase 0.6 先使用 Python codegen 和 checked generated Scala，保证 Chipyard
 {
   "version": 1,
   "catalog_id": "cute_trace_v1",
-  "levels": [
-    { "name": "F0_task", "id": 0, "description": "task lifecycle" },
-    { "name": "F1_loadstore", "id": 1, "description": "load/store data flow" },
-    { "name": "F2_compute", "id": 2, "description": "MTE compute result" }
+  "categories": [
+    { "name": "cute_inst", "id": 0, "description": "发往 CUTE 的指令、完成、程序退出相关观测" },
+    { "name": "cute_task", "id": 1, "description": "CUTE 内部 task 生命周期观测" },
+    { "name": "cute_loadstore", "id": 2, "description": "CUTE 内部访存数据流观测" },
+    { "name": "cute_compute", "id": 3, "description": "MTE 计算结果观测" },
+    { "name": "vector_loadstore", "id": 4, "description": "vector 访存数据流观测" }
   ],
   "modules": [
     { "name": "TaskController", "id": 1 },
@@ -132,7 +134,7 @@ Phase 0.6 先使用 Python codegen 和 checked generated Scala，保证 Chipyard
       "id": 33,
       "module": "AML",
       "method_group": "AMLLoad",
-      "description": "A tensor load task"
+      "description": "A 张量加载任务"
     }
   ],
   "events": [
@@ -141,14 +143,14 @@ Phase 0.6 先使用 Python codegen 和 checked generated Scala，保证 Chipyard
       "method": "mmuReq",
       "id": 2,
       "task": "AMLLoad",
-      "level": "F1_loadstore",
-      "description": "AML issues LocalMMU request",
+      "category": "cute_loadstore",
+      "description": "AML 发起 LocalMMU 请求",
       "fields": [
-        { "name": "ih", "width": 16, "type": "uint", "fmt": "dec" },
-        { "name": "iw", "width": 16, "type": "uint", "fmt": "dec" },
-        { "name": "m", "width": 16, "type": "uint", "fmt": "dec" },
-        { "name": "k", "width": 16, "type": "uint", "fmt": "dec" },
-        { "name": "vaddr", "width": 64, "type": "uint", "fmt": "hex" }
+        { "name": "ih", "type": "uint", "fmt": "dec" },
+        { "name": "iw", "type": "uint", "fmt": "dec" },
+        { "name": "m", "type": "uint", "fmt": "dec" },
+        { "name": "k", "type": "uint", "fmt": "dec" },
+        { "name": "vaddr", "type": "uint", "fmt": "hex" }
       ],
       "render": "ih={ih} iw={iw} m={m} k={k} vaddr=0x{vaddr:x}"
     }
@@ -156,23 +158,51 @@ Phase 0.6 先使用 Python codegen 和 checked generated Scala，保证 Chipyard
 }
 ```
 
+### 字段规则
+
+Phase 0.6 的 Trace 只面向 Verilator 日志，不做硬件侧二进制打包。
+
+因此字段不强制写位宽：
+
+```json
+{ "name": "vaddr", "type": "uint", "fmt": "hex" }
+```
+
+字段含义：
+
+```text
+name:
+  字段名，也是 renderer、JSONL、功能验证检查器看到的 key
+
+type:
+  解码语义，当前为 uint / sint / bool
+
+fmt:
+  默认打印和可读文本渲染格式，当前为 dec / hex / bin / bool
+
+description:
+  可选的人类说明
+```
+
+第一版生成器不生成 `Cat(...)`，不做 `fit/pad/truncate`，也不把多个字段拼成无分隔的十六进制 payload。
+
 ### ID 规则
 
 ```text
-level.id:
-  small integer, stable
+category.id:
+  小整数，保持稳定
 
 module.id:
-  small integer, stable
+  小整数，保持稳定
 
 task.id:
-  stable UInt id in compact printf
+  紧凑 printf 中使用的稳定 UInt id
 
 event.id:
-  stable inside task
+  在 task 内保持稳定
 
 field order:
-  payload packing order
+  compact 日志中的字段值顺序
 ```
 
 ID 管理策略：
@@ -181,12 +211,12 @@ ID 管理策略：
 - 已发布 id 永久保留。
 - 旧 event 退出使用时标记 `deprecated: true`。
 - event 字段语义变化时新增 event 名称和 id。
-- field 顺序作为 payload ABI 的一部分。
+- field 顺序作为日志 ABI 的一部分。日志里不打印字段名，解码器用 catalog field 顺序还原字段名。
 - catalog schema 校验 id 唯一性、field 名唯一性、method 名合法性。
 
 ---
 
-## Generated Scala API
+## 生成的 Scala API
 
 ### 使用方式
 
@@ -228,21 +258,25 @@ object CUTETrace {
       k: UInt,
       vaddr: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
-      val payload = Cat(
-        CUTETracePrintf.fit(vaddr, 64),
-        CUTETracePrintf.fit(k, 16),
-        CUTETracePrintf.fit(m, 16),
-        CUTETracePrintf.fit(iw, 16),
-        CUTETracePrintf.fit(ih, 16)
-      )
-
       CUTETracePrintf.emit(
         cond = cond,
-        cycle = ctx.cycle,
-        level = CUTETraceLevel.F1Loadstore,
-        taskId = CUTETraceIds.Task.AMLLoad,
-        eventId = CUTETraceIds.Event.AMLLoad_mmuReq,
-        payload = payload
+        categoryId = CUTETraceIds.Category.cute_loadstore
+      )(
+        compact = {
+          printf(
+            "CT,1,%x,%x,%x,%x,%x,%x,%x,%x\n",
+            ctx.cycle,
+            CUTETraceIds.Task.AMLLoad.U,
+            CUTETraceIds.Event.AMLLoad_mmuReq.U,
+            ih, iw, m, k, vaddr
+          )
+        },
+        human = {
+          printf(
+            "CTH c=%d task=AMLLoad event=mmuReq ih=%d iw=%d m=%d k=%d vaddr=0x%x\n",
+            ctx.cycle, ih, iw, m, k, vaddr
+          )
+        }
       )
     }
   }
@@ -251,12 +285,12 @@ object CUTETrace {
 
 生成器负责：
 
-- 把 `method_group` 生成成 nested object。
-- 把 `method` 生成成 Scala method。
-- 把 catalog field 生成成 method 参数。
-- 按 field 顺序生成 payload pack。
-- 生成 task/event/level id 常量。
-- 生成 catalog hash 常量。
+- 把 `method_group` 生成成嵌套 object。
+- 把 `method` 生成成 Scala 方法。
+- 把 catalog field 生成成方法参数。
+- 按 field 顺序生成 compact printf 参数。
+- 按 field 名称和 `fmt` 生成 human printf 格式串。
+- 生成 category/task/event id 常量。
 - 在文件头写入 `AUTO-GENERATED FROM trace/catalogs/cute_trace.json`。
 
 ### 手写 Scala runtime
@@ -281,24 +315,15 @@ package cute.trace
 
 sealed trait CUTETracePrintMode
 object CUTETracePrintMode {
-  case object Off extends CUTETracePrintMode
   case object Compact extends CUTETracePrintMode
   case object Human extends CUTETracePrintMode
   case object Both extends CUTETracePrintMode
 }
 
-sealed trait CUTETraceLevel
-object CUTETraceLevel {
-  case object F0Task extends CUTETraceLevel
-  case object F1Loadstore extends CUTETraceLevel
-  case object F2Compute extends CUTETraceLevel
-}
-
 case class CUTETraceParams(
   enable: Boolean = false,
-  mode: CUTETracePrintMode = CUTETracePrintMode.Compact,
-  levels: Set[CUTETraceLevel] = Set(CUTETraceLevel.F0Task),
-  catalogHash: BigInt = CUTETraceCatalogHash.value
+  printMode: CUTETracePrintMode = CUTETracePrintMode.Compact,
+  enabledCategories: Set[Int] = Set.empty
 )
 
 object CUTETraceParams {
@@ -315,65 +340,48 @@ import chisel3._
 import chisel3.util._
 
 object CUTETracePrintf {
-  def fit(x: UInt, width: Int): UInt = {
-    val w = x.getWidth
-    if (w == width) x
-    else if (w > width) x(width - 1, 0)
-    else Cat(0.U((width - w).W), x)
-  }
-
   def emit(
     cond: Bool,
-    cycle: UInt,
-    level: CUTETraceLevel,
-    taskId: Int,
-    eventId: Int,
-    payload: UInt
+    categoryId: Int
+  )(
+    compact: => Unit,
+    human: => Unit
   )(implicit ctx: CUTETraceContext): Unit = {
-    val enabled = ctx.params.enable && ctx.params.levels.contains(level)
+    val enabled = ctx.params.enable &&
+      (ctx.params.enabledCategories.isEmpty || ctx.params.enabledCategories.contains(categoryId))
 
-    if (enabled) {
-      ctx.params.mode match {
-        case CUTETracePrintMode.Compact =>
+    ctx.params.printMode match {
+      case CUTETracePrintMode.Compact =>
+        if (enabled) {
           when(cond) {
-            printf(
-              "CT v=1 h=%x c=%d t=%x e=%x p=%x\n",
-              ctx.params.catalogHash.U,
-              cycle,
-              taskId.U,
-              eventId.U,
-              payload
-            )
+            compact
           }
-        case CUTETracePrintMode.Human =>
+        }
+      case CUTETracePrintMode.Human =>
+        if (enabled) {
           when(cond) {
-            printf(
-              "CTH c=%d task=%x event=%x payload=%x\n",
-              cycle,
-              taskId.U,
-              eventId.U,
-              payload
-            )
+            human
           }
-        case CUTETracePrintMode.Both =>
+        }
+      case CUTETracePrintMode.Both =>
+        if (enabled) {
           when(cond) {
-            printf("CT v=1 h=%x c=%d t=%x e=%x p=%x\n", ctx.params.catalogHash.U, cycle, taskId.U, eventId.U, payload)
-            printf("CTH c=%d task=%x event=%x payload=%x\n", cycle, taskId.U, eventId.U, payload)
+            compact
+            human
           }
-        case CUTETracePrintMode.Off =>
-      }
+        }
     }
   }
 }
 ```
 
-第一版 Scala runtime 聚焦 compact printf。Human mode 可以先用通用 `task/event/payload` 输出，漂亮字段级渲染交给 Python renderer。
+`Compact` 输出给 parser 和功能验证使用，`Human` 输出给人直接看，`Both` 在 bringup 时同时输出两行。具体 task name、event name、字段名、字段格式都由 catalog 生成到 Scala API 中，模块作者只调用 `CUTETrace.AMLLoad.mmuReq(...)`。
 
 ---
 
-## Python Codegen
+## Python 代码生成
 
-### CLI
+### 命令行入口
 
 ```bash
 python3 scripts/trace/gen_cute_trace.py \
@@ -396,70 +404,53 @@ python3 scripts/trace/gen_cute_trace.py \
 
 `--check` 做 dry-run，比较生成结果和工作区文件内容，用于 CI。
 
-### Generator 步骤
+### 生成器步骤
 
 ```text
-load JSON
-validate JSON schema
-normalize catalog
-check id uniqueness
-check method names
-check field names / widths / types
-compute stable catalog hash
-emit normalized catalog JSON
-emit Scala CUTETraceIds.scala
-emit Scala CUTETraceCatalogHash.scala
-emit Scala CUTETrace.scala
-emit Python generated catalog module
-emit summary report
+读取 JSON
+校验 JSON schema
+归一化 catalog
+检查 id 唯一性
+检查 method 名称
+检查 field 名称 / 类型 / fmt
+输出归一化 catalog JSON
+输出 Scala CUTETraceIds.scala
+输出 Scala CUTETrace.scala
+输出 Python generated catalog module
+输出摘要报告
 ```
 
-### Catalog hash
+### Catalog 归一化
 
-hash 输入使用 normalized JSON：
+生成器输出 normalized catalog，供 review、diff 和 Python 解码器使用。日志解码时由命令行或 runner 显式指定 catalog 文件。
+
+Verilator compact 日志：
 
 ```text
-sort object keys
-preserve event field order
-remove comments / whitespace
-include version / ids / fields / render templates
+CT,1,<cycle_hex>,<task_id_hex>,<event_id_hex>,<field0_hex>,<field1_hex>,...
 ```
 
-hash 输出：
+Verilator human 日志：
 
 ```text
-trace/generated/cute_trace_catalog_hash.txt
-src/main/scala/trace/generated/CUTETraceCatalogHash.scala
-trace/python/cutetrace/generated/cute_trace_catalog.py
-```
-
-Verilator compact log：
-
-```text
-CT v=1 h=<catalog_hash> c=<cycle> t=<task_id> e=<event_id> p=<hex_payload>
-```
-
-Python decoder 校验：
-
-```text
-log hash == catalog hash
+CTH c=<cycle_dec> task=<task_name> event=<event_name> field=value ...
 ```
 
 ---
 
-## Filter 一致性
+## 过滤器一致性
 
-### Filter YAML
+### 过滤器 YAML
 
 ```yaml
 version: 1
-name: func_loadstore
+name: func_level2_mem_cute
 purpose: func
-description: load/store trace events for F1 checker
+description: Level2_mem_cute 功能验证使用的过滤器，选择 CUTE load/store 事件。
 status: draft
 
 include:
-  levels: [F1_loadstore]
+  categories: [cute_loadstore]
   modules: [AML, BML, CML, LocalMMU]
   tasks: []
   events:
@@ -481,55 +472,56 @@ configs/trace_filters/*.yaml
 
 检查：
 
-- filter 引用的 level 在 catalog 中存在。
-- filter 引用的 module 在 catalog 中存在。
-- filter 引用的 task 在 catalog 中存在。
-- filter 引用的 event 在 catalog 中存在。
-- filter 的 `purpose` 和 level 用途一致。
-- stable filter 引用的 event 处于 active 状态。
+- 过滤器引用的 category 在 catalog 中存在。
+- 过滤器引用的 module 在 catalog 中存在。
+- 过滤器引用的 task 在 catalog 中存在。
+- 过滤器引用的 event 在 catalog 中存在。
+- 过滤器的 `purpose` 和功能验证等级用途一致。
+- stable 过滤器引用的 event 处于 active 状态。
 
 输出：
 
 ```text
 TRACE_CATALOG_OK
-TRACE_FILTER_OK func_task
-TRACE_FILTER_OK func_loadstore
-TRACE_FILTER_OK func_compute
+TRACE_FILTER_OK func_level1_inst
+TRACE_FILTER_OK func_level2_mem_cute
+TRACE_FILTER_OK func_level2ex_all_cute
+TRACE_FILTER_OK func_level3_mem_vector
 TRACE_FILTER_OK perf_topdown_status
 ```
 
 ---
 
-## Decoder 与 Renderer
+## 解码器与渲染器
 
-### Parser
+### 解析器
 
 输入：
 
 ```text
-CT v=1 h=3c89... c=123456 t=21 e=02 p=00030007000c000180204000
+CT,1,1e240,21,02,3,7,c,1,80204000
 ```
 
 输出结构：
 
 ```python
 TraceRecord(
+    version=1,
     cycle=123456,
-    catalog_hash="3c89...",
     task_id=0x21,
     event_id=0x02,
-    payload="00030007000c000180204000",
+    values=[0x3, 0x7, 0xc, 0x1, 0x80204000],
 )
 ```
 
-### Decoder
+### 解码器
 
 根据 catalog：
 
 ```python
 DecodedTraceEvent(
     cycle=123456,
-    level="F1_loadstore",
+    category="cute_loadstore",
     module="AML",
     task="AMLLoad",
     event="AMLLoad.mmuReq",
@@ -543,34 +535,34 @@ DecodedTraceEvent(
 )
 ```
 
-### Renderer
+### 渲染器
 
-Pretty text：
+可读文本：
 
 ```text
-[123456][F1_loadstore][AML.AMLLoad.mmuReq] ih=3 iw=7 m=12 k=1 vaddr=0x80204000
+[123456][cute_loadstore][AML.AMLLoad.mmuReq] ih=3 iw=7 m=12 k=1 vaddr=0x80204000
 ```
 
 JSONL：
 
 ```json
-{"cycle":123456,"level":"F1_loadstore","module":"AML","task":"AMLLoad","event":"AMLLoad.mmuReq","ih":3,"iw":7,"m":12,"k":1,"vaddr":"0x80204000"}
+{"cycle":123456,"category":"cute_loadstore","module":"AML","task":"AMLLoad","event":"AMLLoad.mmuReq","ih":3,"iw":7,"m":12,"k":1,"vaddr":"0x80204000"}
 ```
 
 ---
 
-## F0_task 第一版落点
+## Level1_Inst 第一版落点
 
-Phase 0.6 优先实现 F0_task。
+Phase 0.6 优先实现 Level1_Inst。
 
-### Catalog events
+### Catalog 事件
 
 ```text
-TaskController.macroInstInsert
-TaskController.macroInstDecodeStart
-TaskController.macroInstDecodeEnd
-TaskController.microTaskIssue
-TaskController.microTaskCommit
+TaskControllerTrace.macroInstInsert
+TaskControllerTrace.macroInstDecodeStart
+TaskControllerTrace.macroInstDecodeEnd
+TaskControllerTrace.microTaskIssue
+TaskControllerTrace.microTaskCommit
 
 AMLLoad.taskStart
 AMLLoad.taskEnd
@@ -584,31 +576,31 @@ MTECompute.taskStart
 MTECompute.taskEnd
 ```
 
-### F0 checker
+### Level1_Inst 检查器
 
-`trace/python/func/task_model.py` 检查：
+`trace/python/func/level1_inst.py` 检查：
 
 ```text
 task_start / task_end 配对
 TaskController issue 与模块 task_start 对齐
 模块 task_end 与 TaskController commit 对齐
 同一 task_id 生命周期单调
-缺失 task_end 输出 error
-重复 task_start 输出 error
+缺失 task_end 输出错误
+重复 task_start 输出错误
 ```
 
 输出：
 
 ```text
-F0_TASK_PASS
-F0_TASK_FAIL <reason>
+LEVEL1_INST_PASS
+LEVEL1_INST_FAIL <reason>
 ```
 
 ---
 
-## F1_loadstore 与 F2_compute 扩展点
+## Level2/Level2ex/Level3 扩展点
 
-### F1_loadstore
+### Level2_mem_cute
 
 第一批 catalog 占位：
 
@@ -626,7 +618,7 @@ LocalMMU.mmuReq
 LocalMMU.mmuRsp
 ```
 
-checker 目标：
+检查器目标：
 
 ```text
 load 请求/响应配对
@@ -635,7 +627,7 @@ LocalMMU source id 生命周期检查
 最小 D tensor 重建
 ```
 
-### F2_compute
+### Level2ex_all_cute
 
 第一批 catalog 占位：
 
@@ -646,7 +638,7 @@ MTECompute.computeResult
 MTECompute.computeEnd
 ```
 
-checker 目标：
+检查器目标：
 
 ```text
 MTE compute result 提取
@@ -717,8 +709,8 @@ Phase 0.6 的最小接入：
 ```scala
 object CUTETraceBuildConfig {
   val enable = true
-  val mode = CUTETracePrintMode.Compact
-  val levels = Set(CUTETraceLevel.F0Task)
+  val printMode = CUTETracePrintMode.Compact
+  val enabledCategories = Set(CUTETraceIds.Category.cute_inst, CUTETraceIds.Category.cute_task)
 }
 ```
 
@@ -727,12 +719,12 @@ object CUTETraceBuildConfig {
 ```scala
 case class CUTETraceParamsInCuteParams(
   enable: Boolean,
-  mode: String,
-  levels: Seq[String]
+  printMode: String,
+  enabledCategories: Seq[String]
 )
 ```
 
-Phase 0.6 先让 F0_task 在 Verilator 中可见。
+Phase 0.6 先让 cute_inst 和 cute_task 在 Verilator 中可见。
 
 ---
 
@@ -749,9 +741,9 @@ trace/catalogs/cute_trace.json
 
 验收：
 
-- schema 覆盖 level/module/task/event/field。
-- seed catalog 包含 F0_task 最小事件。
-- catalog 中包含 F1_loadstore / F2_compute level 定义。
+- schema 覆盖 category/module/task/event/field。
+- seed catalog 包含 cute_inst 和 cute_task 最小事件。
+- catalog 中包含 cute_loadstore、cute_compute、vector_loadstore category 定义。
 
 ### Task 2: Python catalog loader/validator
 
@@ -766,11 +758,11 @@ scripts/trace/check_cute_trace.py
 
 - 能读取 catalog。
 - 能检查 id 唯一性。
-- 能检查 event/task/module/level 引用。
-- 能检查 field width/type/fmt。
-- 能输出 normalized JSON 和 catalog hash。
+- 能检查 event/task/module/category 引用。
+- 能检查 field type/fmt。
+- 能输出 normalized JSON。
 
-### Task 3: Python -> Scala codegen
+### Task 3: Python 到 Scala 代码生成
 
 产物：
 
@@ -778,18 +770,16 @@ scripts/trace/check_cute_trace.py
 scripts/trace/gen_cute_trace.py
 src/main/scala/trace/generated/CUTETrace.scala
 src/main/scala/trace/generated/CUTETraceIds.scala
-src/main/scala/trace/generated/CUTETraceCatalogHash.scala
 trace/python/cutetrace/generated/cute_trace_catalog.py
 trace/generated/cute_trace_catalog.normalized.json
-trace/generated/cute_trace_catalog_hash.txt
 ```
 
 验收：
 
-- 运行 generator 后生成 Scala typed API。
-- `CUTETrace.AMLLoad.taskStart(...)` 这类 method 存在。
-- 生成文件头包含 catalog path 和 hash。
-- `--check` 能发现 generated file 过期。
+- 运行生成器后生成 Scala typed API。
+- `CUTETrace.AMLLoad.taskStart(...)` 这类方法存在。
+- 生成文件头包含 catalog path。
+- `--check` 能发现生成文件过期。
 
 ### Task 4: Scala trace runtime
 
@@ -803,11 +793,13 @@ src/main/scala/trace/CUTETracePrintf.scala
 
 验收：
 
-- compact printf 能输出 `CT v=1 h=... c=... t=... e=... p=...`。
-- level enable 能在 Scala elaboration 时控制输出范围。
-- payload field fit/pad/truncate 行为稳定。
+- Compact printf 能输出 `CT,1,<cycle>,<task>,<event>,...`。
+- Human printf 能输出 `CTH c=... task=... event=... field=value ...`。
+- Both 模式能同时输出 compact 和 human 两行。
+- category enable 能在 Scala elaboration 时控制输出范围。
+- 字段顺序和打印格式行为稳定。
 
-### Task 5: F0_task PoC 插点
+### Task 5: Level1_Inst PoC 插点
 
 优先模块：
 
@@ -823,10 +815,10 @@ MatrixTE.scala
 
 - TaskController 输出 macro/micro lifecycle。
 - AML/BML/CML/MTE 输出 task_start/task_end。
-- Verilator 日志中能看到 F0_task compact trace。
-- F0_task checker 能跑通一条最小 workload。
+- Verilator 日志中能看到 cute_inst 和 cute_task compact trace。
+- Level1_Inst 检查器能跑通一条最小 workload。
 
-### Task 6: Decoder / renderer / JSONL
+### Task 6: 解码器 / 渲染器 / JSONL
 
 产物：
 
@@ -838,28 +830,29 @@ trace/python/cutetrace/render.py
 
 验收：
 
-- compact log 能解码成 decoded event。
-- pretty text 可读。
+- 紧凑日志能解码成 decoded event。
+- 可读文本输出清晰。
 - JSONL 每行一个 event。
-- catalog hash mismatch 输出明确错误。
+- catalog 文件缺失或版本不兼容时输出明确错误。
 
-### Task 7: Filter checker
+### Task 7: 过滤器检查器
 
 产物：
 
 ```text
-configs/trace_filters/func_task.yaml
-configs/trace_filters/func_loadstore.yaml
-configs/trace_filters/func_compute.yaml
+configs/trace_filters/func_level1_inst.yaml
+configs/trace_filters/func_level2_mem_cute.yaml
+configs/trace_filters/func_level2ex_all_cute.yaml
+configs/trace_filters/func_level3_mem_vector.yaml
 configs/trace_filters/perf_topdown_status.yaml
 scripts/trace/check_cute_trace.py
 ```
 
 验收：
 
-- filter 引用 catalog 中存在的 level/module/task/event。
-- stale filter 在 check 阶段报错。
-- `func_task` 能选出 F0_task event。
+- 过滤器引用 catalog 中存在的 category/module/task/event。
+- 过期过滤器在检查阶段报错。
+- `func_level1_inst` 能选出 cute_inst 和 cute_task event。
 
 ### Task 8: 构建入口
 
@@ -879,7 +872,7 @@ python3 scripts/trace/check_cute_trace.py --catalog trace/catalogs/cute_trace.js
 验收：
 
 - 新人按 README 可以生成 trace API。
-- CI/本地 check 可以发现 catalog/filter/generated drift。
+- CI / 本地检查可以发现 catalog、filter、生成文件之间的漂移。
 
 ---
 
@@ -887,14 +880,14 @@ python3 scripts/trace/check_cute_trace.py --catalog trace/catalogs/cute_trace.js
 
 ```text
 1. 写 cute_trace_catalog.schema.json
-2. 写 cute_trace.json 的 F0_task seed
+2. 写 cute_trace.json 的 cute_inst/cute_task seed
 3. 写 catalog.py loader + validator
-4. 写 gen_cute_trace.py 生成 Scala ids/hash/API
+4. 写 gen_cute_trace.py 生成 Scala ids / hash / API
 5. 写 CUTETraceContext/Params/Printf runtime
-6. 在 TaskController 插第一批 F0_task trace
-7. 写 parser/decoder/render
+6. 在 TaskController 插第一批 cute_inst/cute_task trace
+7. 写 parser / decoder / render
 8. 跑一个 Verilator 小日志并解码
-9. 加 filter checker
+9. 加过滤器检查器
 10. 扩展 AML/BML/CML/MTE task_start/task_end
 ```
 
@@ -905,12 +898,12 @@ python3 scripts/trace/check_cute_trace.py --catalog trace/catalogs/cute_trace.js
 Phase 0.6 完成时，应满足：
 
 1. `trace/catalogs/cute_trace.json` 成为 CUTETrace 的唯一真相源。
-2. Python generator 可以生成 Scala typed API。
+2. Python 生成器可以生成 Scala typed API。
 3. CUTE 模块可以调用 `CUTETrace.<Task>.<event>(...)`。
-4. Verilator 输出 compact `CT` 日志并携带 catalog hash。
-5. Python decoder 可以解码 compact 日志。
-6. Pretty text 和 JSONL renderer 可用。
-7. Filter checker 可以校验 `configs/trace_filters/*.yaml`。
-8. F0_task checker 可以检查最小 task lifecycle。
+4. Verilator 输出 compact `CT` 日志，解码时由 runner 或命令行指定 catalog。
+5. Python 解码器可以解码紧凑日志。
+6. 可读文本和 JSONL 渲染器可用。
+7. 过滤器检查器可以校验 `configs/trace_filters/*.yaml`。
+8. Level1_Inst 检查器可以检查最小 inst/task 生命周期。
 9. generated Scala / Python 文件可以通过 `--check` 防止漂移。
-10. F1_loadstore / F2_compute 有 catalog 扩展点和 checker 文件骨架。
+10. Level2_mem_cute、Level2ex_all_cute、Level3_mem_vector 有 catalog 扩展点和检查器文件骨架。

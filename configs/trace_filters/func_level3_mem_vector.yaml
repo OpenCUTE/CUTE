@@ -1,0 +1,5 @@
+version: 1
+name: func_level3_mem_vector
+purpose: func
+description: Level3_mem_vector 功能验证使用的过滤器，在 Level2_mem_cute 通过后选择 vector load/store 事件。
+status: placeholder

@@ -1,6 +1,6 @@
 version: 1
 id: cute_isa_v1
-description: CUTE/YGJK instruction manifest for the current SDK compatibility version.
+description: 当前 SDK 兼容版本使用的 CUTE/YGJK 指令 manifest。
 
 source:
   scala_file: src/main/scala/CUTEParameters.scala
@@ -15,7 +15,7 @@ rocc:
 groups:
   ygjk:
     scala_object: cute.YGJKInstConfigs
-    description: YGK/RoCC interface instructions handled directly at the RoCC interface layer.
+    description: 直接在 RoCC 接口层处理的 YGK/RoCC 接口指令组。
     rocc_funct_offset: 0
     instructions:
       - name: QUERY_ACCELERATOR_BUSY
@@ -60,7 +60,7 @@ groups:
         return_description: 返回FIFO中当前指令状态 (0010 = id为1的位置已有指令)
   cute:
     scala_object: cute.CuteInstConfigs
-    description: CUTE internal control instructions forwarded to the CUTE core through RoCC funct offset 64.
+    description: 通过 RoCC funct 偏移量 64 转发到 CUTE 核心的内部控制指令组。
     rocc_funct_offset: 64
     instructions:
       - name: SEND_MACRO_INST

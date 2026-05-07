@@ -1,0 +1,5 @@
+version: 1
+name: perf_topdown_status
+purpose: perf
+description: TopDownStatus 归因分析使用的性能/status 过滤器。
+status: placeholder

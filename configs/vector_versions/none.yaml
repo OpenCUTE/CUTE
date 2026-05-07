@@ -1,6 +1,6 @@
 version: 1
 id: none
-description: No vector implementation is required by the project target.
+description: 项目目标不需要任何向量实现。
 kind: none
 
 features:
@@ -9,4 +9,4 @@ features:
   ops: []
   config_dependent_fields: []
   notes:
-    - Use this when the project does not depend on vector helper kernels.
+    - 当项目不依赖向量辅助内核时使用此版本。

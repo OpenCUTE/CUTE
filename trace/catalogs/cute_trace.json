@@ -1,0 +1,520 @@
+{
+  "version": 1,
+  "catalog_id": "cute_trace_v1",
+  "description": "CUTETrace 的种子 catalog。Phase 0.6 从 cute_inst 和 cute_task trace 事件开始，并为 cute_loadstore、cute_compute、vector_loadstore 类别预留扩展位。",
+  "categories": [
+    {
+      "name": "cute_inst",
+      "id": 0,
+      "description": "发往 CUTE 的指令、完成、程序退出相关观测。"
+    },
+    {
+      "name": "cute_task",
+      "id": 1,
+      "description": "CUTE 内部 task 的 issue、start、end、commit 生命周期。"
+    },
+    {
+      "name": "cute_loadstore",
+      "id": 2,
+      "description": "CUTE 内部 load 读取和 store 写回的观测。"
+    },
+    {
+      "name": "cute_compute",
+      "id": 3,
+      "description": "MTE 计算输入、输出和结果的观测。"
+    },
+    {
+      "name": "vector_loadstore",
+      "id": 4,
+      "description": "vector 与 CUTE 配合时的访存观测。"
+    }
+  ],
+  "modules": [
+    {
+      "name": "TaskController",
+      "id": 1,
+      "description": "CUTE 宏指令/微指令调度与生命周期管理模块。"
+    },
+    {
+      "name": "AML",
+      "id": 2,
+      "description": "A 张量加载模块。"
+    },
+    {
+      "name": "BML",
+      "id": 3,
+      "description": "B 张量加载模块。"
+    },
+    {
+      "name": "CML",
+      "id": 4,
+      "description": "C/D 张量加载与 store 写回模块。"
+    },
+    {
+      "name": "MTE",
+      "id": 5,
+      "description": "矩阵张量计算引擎。"
+    },
+    {
+      "name": "LocalMMU",
+      "id": 6,
+      "description": "CUTE 本地 MMU 与内存请求路由模块。"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "TaskControllerTrace",
+      "id": 1,
+      "module": "TaskController",
+      "method_group": "TaskControllerTrace",
+      "description": "TaskController 的宏/微任务生命周期 trace 组。"
+    },
+    {
+      "name": "AMLLoad",
+      "id": 33,
+      "module": "AML",
+      "method_group": "AMLLoad",
+      "description": "A 张量加载任务 trace 组。"
+    },
+    {
+      "name": "BMLLoad",
+      "id": 34,
+      "module": "BML",
+      "method_group": "BMLLoad",
+      "description": "B 张量加载任务 trace 组。"
+    },
+    {
+      "name": "CMLLoad",
+      "id": 35,
+      "module": "CML",
+      "method_group": "CMLLoad",
+      "description": "C 张量加载任务 trace 组。"
+    },
+    {
+      "name": "CMLStore",
+      "id": 36,
+      "module": "CML",
+      "method_group": "CMLStore",
+      "description": "D 张量 store 任务 trace 组。"
+    },
+    {
+      "name": "MTECompute",
+      "id": 48,
+      "module": "MTE",
+      "method_group": "MTECompute",
+      "description": "MTE 计算任务 trace 组。"
+    }
+  ],
+  "events": [
+    {
+      "name": "TaskControllerTrace.macroInstInsert",
+      "method": "macroInstInsert",
+      "id": 1,
+      "task": "TaskControllerTrace",
+      "category": "cute_inst",
+      "description": "向 TaskController 插入一条宏指令。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "opcode",
+          "type": "uint",
+          "fmt": "hex"
+        }
+      ],
+      "render": "macro_id={macro_id} opcode=0x{opcode:x}"
+    },
+    {
+      "name": "TaskControllerTrace.macroInstDecodeStart",
+      "method": "macroInstDecodeStart",
+      "id": 2,
+      "task": "TaskControllerTrace",
+      "category": "cute_inst",
+      "description": "TaskController 开始解码一条宏指令。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "opcode",
+          "type": "uint",
+          "fmt": "hex"
+        }
+      ],
+      "render": "macro_id={macro_id} opcode=0x{opcode:x}"
+    },
+    {
+      "name": "TaskControllerTrace.macroInstDecodeEnd",
+      "method": "macroInstDecodeEnd",
+      "id": 3,
+      "task": "TaskControllerTrace",
+      "category": "cute_inst",
+      "description": "TaskController 完成一条宏指令的解码。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "load_tasks",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "compute_tasks",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "store_tasks",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} load_tasks={load_tasks} compute_tasks={compute_tasks} store_tasks={store_tasks}"
+    },
+    {
+      "name": "TaskControllerTrace.microTaskIssue",
+      "method": "microTaskIssue",
+      "id": 4,
+      "task": "TaskControllerTrace",
+      "category": "cute_task",
+      "description": "TaskController 向内部模块发出一条微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "target_task_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} target_task_id={target_task_id}"
+    },
+    {
+      "name": "TaskControllerTrace.microTaskCommit",
+      "method": "microTaskCommit",
+      "id": 5,
+      "task": "TaskControllerTrace",
+      "category": "cute_task",
+      "description": "TaskController 提交一条已完成的微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "target_task_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} target_task_id={target_task_id}"
+    },
+    {
+      "name": "AMLLoad.taskStart",
+      "method": "taskStart",
+      "id": 1,
+      "task": "AMLLoad",
+      "category": "cute_task",
+      "description": "AML 开始一个加载微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+    },
+    {
+      "name": "AMLLoad.taskEnd",
+      "method": "taskEnd",
+      "id": 2,
+      "task": "AMLLoad",
+      "category": "cute_task",
+      "description": "AML 完成一个加载微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+    },
+    {
+      "name": "BMLLoad.taskStart",
+      "method": "taskStart",
+      "id": 1,
+      "task": "BMLLoad",
+      "category": "cute_task",
+      "description": "BML 开始一个加载微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+    },
+    {
+      "name": "BMLLoad.taskEnd",
+      "method": "taskEnd",
+      "id": 2,
+      "task": "BMLLoad",
+      "category": "cute_task",
+      "description": "BML 完成一个加载微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+    },
+    {
+      "name": "CMLLoad.taskStart",
+      "method": "taskStart",
+      "id": 1,
+      "task": "CMLLoad",
+      "category": "cute_task",
+      "description": "CML 开始一个加载 C 张量的微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+    },
+    {
+      "name": "CMLLoad.taskEnd",
+      "method": "taskEnd",
+      "id": 2,
+      "task": "CMLLoad",
+      "category": "cute_task",
+      "description": "CML 完成一个加载 C 张量的微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+    },
+    {
+      "name": "CMLStore.taskStart",
+      "method": "taskStart",
+      "id": 1,
+      "task": "CMLStore",
+      "category": "cute_task",
+      "description": "CML 开始一个写回 D 张量的微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+    },
+    {
+      "name": "CMLStore.taskEnd",
+      "method": "taskEnd",
+      "id": 2,
+      "task": "CMLStore",
+      "category": "cute_task",
+      "description": "CML 完成一个写回 D 张量的微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+    },
+    {
+      "name": "MTECompute.taskStart",
+      "method": "taskStart",
+      "id": 1,
+      "task": "MTECompute",
+      "category": "cute_task",
+      "description": "MTE 开始一个计算微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "a_scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "b_scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "c_scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} a_scp_id={a_scp_id} b_scp_id={b_scp_id} c_scp_id={c_scp_id}"
+    },
+    {
+      "name": "MTECompute.taskEnd",
+      "method": "taskEnd",
+      "id": 2,
+      "task": "MTECompute",
+      "category": "cute_task",
+      "description": "MTE 完成一个计算微任务。",
+      "fields": [
+        {
+          "name": "macro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "micro_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "a_scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "b_scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "c_scp_id",
+          "type": "uint",
+          "fmt": "dec"
+        }
+      ],
+      "render": "macro_id={macro_id} micro_id={micro_id} a_scp_id={a_scp_id} b_scp_id={b_scp_id} c_scp_id={c_scp_id}"
+    }
+  ],
+  "metadata": {
+    "policy": "append_only_ids",
+    "phase": "0.6",
+    "first_supported_category": "cute_inst"
+  }
+}

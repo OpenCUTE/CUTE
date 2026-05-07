@@ -1,0 +1,5 @@
+version: 1
+name: func_level2ex_all_cute
+purpose: func
+description: Level2ex_all_cute 扩展功能验证使用的过滤器，选择 CUTE load/store 和 compute 事件，用于定位更宽的 CUTE 侧错误。
+status: placeholder

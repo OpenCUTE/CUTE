@@ -15,7 +15,7 @@ Phase 0 的目标不是跑通完整测试，而是先把核心对象的入口和
 完成后，框架应能静态回答：
 
 - 某个 `cute-sdk` project 是否支持某个 `HWConfig`。
-- 某个 project 需要的 generated headers、capability、golden level、trace level 是什么。
+- 某个 project 需要的 generated headers、capability、golden level、功能验证等级是什么。
 - 哪些字段是人工维护入口，哪些字段必须由 Chipyard/runner 自动导出。
 
 ## 设计约束
@@ -29,7 +29,7 @@ Phase 0 的目标不是跑通完整测试，而是先把核心对象的入口和
 - vector 能力列表不放宽到 `Project` target；`ChipyardConfig` manifest 只声明/引用 vector version id，具体 vector mixin/config-dependent 字段由 Chipyard exporter 输出，`Project.target.requires.vector_versions` 只匹配这些 version id。
 - `cute-check-config.py` 不负责反向解析完整 Chipyard Scala Config；它只校验 manifest、引用和 target match。Chipyard Config 的结构事实由后续 exporter 负责导出。
 - `none` 是一个真实的 `VectorVersion` manifest，不是缺省空值；无向量实现或无向量依赖时都显式写 `none`。
-- Trace 保留边界定义：`filter`、`func checker`、`status/profile model`，本阶段冻结 level 名称和 project 引用方式。
+- Trace 保留边界定义：`category`、`filter`、功能验证检查器、`status/profile model`，本阶段冻结功能验证等级名称和 project 引用方式。
 - catalog/index 如果需要，只能由工具扫描生成，不能作为人工维护真相源。
 
 ### Config manifest 的定位
@@ -512,7 +512,7 @@ code:
         requires           # 可选，variant 级 FPE/ISA/vector version 约束
 
 golden:
-  level                    # task | loadstore | compute | layer | fused_layer | model
+  level                    # inst | mem_cute | all_cute | mem_vector | layer | fused_layer | model
   source                   # python_reference | c_reference | existing_checker | external
   compare:
     mode                   # exact | tolerance | semantic
@@ -520,7 +520,7 @@ golden:
     rel_err                # float (tolerance mode)
 
 trace:
-  required_func_level      # F0_task | F1_loadstore | F2_compute
+  required_func_level      # Level1_Inst | Level2_mem_cute | Level2ex_all_cute | Level3_mem_vector
   required_perf_level      # 可选，占位 level 名称
   default_filters          # 占位 filter 名称 list
   required_events          # 可选，占位 event 名称 list
@@ -579,14 +579,14 @@ code:
       params: {}
 
 golden:
-  level: task
+  level: inst
   source: existing_checker
   compare:
     mode: exact
 
 trace:
-  required_func_level: F0_task
-  default_filters: [func_task]
+  required_func_level: Level1_Inst
+  default_filters: [func_level1_inst]
 ```
 
 #### 5.2 `cute-sdk/tensor_ops/matmul/project.yaml`
@@ -628,14 +628,14 @@ code:
         bias_type: zero
 
 golden:
-  level: compute
+  level: all_cute
   source: python_reference
   compare:
     mode: exact
 
 trace:
-  required_func_level: F2_compute
-  default_filters: [func_compute]
+  required_func_level: Level2ex_all_cute
+  default_filters: [func_level2ex_all_cute]
 ```
 
 #### 5.3 产物
@@ -674,22 +674,22 @@ cute-sdk/tensor_ops/matmul/project.yaml
 只记录以下内容：
 
 - Trace 是一级抽象，和 HWConfig、Test 并列。
-- `Trace.filter`、`Trace.func checker`、`Trace.status/profile` 待后续专题展开。
-- 本阶段所有 trace level 名称只作为接口占位：
-  - `F0_task` — CUTE 内部各模块的任务起始和结束
-  - `F1_loadstore` — 每次发生的 load 读取和 store 写回
-  - `F2_compute` — 每次 MTE 的计算结果
-  - `F3_layer` — layer 级
-  - `F4_fused_layer` — fused layer 级
-  - `F5_model` — model 级
-- Level 名称接口冻结，具体 event schema 未冻结。
+- `Trace.category` 描述观测事件类别，当前包括 `cute_inst`、`cute_task`、`cute_loadstore`、`cute_compute`、`vector_loadstore`。
+- `Trace.filter`、功能验证检查器、`Trace.status/profile` 待后续专题展开。
+- 本阶段功能验证等级名称作为接口占位：
+  - `Level1_Inst` — CUTE 指令、程序退出、`cute_inst` 和 `cute_task` 正常
+  - `Level2_mem_cute` — CUTE 访存请求正常，依赖 `Level1_Inst`
+  - `Level2ex_all_cute` — CUTE 计算符合 golden，依赖 `Level1_Inst`
+  - `Level3_mem_vector` — vector 配合任务访存正常，依赖 `Level2_mem_cute`
+- 功能验证等级名称接口冻结，具体 event schema 由 trace catalog 后续冻结。
 
 #### 6.3 占位 filter 文件
 
 ```
-configs/trace_filters/func_task.yaml        # purpose: func, status: placeholder
-configs/trace_filters/func_loadstore.yaml   # purpose: func, status: placeholder
-configs/trace_filters/func_compute.yaml     # purpose: func, status: placeholder
+configs/trace_filters/func_level1_inst.yaml        # purpose: func, status: placeholder
+configs/trace_filters/func_level2_mem_cute.yaml    # purpose: func, status: placeholder
+configs/trace_filters/func_level2ex_all_cute.yaml  # purpose: func, status: placeholder
+configs/trace_filters/func_level3_mem_vector.yaml  # purpose: func, status: placeholder
 configs/trace_filters/perf_topdown_status.yaml  # purpose: perf, status: placeholder
 ```
 
@@ -700,9 +700,10 @@ configs/trace_filters/perf_topdown_status.yaml  # purpose: perf, status: placeho
 ```
 configs/schemas/trace_filter.schema.json
 trace/format_spec.md
-configs/trace_filters/func_task.yaml
-configs/trace_filters/func_loadstore.yaml
-configs/trace_filters/func_compute.yaml
+configs/trace_filters/func_level1_inst.yaml
+configs/trace_filters/func_level2_mem_cute.yaml
+configs/trace_filters/func_level2ex_all_cute.yaml
+configs/trace_filters/func_level3_mem_vector.yaml
 configs/trace_filters/perf_topdown_status.yaml
 ```
 
@@ -956,9 +957,9 @@ CLI 编排:
   VECTOR_VERSION_MISS — vector version 不满足
 ```
 
-#### 7.8 Trace Level 检查
+#### 7.8 功能验证等级检查
 
-读取 `trace/format_spec.md` 中定义的占位 level 名称集合，检查 `project.trace.required_func_level` 和 `project.trace.required_perf_level` 是否在集合内。输出 `TRACE_LEVEL_KNOWN` 或 `TRACE_LEVEL_UNKNOWN`。
+读取 `trace/format_spec.md` 中定义的功能验证等级名称集合，检查 `project.trace.required_func_level` 和 `project.trace.required_perf_level` 是否在集合内。输出 `FUNC_LEVEL_KNOWN` 或 `FUNC_LEVEL_UNKNOWN`。
 
 #### 7.9 依赖
 
@@ -977,20 +978,21 @@ tools/runner/cute-check-config.py
 
 ### Task 8: Trace 实现任务占位（后续专题讨论）
 
-Task 8 暂不在本轮实现，把 Trace 实现从 Task 7 中剥离出来，后续单独讨论 `trace/func checker` 和 `trace/status profile` 的边界、输入格式和模型责任。
+Task 8 暂不在本轮实现，把 Trace 实现从 Task 7 中剥离出来，后续单独讨论功能验证检查器和 `trace/status profile` 的边界、输入格式和模型责任。
 
 候选实现范围：
 
 ```text
-trace/python/cutetrace/parser.py        # compact printf parser
-trace/python/cutetrace/decoder.py       # task/event/field dictionary decoder
-trace/python/cutetrace/render.py        # pretty text / JSONL renderer
-trace/python/func/task_model.py         # F0_task checker
-trace/python/func/loadstore_model.py    # F1_loadstore checker
-trace/python/func/compute_model.py      # F2_compute checker
-trace/python/status/status_parser.py    # TopDownStatus printf parser
-trace/python/status/topdown.py          # offline top-down attribution
-trace/python/status/rule_compare.py     # attribution rule comparison
+trace/python/cutetrace/parser.py        # 紧凑 printf 解析器
+trace/python/cutetrace/decoder.py       # task/event/field 字典解码器
+trace/python/cutetrace/render.py        # 可读文本 / JSONL 渲染器
+trace/python/func/level1_inst.py        # Level1_Inst 检查器
+trace/python/func/level2_mem_cute.py    # Level2_mem_cute 检查器
+trace/python/func/level2ex_all_cute.py  # Level2ex_all_cute 检查器
+trace/python/func/level3_mem_vector.py  # Level3_mem_vector 检查器
+trace/python/status/status_parser.py    # TopDownStatus printf 解析器
+trace/python/status/topdown.py          # 离线 top-down 归因
+trace/python/status/rule_compare.py     # 归因规则对比
 ```
 
 本阶段只要求 Task 7 的 `cute-check-config.py` 能读取 `trace/format_spec.md` 和 `configs/trace_filters/*.yaml` 做名称存在性检查；不实现 parser/filter/model。
@@ -1037,9 +1039,10 @@ cute-sdk/tensor_ops/matmul/project.yaml
 
 # Trace 占位
 trace/format_spec.md
-configs/trace_filters/func_task.yaml
-configs/trace_filters/func_loadstore.yaml
-configs/trace_filters/func_compute.yaml
+configs/trace_filters/func_level1_inst.yaml
+configs/trace_filters/func_level2_mem_cute.yaml
+configs/trace_filters/func_level2ex_all_cute.yaml
+configs/trace_filters/func_level3_mem_vector.yaml
 configs/trace_filters/perf_topdown_status.yaml
 
 # 工具
@@ -1063,7 +1066,7 @@ tools/runner/cute-check-config.py
 - [ ] `cute-check-config.py --hwconfig <hw> --project <proj>` 输出 MATCH 且理由正确
 - [ ] `cute-check-config.py --scan` 输出 project × variant × hwconfig 匹配矩阵
 - [ ] `HWConfig`、薄 `ChipyardConfig` manifest、Chipyard exported JSON 和 `project.yaml` 的字段边界清楚，人工入口和自动导出字段有文档区分
-- [ ] Trace level 名称（F0_task / F1_loadstore / F2_compute / F3_layer / F4_fused_layer / F5_model）已作为占位冻结，但具体 event schema 未承诺
+- [ ] Func verify level 名称（Level1_Inst / Level2_mem_cute / Level2ex_all_cute / Level3_mem_vector）已作为占位冻结，trace category 与 event schema 由 trace catalog 承担
 - [ ] 文档明确：`configs/tests` 不作为人工维护入口
 
 ---
@@ -1091,7 +1094,7 @@ tools/runner/cute-check-config.py
 | 风险 | 应对 |
 |------|------|
 | Schema 过早复杂化 | 本阶段只保留 Phase 1/2 需要的字段；不确定的字段用 `*_TODO` 标注或直接省略 |
-| Trace 过早展开 | 只做占位；level 名称冻结但内容为空 |
+| Trace 过早展开 | Phase 0 只冻结 func verify level 和 trace category 边界；具体 event schema 在 trace catalog 中增量推进 |
 | project.yaml 过于自由 | schema 约束最小必填字段；variant 参数统一放入 `params`，只有 `params` 内允许自由键值 |
 | HWConfig 字段与 CUTEParameters 不对齐 | HWConfig 不承载 CUTE 参数；薄 `ChipyardConfig` manifest 只承载 class/export/compatibility 入口；结构事实由后续 Chipyard exporter 导出；datatype set 由 `CUTEFPEVersion` 统一维护；instruction set 由 `CUTEISAVersion` 统一维护；vector feature set 由 `VectorVersion` 统一维护 |
 

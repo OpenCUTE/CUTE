@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CUTE ISA Version",
-  "description": "CUTE 内部指令集版本。ChipyardConfig 通过 compatibility.isa.version 引用这里定义的 YGJK/CUTE instruction set。Phase 0 不读取 Scala 或 generated header；后续由 Chipyard exporter facts/header fingerprint 做强一致性检查。Header 产物归属于 ChipyardConfig.export.generated_headers，不在本 manifest 中记录。",
+  "description": "CUTE 内部指令集版本。ChipyardConfig 通过 compatibility.isa.version 引用这里定义的 YGJK/CUTE instruction set。Phase 0 不读取 Scala 或 generated header；后续由 Chipyard exporter facts / header fingerprint 做强一致性检查。Header 产物归属于 ChipyardConfig.export.generated_headers，不在本 manifest 中记录。",
   "type": "object",
   "required": ["version", "id", "source", "groups"],
   "additionalProperties": false,
@@ -26,14 +26,14 @@
       "properties": {
         "scala_file": {
           "type": "string",
-          "description": "定义指令集 object 的 Scala 源码路径，仅作为 Chipyard exporter metadata；Phase 0 不读取 Scala"
+          "description": "定义指令集 object 的 Scala 源码路径，仅作为 Chipyard exporter metadata；Phase 0 不读取 Scala。"
         },
         "scala_objects": {
           "type": "array",
           "items": { "type": "string" },
           "minItems": 1,
           "uniqueItems": true,
-          "description": "该 ISA version 后续由 Chipyard exporter 对齐的 Scala object 全名"
+          "description": "该 ISA version 后续由 Chipyard exporter 对齐的 Scala object 全名。"
         }
       }
     },
@@ -44,12 +44,12 @@
         "opcode": {
           "type": "string",
           "pattern": "^0x[0-9A-Fa-f]+$",
-          "description": "RoCC opcode，当前来自 ygjk.h/inline asm 约定"
+          "description": "RoCC opcode，当前来自 ygjk.h / inline asm 约定。"
         },
         "cute_internal_offset": {
           "type": "integer",
           "minimum": 0,
-          "description": "CUTE internal instruction 在 RoCC funct 空间中的 offset"
+          "description": "CUTE 内部指令在 RoCC funct 空间中的偏移量。"
         }
       }
     },
@@ -71,16 +71,16 @@
       "properties": {
         "scala_object": {
           "type": "string",
-          "description": "该 group 对齐的 Scala object"
+          "description": "该 group 对齐的 Scala object。"
         },
         "description": {
           "type": "string",
-          "description": "该 instruction group 的用途说明"
+          "description": "该 instruction group 的用途说明。"
         },
         "rocc_funct_offset": {
           "type": "integer",
           "minimum": 0,
-          "description": "从 Scala funct 到 RoCC funct 的固定 offset"
+          "description": "从 Scala funct 到 RoCC funct 的固定偏移量。"
         },
         "instructions": {
           "type": "array",
@@ -98,25 +98,25 @@
         "name": {
           "type": "string",
           "pattern": "^[A-Z][A-Z0-9_]*$",
-          "description": "软件/header 可见的指令名"
+          "description": "软件 / header 可见的指令名。"
         },
         "funct": {
           "type": "integer",
           "minimum": 0,
-          "description": "Scala CuteInstConfig.funct"
+          "description": "Scala CuteInstConfig.funct。"
         },
         "rocc_funct": {
           "type": "integer",
           "minimum": 0,
-          "description": "CUTE_INST_FUNCT_<name> 在 generated header 中的值"
+          "description": "CUTE_INST_FUNCT_<name> 在 generated header 中的值。"
         },
         "description": {
           "type": "string",
-          "description": "从 Scala CuteInstConfig.description 抄录的指令说明"
+          "description": "从 Scala CuteInstConfig.description 抄录的指令说明。"
         },
         "return_description": {
           "type": "string",
-          "description": "从 Scala CuteInstConfig.returnDescription 抄录的返回值说明"
+          "description": "从 Scala CuteInstConfig.returnDescription 抄录的返回值说明。"
         }
       }
     }

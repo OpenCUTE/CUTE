@@ -14,7 +14,7 @@ Phase 0.5 实施范围：
 Verilator Trace:
   用 task_id/event_id/field dictionary 降低日志字符量
   保留可读/可解析的 printf
-  支持 parser/decoder 做功能验证
+  支持解析器 / 解码器做功能验证
 
 Top-Down Status:
   在模块内产生 status
@@ -132,9 +132,9 @@ CUTE Trace 采用 Verilator printf + 字典机制。
 目标：
 
 - 替代散落的长字符串 `printf`。
-- 用 `task_id/event_id/field_id` 字典机制减少日志字符量。
+- 用 `task_id/event_id` 字典机制减少 compact 日志字符量。
 - 保留可解析性，parser 可以还原漂亮日志。
-- 服务 F0_task / F1_loadstore / F2_compute 功能验证。
+- 服务 Level1_Inst、Level2_mem_cute、Level2ex_all_cute、Level3_mem_vector 功能验证。
 - 综合边界限定在 Verilator/仿真。
 
 示例：
@@ -149,16 +149,16 @@ vtrace(TraceTask.AMLLoad, TraceEvent.MmuReq, Request.fire)(
 )
 ```
 
-仿真输出可以是紧凑格式：
+Compact 输出：
 
 ```text
-CT c=123456 t=0x21 e=0x02 p=0003_0007_000c_0001_80204000
+CT,1,1e240,21,02,3,7,c,1,80204000
 ```
 
-软件 decoder 根据字典渲染为：
+Human 输出：
 
 ```text
-[123456][AML.load][mmu_req] ih=3 iw=7 m=12 k=1 vaddr=0x80204000
+CTH c=123456 task=AMLLoad event=mmuReq ih=3 iw=7 m=12 k=1 vaddr=0x80204000
 ```
 
 ### Status
@@ -196,14 +196,13 @@ backend:
 encoding:
   task_id
   event_id
-  field_id
-  packed payload
+  catalog field order
 
 software:
-  Python parser/decoder
-  pretty text renderer
-  JSONL exporter
-  functional-check model input
+  Python 解析器 / 解码器
+  可读文本渲染器
+  JSONL 导出器
+  功能验证模型输入
 ```
 
 ### 字典机制
@@ -222,13 +221,13 @@ events:
   AML_MmuReq:
     task: AMLLoad
     id: 0x02
-    level: F1_loadstore
-    fields:
-      - { name: ih, width: 16, fmt: dec }
-      - { name: iw, width: 16, fmt: dec }
-      - { name: m, width: 16, fmt: dec }
-      - { name: k, width: 16, fmt: dec }
-      - { name: vaddr, width: 64, fmt: hex }
+      category: cute_loadstore
+      fields:
+      - { name: ih, type: uint, fmt: dec }
+      - { name: iw, type: uint, fmt: dec }
+      - { name: m, type: uint, fmt: dec }
+      - { name: k, type: uint, fmt: dec }
+      - { name: vaddr, type: uint, fmt: hex }
     render: "ih={ih} iw={iw} m={m} k={k} vaddr=0x{vaddr:x}"
 ```
 
@@ -237,60 +236,54 @@ events:
 ```text
 build/trace/trace_catalog.json
 build/trace/TraceIds.scala
-build/trace/trace_catalog_hash.txt
 ```
 
 ### printf 格式
 
-建议先支持两种格式。
+支持三种 print mode：
+
+```text
+Compact
+Human
+Both
+```
 
 #### 紧凑格式
 
 ```text
-CT v=1 h=<catalog_hash> c=<cycle> t=<task_id> e=<event_id> p=<hex_payload>
+CT,1,<cycle_hex>,<task_id_hex>,<event_id_hex>,<field0_hex>,<field1_hex>,...
 ```
 
 优点：
 
 - 字符少。
-- parser 简单。
+- 解析器简单。
 - 比长 printf 更适合大日志。
 
 #### 可读格式
 
-```text
-[cycle][module.task.event] field=value ...
-```
-
-优点：
-
-- 人直接看舒服。
-- 适合 bringup。
-
-Config 中可以切：
-
-```scala
-CUTETracePrintMode.Compact
-CUTETracePrintMode.Human
-CUTETracePrintMode.Both
-```
-
-### Trace levels
-
-Trace level 按 CUTE 内部验证语义分层：
+Human 格式由生成器根据 catalog 生成 task/event 名和字段名：
 
 ```text
-F0_task:
+CTH c=<cycle_dec> task=<task_name> event=<event_name> field=value ...
+```
+
+### Trace 类别与功能验证等级
+
+Trace 类别描述观测事件类别，功能验证等级描述校验目标和依赖关系：
+
+```text
+cute_inst/cute_task:
   关注 CUTE 内部各模块的任务起始和结束。
-  目标是还原 task lifecycle，并检查 task 的发射、执行、完成顺序。
+  目标是还原 task 生命周期，并检查 task 的发射、执行、完成顺序。
 
-F1_loadstore:
+cute_loadstore:
   关注每次发生的 load 读取和 store 写回。
   目标是重建 CUTE 与内存/LocalMMU/scratchpad 之间的数据流。
 
-F2_compute:
+cute_compute:
   关注每次 MTE 的计算输入、输出和计算结果。
-  目标是对 MTE compute result 做功能验证，并和参考模型对齐。
+  目标是对 MTE 计算结果做功能验证，并和参考模型对齐。
 ```
 
 ### 第一批 Trace 事件
@@ -298,7 +291,7 @@ F2_compute:
 优先迁移现有 printf 中最有功能验证价值的事件：
 
 ```text
-F0_task:
+cute_inst/cute_task:
   TaskController macro_inst_insert
   TaskController macro_inst_decode_start
   TaskController macro_inst_decode_end
@@ -307,7 +300,7 @@ F0_task:
   AML/BML/CML/MTE task_start
   AML/BML/CML/MTE task_end
 
-F1_loadstore:
+cute_loadstore:
   AML/BML load_req
   AML/BML load_rsp
   AML/BML load_data
@@ -317,7 +310,7 @@ F1_loadstore:
   LocalMMU mmu_req
   LocalMMU mmu_rsp
 
-F2_compute:
+cute_compute:
   MTE compute_start
   MTE compute_input
   MTE compute_result
@@ -326,7 +319,7 @@ F2_compute:
 
 ### Trace event 字段建议
 
-#### F0_task
+#### cute_inst / cute_task
 
 ```text
 common:
@@ -344,7 +337,7 @@ events:
   task_commit
 ```
 
-#### F1_loadstore
+#### cute_loadstore
 
 ```text
 common:
@@ -367,7 +360,7 @@ events:
   store_ack
 ```
 
-#### F2_compute
+#### cute_compute
 
 ```text
 common:
@@ -387,7 +380,7 @@ events:
   compute_end
 ```
 
-### Trace parser
+### Trace 解析器
 
 目录建议：
 
@@ -404,12 +397,12 @@ trace/python/cutetrace/
 
 功能：
 
-- 读取 compact printf 日志。
-- 校验 catalog hash。
-- 解码 task/event/payload。
-- 输出漂亮 text。
+- 读取紧凑 printf 日志。
+- 使用 runner 指定的 catalog 解码。
+- 解码 task、event、field 值。
+- 输出可读文本。
 - 输出 JSONL。
-- 给 F0_task / F1_loadstore / F2_compute checker 提供结构化输入。
+- 给 Level1_Inst、Level2_mem_cute、Level2ex_all_cute、Level3_mem_vector 检查器提供结构化输入。
 
 ---
 
@@ -811,19 +804,9 @@ render top-down graph
 ```scala
 case class CUTETraceParams(
   enable: Boolean = false,
-  mode: CUTETraceMode = CUTETraceMode.CompactPrintf,
-  levels: Set[CUTETraceLevel] = Set(F0Task),
-  catalogHash: BigInt = 0
+  printMode: CUTETracePrintMode = CUTETracePrintMode.Compact,
+  enabledCategories: Set[String] = Set("cute_inst", "cute_task")
 )
-```
-
-模式：
-
-```text
-Off
-HumanPrintf
-CompactPrintf
-BothPrintf
 ```
 
 ### Status config
@@ -868,7 +851,7 @@ Phase 0.5 记录该 config 的接口形态和参数含义；实际实现进入 F
 ```text
 src/main/scala/trace/CUTETraceIds.scala
 src/main/scala/trace/CUTETracePrintf.scala
-trace/catalogs/cute_trace.yaml
+trace/catalogs/cute_trace.json
 trace/python/cutetrace/parser.py
 trace/python/cutetrace/decoder.py
 trace/python/cutetrace/render.py
@@ -913,13 +896,13 @@ trace/status_spec.md
 - 明确 Status 是 profile attribution 主线。
 - 明确 Chipyard TraceIO 为 status plumbing 提供参考。
 
-### Task 2: Trace 字典与 compact printf
+### Task 2: Trace 字典与紧凑 printf
 
 产物：
 
 ```text
-trace/catalogs/cute_trace.yaml
-scripts/generate-cute-trace-ids.py
+trace/catalogs/cute_trace.json
+scripts/trace/gen_cute_trace.py
 src/main/scala/trace/CUTETraceIds.scala
 src/main/scala/trace/CUTETracePrintf.scala
 ```
@@ -927,10 +910,11 @@ src/main/scala/trace/CUTETracePrintf.scala
 验收：
 
 - 可以用 task/event id 输出 compact printf。
-- 可以切换 compact/human printf。
-- catalog hash 出现在日志头或日志行中。
+- 可以用 task/event 名和字段名输出 human printf。
+- Both 模式可以同时输出 compact 和 human 两行。
+- 解码时由 runner 或命令行指定 catalog。
 
-### Task 3: Trace parser/decoder
+### Task 3: Trace 解析器 / 解码器
 
 产物：
 
@@ -942,9 +926,9 @@ trace/python/cutetrace/render.py
 
 验收：
 
-- compact printf 能还原成漂亮日志。
+- 紧凑 printf 能还原成漂亮日志。
 - 能输出 JSONL。
-- 能为 F0_task / F1_loadstore / F2_compute checker 提供结构化事件。
+- 能为 Level1_Inst、Level2_mem_cute、Level2ex_all_cute、Level3_mem_vector 检查器提供结构化事件。
 
 ### Task 4: CUTE 关键 Trace 事件 PoC
 
@@ -961,9 +945,9 @@ MTE compute_result
 
 - 旧 printf 保留到 compact trace 覆盖同等信息。
 - 新 compact trace 与旧 printf 可交叉确认。
-- F0_task 能检查 CUTE 内部关键模块 task_start/task_end 顺序。
-- F1_loadstore 能重建最小 load/store 数据流。
-- F2_compute 能记录并校验最小 MTE compute result。
+- Level1_Inst 能检查 CUTE 指令、程序退出和关键模块 task_start/task_end 顺序。
+- Level2_mem_cute 能重建并检查最小 CUTE load/store 数据流。
+- Level2ex_all_cute 能记录并校验最小 MTE 计算结果。
 
 ### Task 5: Status enum 草案
 
@@ -1068,9 +1052,9 @@ tools/perf/profile_status_budget.md
 必须做：
 
 ```text
-Trace compact printf
+Trace compact/human printf
 Trace catalog
-Trace parser/decoder
+Trace 解析器 / 解码器
 CUTE 关键 trace PoC
 Status enum 草案
 CUTEStatus 聚合
@@ -1142,11 +1126,11 @@ ChipTop profile external port
 Phase 0.5 完成时，应满足：
 
 1. 文档明确 Trace 是 Verilator-only printf，Status 是 profile/top-down 归因主线。
-2. CUTE 关键模块可以输出 compact trace printf。
-3. Trace decoder 可以把 compact printf 还原成漂亮日志和 JSONL。
-4. F0_task 可以检查 CUTE 内部关键模块的任务起始和结束顺序。
-5. F1_loadstore 可以重建最小 load/store 数据流。
-6. F2_compute 可以记录并校验最小 MTE compute result。
+2. CUTE 关键模块可以输出 compact/human trace printf。
+3. Trace 解码器可以把紧凑 printf 还原成漂亮日志和 JSONL。
+4. Level1_Inst 可以检查 CUTE 指令、程序退出和关键模块任务生命周期。
+5. Level2_mem_cute 可以重建并检查最小 CUTE load/store 数据流。
+6. Level2ex_all_cute 可以记录并校验最小 MTE 计算结果。
 7. AML/BML/CML/MTE/LocalMMU 至少有初版 status 枚举。
 8. CUTE top 可以聚合出 `CUTEStatus`。
 9. 仿真中可以 printf ChipTop/DigitalTop 聚合好的 `TopDownStatus`。

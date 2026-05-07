@@ -1,0 +1,352 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CUTE Trace Catalog",
+  "description": "CUTETrace 的 catalog schema。这个 catalog 是 trace 类别、模块、任务、事件、payload 字段、Scala typed API 生成、Python 解码和 trace 过滤器校验的唯一真相源。",
+  "type": "object",
+  "required": [
+    "version",
+    "catalog_id",
+    "categories",
+    "modules",
+    "tasks",
+    "events"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema 版本，固定为 1。"
+    },
+    "catalog_id": {
+      "$ref": "#/definitions/catalog_id",
+      "description": "稳定的 catalog id，例如 cute_trace_v1。"
+    },
+    "description": {
+      "type": "string",
+      "description": "catalog 的补充说明。"
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/category"
+      },
+      "description": "trace 类别列表，例如 cute_inst、cute_task、cute_loadstore、cute_compute、vector_loadstore。"
+    },
+    "modules": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/module"
+      },
+      "description": "发出 trace 事件的硬件模块或逻辑模块列表。"
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/task"
+      },
+      "description": "trace 任务组。每个 task 会生成一个嵌套 Scala object。"
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/event"
+      },
+      "description": "trace 事件列表。每个 event 会生成一个 typed Scala method。"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/value"
+      }
+    }
+  },
+  "definitions": {
+    "catalog_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "catalog id 的命名模式。"
+    },
+    "category_name": {
+      "type": "string",
+      "enum": [
+        "cute_inst",
+        "cute_task",
+        "cute_loadstore",
+        "cute_compute",
+        "vector_loadstore"
+      ],
+      "description": "trace 类别名称。功能验证等级会消费一个或多个 trace 类别。"
+    },
+    "module_name": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*$",
+      "description": "模块名，采用 PascalCase 或全大写风格，例如 TaskController、AML、CML、LocalMMU。"
+    },
+    "task_name": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*$",
+      "description": "task 名称，用作 Scala 嵌套对象名，例如 AMLLoad。"
+    },
+    "event_name": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*\\.[a-z][A-Za-z0-9]*$",
+      "description": "完整 event 名称，格式为 <TaskName>.<methodName>，例如 AMLLoad.mmuReq。"
+    },
+    "scala_method": {
+      "type": "string",
+      "pattern": "^[a-z][A-Za-z0-9]*$",
+      "description": "生成到 task object 下的 Scala 方法名。"
+    },
+    "field_name": {
+      "type": "string",
+      "pattern": "^[a-z][A-Za-z0-9_]*$",
+      "description": "字段名。"
+    },
+    "uint_id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "稳定的小整数 id，范围 0 到 65535。"
+    },
+    "category": {
+      "type": "object",
+      "required": [
+        "name",
+        "id",
+        "description"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/category_name",
+          "description": "trace 类别名称。"
+        },
+        "id": {
+          "$ref": "#/definitions/uint_id",
+          "description": "类别的稳定 id。"
+        },
+        "description": {
+          "type": "string",
+          "description": "类别说明。"
+        },
+        "deprecated": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否已废弃。"
+        }
+      }
+    },
+    "module": {
+      "type": "object",
+      "required": [
+        "name",
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/module_name",
+          "description": "模块名。"
+        },
+        "id": {
+          "$ref": "#/definitions/uint_id",
+          "description": "模块的稳定 id。"
+        },
+        "description": {
+          "type": "string",
+          "description": "模块说明。"
+        },
+        "deprecated": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否已废弃。"
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": [
+        "name",
+        "id",
+        "module",
+        "method_group",
+        "description"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/task_name",
+          "description": "task 名称。"
+        },
+        "id": {
+          "$ref": "#/definitions/uint_id",
+          "description": "task 的稳定 id。"
+        },
+        "module": {
+          "$ref": "#/definitions/module_name",
+          "description": "task 所属模块名。"
+        },
+        "method_group": {
+          "$ref": "#/definitions/task_name",
+          "description": "生成到 CUTETrace 下的 Scala 嵌套 object 名称。"
+        },
+        "description": {
+          "type": "string",
+          "description": "task 的说明。"
+        },
+        "deprecated": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否已废弃。"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/value"
+          }
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": [
+        "name",
+        "method",
+        "id",
+        "task",
+        "category",
+        "description",
+        "fields",
+        "render"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/event_name",
+          "description": "完整 event 名称。"
+        },
+        "method": {
+          "$ref": "#/definitions/scala_method",
+          "description": "生成到 task object 下的方法名。"
+        },
+        "id": {
+          "$ref": "#/definitions/uint_id",
+          "description": "event 的 id。语义上的唯一性按 task 维度校验。"
+        },
+        "task": {
+          "$ref": "#/definitions/task_name",
+          "description": "event 所属 task 名称。"
+        },
+        "category": {
+          "$ref": "#/definitions/category_name",
+          "description": "event 所属 trace 类别。"
+        },
+        "description": {
+          "type": "string",
+          "description": "event 的说明。"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/field"
+          },
+          "description": "payload 字段列表，顺序就是打包顺序，也是 trace ABI 的一部分。"
+        },
+        "render": {
+          "type": "string",
+          "description": "用于可读文本输出的 Python 格式化模板。"
+        },
+        "deprecated": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否已废弃。"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/value"
+          }
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "fmt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/field_name",
+          "description": "字段名。"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "uint",
+            "sint",
+            "bool"
+          ],
+          "description": "字段逻辑类型，供解码器和渲染器使用。"
+        },
+        "fmt": {
+          "type": "string",
+          "enum": [
+            "dec",
+            "hex",
+            "bin",
+            "bool"
+          ],
+          "description": "默认打印格式。"
+        },
+        "description": {
+          "type": "string",
+          "description": "字段说明。"
+        }
+      }
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/value"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/value"
+          }
+        }
+      ],
+      "description": "可嵌套的通用值类型。"
+    }
+  }
+}

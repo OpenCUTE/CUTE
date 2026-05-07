@@ -1,6 +1,6 @@
 version: 1
 id: cute_fpe_v1
-description: CUTE/FPE datatype manifest for the current SDK compatibility version.
+description: 当前 SDK 兼容版本使用的 CUTE/FPE datatype manifest。
 
 source:
   scala_object: cute.ElementDataType

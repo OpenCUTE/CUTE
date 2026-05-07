@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CUTE Project",
-  "description": "cute-sdk project.yaml schema. Project target is intentionally narrow in Phase 0: select HWConfig candidates by tags, then require only CUTE internal FPE/ISA/vector version compatibility.",
+  "description": "cute-sdk 的 project.yaml schema。Phase 0 中 Project target 的范围刻意收窄：先按 tag 选择 HWConfig 候选，再只要求 CUTE 内部的 FPE / ISA / vector 版本兼容性。",
   "type": "object",
   "required": ["version", "id", "name", "kind", "version_name", "target", "code", "golden", "trace"],
   "additionalProperties": false,
@@ -223,7 +223,7 @@
       "properties": {
         "level": {
           "type": "string",
-          "enum": ["event", "store_tensor", "tensor_op", "layer", "fused_layer", "model"]
+          "enum": ["inst", "mem_cute", "all_cute", "mem_vector", "layer", "fused_layer", "model"]
         },
         "source": {
           "type": "string",
@@ -252,7 +252,7 @@
       "properties": {
         "required_func_level": {
           "type": "string",
-          "pattern": "^(none|F[0-9]_[A-Za-z0-9_]+)$"
+          "enum": ["none", "Level1_Inst", "Level2_mem_cute", "Level2ex_all_cute", "Level3_mem_vector"]
         },
         "required_perf_level": {
           "type": "string",

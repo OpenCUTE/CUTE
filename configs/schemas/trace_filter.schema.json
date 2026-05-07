@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CUTE Trace Filter",
-  "description": "Placeholder manifest for reusable trace filters. Phase 0 only freezes filter identity, purpose, and status; concrete filter predicates are intentionally deferred.",
+  "description": "可复用 trace 过滤器的占位 manifest。Phase 0 只冻结过滤器的身份、用途和状态；具体的过滤谓词后置。",
   "type": "object",
   "required": ["version", "name", "purpose", "description", "status"],
   "additionalProperties": false,
@@ -9,17 +9,17 @@
     "version": {
       "type": "integer",
       "const": 1,
-      "description": "Schema version, fixed to 1"
+      "description": "Schema 版本，固定为 1。"
     },
     "name": {
       "type": "string",
       "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
-      "description": "Trace filter name, matching the file stem by convention"
+      "description": "trace 过滤器名称，按约定与文件名 stem 对齐。"
     },
     "purpose": {
       "type": "string",
       "enum": ["func", "perf", "debug"],
-      "description": "Whether the filter is intended for functional checking, performance analysis, or debug"
+      "description": "该过滤器用于功能验证、性能分析还是调试。"
     },
     "description": {
       "type": "string"

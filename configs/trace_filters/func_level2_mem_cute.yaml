@@ -1,0 +1,5 @@
+version: 1
+name: func_level2_mem_cute
+purpose: func
+description: Level2_mem_cute 功能验证使用的过滤器，在 Level1_Inst 通过后选择 CUTE load/store 事件。
+status: placeholder

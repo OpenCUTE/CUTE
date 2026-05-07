@@ -1,6 +1,6 @@
 version: 1
 id: saturn_rvv
-description: Saturn-backed RISC-V Vector path for projects that require RVV helper kernels.
+description: 面向需要 RVV 辅助内核的项目的 Saturn-backed RISC-V Vector 路径。
 kind: rvv
 
 source:
@@ -26,5 +26,5 @@ features:
   ops: [load_store, elementwise, reduction, mask, permutation, floating_point, integer]
   config_dependent_fields: [vLen, dLen, mLen, cores, core_kind]
   notes:
-    - VLEN, DLEN, MLEN, and core attachment are selected by the concrete Chipyard Config.
-    - Layer and model projects should require this version when they use Saturn/RVV helper kernels.
+    - VLEN、DLEN、MLEN 以及核心挂载方式由具体的 Chipyard Config 决定。
+    - 当 layer 或 model 项目使用 Saturn / RVV 辅助内核时，应要求此版本。

@@ -1,0 +1,5 @@
+version: 1
+name: func_level1_inst
+purpose: func
+description: Level1_Inst 功能验证使用的过滤器，选择 cute_inst 和 cute_task 事件。
+status: placeholder
