@@ -23,7 +23,7 @@ object WrapInc
 }
 
 class DebugInfoIO()(implicit p: Parameters) extends CuteBundle{
-    val DebugTimeStampe = UInt(64.W)
+    val DebugTimeStampe = UInt(32.W)
 }
 
 case object CuteParamsKey extends Field[CuteParams]

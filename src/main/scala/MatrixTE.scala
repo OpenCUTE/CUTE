@@ -4,6 +4,8 @@ package cute
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
+import cute.trace._
+import cute.trace.generated.{CUTETrace, CUTETraceIds}
 // import boom.exu.ygjk._
 
 //MatrixTE
@@ -28,8 +30,25 @@ class MatrixTE(implicit p: Parameters) extends CuteModule{
     // 配置数据类型
     val DataType = Reg(UInt((ElementDataType.DataTypeBitWidth).W))
 
+    implicit val traceCtx: CUTETraceContext = CUTETraceContext(
+        cycle = io.DebugInfo.DebugTimeStampe,
+        params = CUTETraceParams(
+            enable = true,
+            printMode = CUTETracePrintMode.Compact,
+            enabledCategories = Set(CUTETraceIds.Category.cute_task)
+        )
+    )
+    val taskCount = RegInit(0.U(16.W))
+    val taskActive = RegInit(false.B)
+
     when (io.ConfigInfo.MicroTaskValid) {
         DataType := io.ConfigInfo.dataType
+        when(taskActive) {
+            CUTETrace.MTECompute.taskEnd(cond = true.B, task_count = taskCount - 1.U)
+        }
+        CUTETrace.MTECompute.taskStart(cond = true.B, task_count = taskCount)
+        taskCount := taskCount + 1.U
+        taskActive := true.B
     }
 
     //直接驱动ReducePE的输入

@@ -240,22 +240,12 @@
       "description": "AML 开始一个加载微任务。",
       "fields": [
         {
-          "name": "macro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "micro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "scp_id",
+          "name": "task_count",
           "type": "uint",
           "fmt": "dec"
         }
       ],
-      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+      "render": "task_count={task_count}"
     },
     {
       "name": "AMLLoad.taskEnd",
@@ -266,22 +256,12 @@
       "description": "AML 完成一个加载微任务。",
       "fields": [
         {
-          "name": "macro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "micro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "scp_id",
+          "name": "task_count",
           "type": "uint",
           "fmt": "dec"
         }
       ],
-      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+      "render": "task_count={task_count}"
     },
     {
       "name": "BMLLoad.taskStart",
@@ -292,22 +272,12 @@
       "description": "BML 开始一个加载微任务。",
       "fields": [
         {
-          "name": "macro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "micro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "scp_id",
+          "name": "task_count",
           "type": "uint",
           "fmt": "dec"
         }
       ],
-      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+      "render": "task_count={task_count}"
     },
     {
       "name": "BMLLoad.taskEnd",
@@ -318,22 +288,12 @@
       "description": "BML 完成一个加载微任务。",
       "fields": [
         {
-          "name": "macro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "micro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "scp_id",
+          "name": "task_count",
           "type": "uint",
           "fmt": "dec"
         }
       ],
-      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+      "render": "task_count={task_count}"
     },
     {
       "name": "CMLLoad.taskStart",
@@ -344,22 +304,12 @@
       "description": "CML 开始一个加载 C 张量的微任务。",
       "fields": [
         {
-          "name": "macro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "micro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "scp_id",
+          "name": "task_count",
           "type": "uint",
           "fmt": "dec"
         }
       ],
-      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+      "render": "task_count={task_count}"
     },
     {
       "name": "CMLLoad.taskEnd",
@@ -370,22 +320,12 @@
       "description": "CML 完成一个加载 C 张量的微任务。",
       "fields": [
         {
-          "name": "macro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "micro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "scp_id",
+          "name": "task_count",
           "type": "uint",
           "fmt": "dec"
         }
       ],
-      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+      "render": "task_count={task_count}"
     },
     {
       "name": "CMLStore.taskStart",
@@ -396,22 +336,12 @@
       "description": "CML 开始一个写回 D 张量的微任务。",
       "fields": [
         {
-          "name": "macro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "micro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "scp_id",
+          "name": "task_count",
           "type": "uint",
           "fmt": "dec"
         }
       ],
-      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+      "render": "task_count={task_count}"
     },
     {
       "name": "CMLStore.taskEnd",
@@ -422,22 +352,12 @@
       "description": "CML 完成一个写回 D 张量的微任务。",
       "fields": [
         {
-          "name": "macro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "micro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "scp_id",
+          "name": "task_count",
           "type": "uint",
           "fmt": "dec"
         }
       ],
-      "render": "macro_id={macro_id} micro_id={micro_id} scp_id={scp_id}"
+      "render": "task_count={task_count}"
     },
     {
       "name": "MTECompute.taskStart",
@@ -448,32 +368,12 @@
       "description": "MTE 开始一个计算微任务。",
       "fields": [
         {
-          "name": "macro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "micro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "a_scp_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "b_scp_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "c_scp_id",
+          "name": "task_count",
           "type": "uint",
           "fmt": "dec"
         }
       ],
-      "render": "macro_id={macro_id} micro_id={micro_id} a_scp_id={a_scp_id} b_scp_id={b_scp_id} c_scp_id={c_scp_id}"
+      "render": "task_count={task_count}"
     },
     {
       "name": "MTECompute.taskEnd",
@@ -484,32 +384,12 @@
       "description": "MTE 完成一个计算微任务。",
       "fields": [
         {
-          "name": "macro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "micro_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "a_scp_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "b_scp_id",
-          "type": "uint",
-          "fmt": "dec"
-        },
-        {
-          "name": "c_scp_id",
+          "name": "task_count",
           "type": "uint",
           "fmt": "dec"
         }
       ],
-      "render": "macro_id={macro_id} micro_id={micro_id} a_scp_id={a_scp_id} b_scp_id={b_scp_id} c_scp_id={c_scp_id}"
+      "render": "task_count={task_count}"
     }
   ],
   "metadata": {

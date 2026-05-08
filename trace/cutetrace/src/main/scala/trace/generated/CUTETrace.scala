@@ -168,9 +168,7 @@ object CUTETrace {
   object AMLLoad {
     def taskStart(
       cond: Bool,
-      macro_id: UInt,
-      micro_id: UInt,
-      scp_id: UInt
+      task_count: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
       CUTETracePrintf.emit(
         cond = cond,
@@ -178,31 +176,25 @@ object CUTETrace {
       )(
         compact = {
           printf(
-            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            "CT,1,%x,%x,%x,%x\n",
             ctx.cycle,
             CUTETraceIds.Task.AMLLoad.U,
             CUTETraceIds.Event.AMLLoad_taskStart.U,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         },
         human = {
           printf(
-            "CTH c=%d task=AMLLoad event=taskStart macro_id=%d micro_id=%d scp_id=%d\n",
+            "CTH c=%d task=AMLLoad event=taskStart task_count=%d\n",
             ctx.cycle,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         }
       )
     }
     def taskEnd(
       cond: Bool,
-      macro_id: UInt,
-      micro_id: UInt,
-      scp_id: UInt
+      task_count: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
       CUTETracePrintf.emit(
         cond = cond,
@@ -210,22 +202,18 @@ object CUTETrace {
       )(
         compact = {
           printf(
-            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            "CT,1,%x,%x,%x,%x\n",
             ctx.cycle,
             CUTETraceIds.Task.AMLLoad.U,
             CUTETraceIds.Event.AMLLoad_taskEnd.U,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         },
         human = {
           printf(
-            "CTH c=%d task=AMLLoad event=taskEnd macro_id=%d micro_id=%d scp_id=%d\n",
+            "CTH c=%d task=AMLLoad event=taskEnd task_count=%d\n",
             ctx.cycle,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         }
       )
@@ -234,9 +222,7 @@ object CUTETrace {
   object BMLLoad {
     def taskStart(
       cond: Bool,
-      macro_id: UInt,
-      micro_id: UInt,
-      scp_id: UInt
+      task_count: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
       CUTETracePrintf.emit(
         cond = cond,
@@ -244,31 +230,25 @@ object CUTETrace {
       )(
         compact = {
           printf(
-            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            "CT,1,%x,%x,%x,%x\n",
             ctx.cycle,
             CUTETraceIds.Task.BMLLoad.U,
             CUTETraceIds.Event.BMLLoad_taskStart.U,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         },
         human = {
           printf(
-            "CTH c=%d task=BMLLoad event=taskStart macro_id=%d micro_id=%d scp_id=%d\n",
+            "CTH c=%d task=BMLLoad event=taskStart task_count=%d\n",
             ctx.cycle,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         }
       )
     }
     def taskEnd(
       cond: Bool,
-      macro_id: UInt,
-      micro_id: UInt,
-      scp_id: UInt
+      task_count: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
       CUTETracePrintf.emit(
         cond = cond,
@@ -276,22 +256,18 @@ object CUTETrace {
       )(
         compact = {
           printf(
-            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            "CT,1,%x,%x,%x,%x\n",
             ctx.cycle,
             CUTETraceIds.Task.BMLLoad.U,
             CUTETraceIds.Event.BMLLoad_taskEnd.U,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         },
         human = {
           printf(
-            "CTH c=%d task=BMLLoad event=taskEnd macro_id=%d micro_id=%d scp_id=%d\n",
+            "CTH c=%d task=BMLLoad event=taskEnd task_count=%d\n",
             ctx.cycle,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         }
       )
@@ -300,9 +276,7 @@ object CUTETrace {
   object CMLLoad {
     def taskStart(
       cond: Bool,
-      macro_id: UInt,
-      micro_id: UInt,
-      scp_id: UInt
+      task_count: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
       CUTETracePrintf.emit(
         cond = cond,
@@ -310,31 +284,25 @@ object CUTETrace {
       )(
         compact = {
           printf(
-            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            "CT,1,%x,%x,%x,%x\n",
             ctx.cycle,
             CUTETraceIds.Task.CMLLoad.U,
             CUTETraceIds.Event.CMLLoad_taskStart.U,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         },
         human = {
           printf(
-            "CTH c=%d task=CMLLoad event=taskStart macro_id=%d micro_id=%d scp_id=%d\n",
+            "CTH c=%d task=CMLLoad event=taskStart task_count=%d\n",
             ctx.cycle,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         }
       )
     }
     def taskEnd(
       cond: Bool,
-      macro_id: UInt,
-      micro_id: UInt,
-      scp_id: UInt
+      task_count: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
       CUTETracePrintf.emit(
         cond = cond,
@@ -342,22 +310,18 @@ object CUTETrace {
       )(
         compact = {
           printf(
-            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            "CT,1,%x,%x,%x,%x\n",
             ctx.cycle,
             CUTETraceIds.Task.CMLLoad.U,
             CUTETraceIds.Event.CMLLoad_taskEnd.U,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         },
         human = {
           printf(
-            "CTH c=%d task=CMLLoad event=taskEnd macro_id=%d micro_id=%d scp_id=%d\n",
+            "CTH c=%d task=CMLLoad event=taskEnd task_count=%d\n",
             ctx.cycle,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         }
       )
@@ -366,9 +330,7 @@ object CUTETrace {
   object CMLStore {
     def taskStart(
       cond: Bool,
-      macro_id: UInt,
-      micro_id: UInt,
-      scp_id: UInt
+      task_count: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
       CUTETracePrintf.emit(
         cond = cond,
@@ -376,31 +338,25 @@ object CUTETrace {
       )(
         compact = {
           printf(
-            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            "CT,1,%x,%x,%x,%x\n",
             ctx.cycle,
             CUTETraceIds.Task.CMLStore.U,
             CUTETraceIds.Event.CMLStore_taskStart.U,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         },
         human = {
           printf(
-            "CTH c=%d task=CMLStore event=taskStart macro_id=%d micro_id=%d scp_id=%d\n",
+            "CTH c=%d task=CMLStore event=taskStart task_count=%d\n",
             ctx.cycle,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         }
       )
     }
     def taskEnd(
       cond: Bool,
-      macro_id: UInt,
-      micro_id: UInt,
-      scp_id: UInt
+      task_count: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
       CUTETracePrintf.emit(
         cond = cond,
@@ -408,22 +364,18 @@ object CUTETrace {
       )(
         compact = {
           printf(
-            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            "CT,1,%x,%x,%x,%x\n",
             ctx.cycle,
             CUTETraceIds.Task.CMLStore.U,
             CUTETraceIds.Event.CMLStore_taskEnd.U,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         },
         human = {
           printf(
-            "CTH c=%d task=CMLStore event=taskEnd macro_id=%d micro_id=%d scp_id=%d\n",
+            "CTH c=%d task=CMLStore event=taskEnd task_count=%d\n",
             ctx.cycle,
-            macro_id,
-            micro_id,
-            scp_id
+            task_count
           )
         }
       )
@@ -432,11 +384,7 @@ object CUTETrace {
   object MTECompute {
     def taskStart(
       cond: Bool,
-      macro_id: UInt,
-      micro_id: UInt,
-      a_scp_id: UInt,
-      b_scp_id: UInt,
-      c_scp_id: UInt
+      task_count: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
       CUTETracePrintf.emit(
         cond = cond,
@@ -444,37 +392,25 @@ object CUTETrace {
       )(
         compact = {
           printf(
-            "CT,1,%x,%x,%x,%x,%x,%x,%x,%x\n",
+            "CT,1,%x,%x,%x,%x\n",
             ctx.cycle,
             CUTETraceIds.Task.MTECompute.U,
             CUTETraceIds.Event.MTECompute_taskStart.U,
-            macro_id,
-            micro_id,
-            a_scp_id,
-            b_scp_id,
-            c_scp_id
+            task_count
           )
         },
         human = {
           printf(
-            "CTH c=%d task=MTECompute event=taskStart macro_id=%d micro_id=%d a_scp_id=%d b_scp_id=%d c_scp_id=%d\n",
+            "CTH c=%d task=MTECompute event=taskStart task_count=%d\n",
             ctx.cycle,
-            macro_id,
-            micro_id,
-            a_scp_id,
-            b_scp_id,
-            c_scp_id
+            task_count
           )
         }
       )
     }
     def taskEnd(
       cond: Bool,
-      macro_id: UInt,
-      micro_id: UInt,
-      a_scp_id: UInt,
-      b_scp_id: UInt,
-      c_scp_id: UInt
+      task_count: UInt
     )(implicit ctx: CUTETraceContext): Unit = {
       CUTETracePrintf.emit(
         cond = cond,
@@ -482,26 +418,18 @@ object CUTETrace {
       )(
         compact = {
           printf(
-            "CT,1,%x,%x,%x,%x,%x,%x,%x,%x\n",
+            "CT,1,%x,%x,%x,%x\n",
             ctx.cycle,
             CUTETraceIds.Task.MTECompute.U,
             CUTETraceIds.Event.MTECompute_taskEnd.U,
-            macro_id,
-            micro_id,
-            a_scp_id,
-            b_scp_id,
-            c_scp_id
+            task_count
           )
         },
         human = {
           printf(
-            "CTH c=%d task=MTECompute event=taskEnd macro_id=%d micro_id=%d a_scp_id=%d b_scp_id=%d c_scp_id=%d\n",
+            "CTH c=%d task=MTECompute event=taskEnd task_count=%d\n",
             ctx.cycle,
-            macro_id,
-            micro_id,
-            a_scp_id,
-            b_scp_id,
-            c_scp_id
+            task_count
           )
         }
       )

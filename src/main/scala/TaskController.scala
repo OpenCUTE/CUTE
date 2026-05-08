@@ -4,6 +4,8 @@ package cute
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
+import cute.trace._
+import cute.trace.generated.{CUTETrace, CUTETraceIds}
 // import boom.exu.ygjk._
 // import boom.v3.util._
 
@@ -37,6 +39,17 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
     val get_configred = RegInit(false.B)
     io.ctrlCounter := 0.U.asTypeOf(io.ctrlCounter)
+
+    implicit val traceCtx: CUTETraceContext = CUTETraceContext(
+        cycle = io.DebugTimeStampe,
+        params = CUTETraceParams(
+            enable = true,
+            printMode = CUTETracePrintMode.Compact,
+            enabledCategories = Set.empty[Int]
+        )
+    )
+    val macroInstCount = RegInit(0.U(8.W))
+    val microTaskIssueCount = RegInit(0.U(16.W))
 
     if (EnablePerfCounter)
     {
@@ -330,6 +343,12 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             // assert(!MacroInst_FIFO_Full, "MacroInst FIFO is full")
             when(!MacroInst_FIFO_Full)
             {
+                CUTETrace.TaskControllerTrace.macroInstInsert(
+                    cond = true.B,
+                    macro_id = macroInstCount,
+                    opcode = MacroInst_Reg.asTypeOf(new MacroInst).element_type
+                )
+                macroInstCount := macroInstCount + 1.U
                 val is_matmul_inst = MacroInst_Reg.asTypeOf(new MacroInst).conv_oh_max === 0.U && MacroInst_Reg.asTypeOf(new MacroInst).conv_ow_max === 0.U
                 val matmul_inst = MacroInst_Reg.asTypeOf(new MacroInst)
                 when(is_matmul_inst)
@@ -626,6 +645,11 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
         when(Decoding_MarcoInst_Going === false.B)
         {
+            CUTETrace.TaskControllerTrace.macroInstDecodeStart(
+                cond = true.B,
+                macro_id = macroInstCount - 1.U,
+                opcode = Decoding_MacroInst.element_type
+            )
             //如果宏指令未开始解析，且当前有未被解码的宏指令，则初始化相关寄存器
             Current_Tile_M_Iter := 0.U
             Current_Tile_N_Iter := 0.U
@@ -756,6 +780,13 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                                 when(Current_Tile_M_Iter + Tensor_M.U >= Decoding_MacroInst.Application_M)
                                 {
                                     Current_Tile_M_Iter := 0.U
+                                    CUTETrace.TaskControllerTrace.macroInstDecodeEnd(
+                                        cond = true.B,
+                                        macro_id = macroInstCount - 1.U,
+                                        load_tasks = 0.U,
+                                        compute_tasks = 0.U,
+                                        store_tasks = 0.U
+                                    )
                                     Decoding_MarcoInst_Going := false.B
                                     // Have_Load_Micro_Inst := false.B
                                     // Have_Compute_Micro_Inst := false.B
@@ -1021,6 +1052,13 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             }
         when(Can_Issue_Load_Micro_Inst && Load_Micro_Inst_Issue_State_Reg === issue_state_idle)
         {
+            CUTETrace.TaskControllerTrace.microTaskIssue(
+                cond = true.B,
+                macro_id = macroInstCount - 1.U,
+                micro_id = microTaskIssueCount,
+                target_task_id = 0.U
+            )
+            microTaskIssueCount := microTaskIssueCount + 1.U
             //发射这条指令
 
             io.AML_MicroTask_Config.ApplicationTensor_A := Load_MicroInst.ApplicationTensor_A
@@ -1151,6 +1189,12 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     //提交Load微指令
     when(Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FIFO_Tail) === true.B)
     {
+        CUTETrace.TaskControllerTrace.microTaskCommit(
+            cond = true.B,
+            macro_id = macroInstCount - 1.U,
+            micro_id = Load_MicroInst_FIFO_Tail,
+            target_task_id = 0.U
+        )
         Load_MicroInst_FIFO_Tail := WrapInc(Load_MicroInst_FIFO_Tail, 4)
         Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FIFO_Tail) := false.B
         if (YJPDebugEnable)
@@ -1205,6 +1249,13 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
         when(Can_Issue_Compute_Micro_Inst && Compute_Micro_Inst_Issue_State_Reg === issue_state_idle)
         {
+            CUTETrace.TaskControllerTrace.microTaskIssue(
+                cond = true.B,
+                macro_id = macroInstCount - 1.U,
+                micro_id = microTaskIssueCount,
+                target_task_id = 1.U
+            )
+            microTaskIssueCount := microTaskIssueCount + 1.U
             io.ADC_MicroTask_Config.ScaratchpadTensor_M := Compute_MicroInst.ScaratchpadTensor_M
             io.ADC_MicroTask_Config.ScaratchpadTensor_N := Compute_MicroInst.ScaratchpadTensor_N
             io.ADC_MicroTask_Config.ScaratchpadTensor_K := Compute_MicroInst.ScaratchpadTensor_K
@@ -1365,6 +1416,12 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     //提交Compute微指令
     when(Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FIFO_Tail) === true.B)
     {
+        CUTETrace.TaskControllerTrace.microTaskCommit(
+            cond = true.B,
+            macro_id = macroInstCount - 1.U,
+            micro_id = Compute_MicroInst_FIFO_Tail,
+            target_task_id = 1.U
+        )
         Compute_MicroInst_FIFO_Tail := WrapInc(Compute_MicroInst_FIFO_Tail, 4)
         Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FIFO_Tail) := false.B
         if (YJPDebugEnable)
@@ -1400,6 +1457,13 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
         when((!Will_Issuse_CML_Load)&& Can_Issue_Store_Micro_Inst && Store_Micro_Inst_Issue_State_Reg === issue_state_idle)
         {
+            CUTETrace.TaskControllerTrace.microTaskIssue(
+                cond = true.B,
+                macro_id = macroInstCount - 1.U,
+                micro_id = microTaskIssueCount,
+                target_task_id = 2.U
+            )
+            microTaskIssueCount := microTaskIssueCount + 1.U
             io.CML_MicroTask_Config.ApplicationTensor_D := Store_MicroInst.ApplicationTensor_D
             io.CML_MicroTask_Config.Conherent        := Store_MicroInst.Conherent
             io.CML_MicroTask_Config.ScaratchpadTensor_M := Store_MicroInst.ScaratchpadTensor_M
@@ -1433,6 +1497,12 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             }
             when(!Store_Micro_Inst_Wait_C_Finish)
             {
+                CUTETrace.TaskControllerTrace.microTaskCommit(
+                    cond = true.B,
+                    macro_id = macroInstCount - 1.U,
+                    micro_id = Store_MicroInst_FIFO_Tail,
+                    target_task_id = 2.U
+                )
                 Store_MicroInst_FIFO_Tail := WrapInc(Store_MicroInst_FIFO_Tail, 4)
                 Store_Micro_Inst_Issue_State_Reg := issue_state_idle
                 when(Store_Micro_Inst_Is_Last_Store)

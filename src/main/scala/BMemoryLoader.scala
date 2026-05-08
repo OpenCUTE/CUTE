@@ -4,6 +4,8 @@ package cute
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
+import cute.trace._
+import cute.trace.generated.{CUTETrace, CUTETraceIds}
 // import boom.exu.ygjk._
 // import boom.v3.util._
 
@@ -45,6 +47,16 @@ class BMemoryLoader(implicit p: Parameters) extends CuteModule{
     io.ConfigInfo.MicroTaskEndValid := false.B
     io.ConfigInfo.MicroTaskReady := false.B
 
+    implicit val traceCtx: CUTETraceContext = CUTETraceContext(
+        cycle = io.DebugInfo.DebugTimeStampe,
+        params = CUTETraceParams(
+            enable = true,
+            printMode = CUTETracePrintMode.Compact,
+            enabledCategories = Set(CUTETraceIds.Category.cute_task)
+        )
+    )
+    val taskCount = RegInit(0.U(16.W))
+
 
     val ScaratchpadBankAddr = io.ToScarchPadIO.BankAddr
     val ScaratchpadData = io.ToScarchPadIO.Data
@@ -80,6 +92,8 @@ class BMemoryLoader(implicit p: Parameters) extends CuteModule{
         ConfigInfo.MicroTaskReady := true.B
         when(ConfigInfo.MicroTaskReady && ConfigInfo.MicroTaskValid){
             //当前配置的指令有效
+            CUTETrace.BMLLoad.taskStart(cond = true.B, task_count = taskCount)
+            taskCount := taskCount + 1.U
             state := s_mm_task
             memoryload_state := s_load_init
             // ApplicationTensor_M := io.ConfigInfo.bits.ApplicationTensor_M
@@ -345,6 +359,7 @@ class BMemoryLoader(implicit p: Parameters) extends CuteModule{
     }.elsewhen(memoryload_state === s_load_end){
         io.ConfigInfo.MicroTaskEndValid := true.B
         when(io.ConfigInfo.MicroTaskEndValid && io.ConfigInfo.MicroTaskEndReady){
+            CUTETrace.BMLLoad.taskEnd(cond = true.B, task_count = taskCount - 1.U)
             memoryload_state := s_load_idle
             state := s_idle
             if(YJPBMLDebugEnable)

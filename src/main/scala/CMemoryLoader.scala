@@ -3,6 +3,8 @@ package cute
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
+import cute.trace._
+import cute.trace.generated.{CUTETrace, CUTETraceIds}
 // import boom.exu.ygjk._
 // import boom.v3.util._
 import freechips.rocketchip.util.SeqToAugmentedSeq
@@ -32,6 +34,18 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
 
     io.ConfigInfo.MicroTaskEndValid := false.B
     io.ConfigInfo.MicroTaskReady := false.B
+
+    implicit val traceCtx: CUTETraceContext = CUTETraceContext(
+        cycle = io.DebugInfo.DebugTimeStampe,
+        params = CUTETraceParams(
+            enable = true,
+            printMode = CUTETracePrintMode.Compact,
+            enabledCategories = Set(CUTETraceIds.Category.cute_task)
+        )
+    )
+    val loadTaskCount = RegInit(0.U(16.W))
+    val storeTaskCount = RegInit(0.U(16.W))
+    val isLoadTask = RegInit(false.B)
     io.ToScarchPadIO.ReadRequestToScarchPad.BankAddr := 0.U.asTypeOf(io.ToScarchPadIO.ReadRequestToScarchPad.BankAddr)
     io.ToScarchPadIO.WriteRequestToScarchPad.BankAddr := 0.U.asTypeOf(io.ToScarchPadIO.WriteRequestToScarchPad.BankAddr)
     io.ToScarchPadIO.WriteRequestToScarchPad.Data := 0.U.asTypeOf(io.ToScarchPadIO.WriteRequestToScarchPad.Data)
@@ -94,6 +108,9 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
         when(io.ConfigInfo.MicroTaskReady && io.ConfigInfo.MicroTaskValid){
             state := s_mm_task
             when(io.ConfigInfo.IsLoadMicroTask === true.B && io.ConfigInfo.IsStoreMicroTask === false.B){
+                CUTETrace.CMLLoad.taskStart(cond = true.B, task_count = loadTaskCount)
+                loadTaskCount := loadTaskCount + 1.U
+                isLoadTask := true.B
                 memoryload_state := s_load_init
                 Tensor_Block_BaseAddr := io.ConfigInfo.ApplicationTensor_C.BlockTensor_C_BaseVaddr
                 ApplicationTensor_C_Stride_M := io.ConfigInfo.ApplicationTensor_C.ApplicationTensor_C_Stride_M
@@ -113,6 +130,9 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
                 }
 
             }.elsewhen(io.ConfigInfo.IsLoadMicroTask === false.B && io.ConfigInfo.IsStoreMicroTask === true.B){
+                CUTETrace.CMLStore.taskStart(cond = true.B, task_count = storeTaskCount)
+                storeTaskCount := storeTaskCount + 1.U
+                isLoadTask := false.B
                 memorystore_state := s_store_init
                 Tensor_Block_BaseAddr := io.ConfigInfo.ApplicationTensor_D.BlockTensor_D_BaseVaddr
                 IsConherent := io.ConfigInfo.Conherent
@@ -595,6 +615,9 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
     }.elsewhen(memoryload_state === s_load_end){
         io.ConfigInfo.MicroTaskEndValid := true.B
         when(io.ConfigInfo.MicroTaskEndReady && io.ConfigInfo.MicroTaskEndValid){
+            when(isLoadTask) {
+                CUTETrace.CMLLoad.taskEnd(cond = true.B, task_count = loadTaskCount - 1.U)
+            }
             memoryload_state := s_load_idle
             state := s_idle
             if (YJPCMLDebugEnable)
@@ -881,6 +904,9 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
             io.ConfigInfo.MicroTaskEndValid := true.B
         }
         when(io.ConfigInfo.MicroTaskEndReady && io.ConfigInfo.MicroTaskEndValid){
+            when(!isLoadTask) {
+                CUTETrace.CMLStore.taskEnd(cond = true.B, task_count = storeTaskCount - 1.U)
+            }
             memorystore_state := s_store_idle
             state := s_idle
             if (YJPCMLDebugEnable)
