@@ -126,6 +126,117 @@ python3 tools/runner/cute-check-config.py
 - id/name 全局唯一
 - 内存模型配置目录存在
 
+---
+
+## 从 Config 到硬件 — 构建流程
+
+每个 ChipyardConfig 对应一个独立的构建目录。构建产物按 config id 组织：
+
+```text
+build/
+└── chipyard_configs/
+    └── <chipyard_config_id>/              # 例如 cute4tops_scp128
+        ├── generated_headers/             # 从 Chipyard Config 提取的 C 头文件
+        │   ├── datatype.h.generated
+        │   ├── validation.h.generated
+        │   ├── instruction.h.generated
+        │   ├── cute_config.h.generated
+        │   └── cute_layout.h.generated
+        ├── chipyard_config.extracted.json # Chipyard 导出的结构事实
+        ├── header_fingerprint.txt         # 头文件指纹（防漂移）
+        └── simulator/                     # 编译好的仿真器
+            └── simulator-verilator        # Verilator 可执行文件
+```
+
+### 步骤 1: 校验配置
+
+```bash
+# 校验所有 manifest 的 schema、引用、唯一性
+python3 tools/runner/cute-check-config.py
+```
+
+### 步骤 2: 生成 C 头文件
+
+从 Chipyard Config class 提取硬件参数，生成 C 头文件到对应 config 目录。
+
+```bash
+# 按 chipyard_config id 生成
+bash scripts/generate-headers.sh chipyard.CUTE4TopsSCP128Config \
+  build/chipyard_configs/cute4tops_scp128/generated_headers
+```
+
+生成的头文件（`*.h.generated`）是 cutelib 编译时的依赖，通过 `-I` 引入。
+
+### 步骤 3: 编译 Verilator 仿真器
+
+从 Chipyard Config 编译 Verilator 仿真器。
+
+```bash
+# 按 chipyard_config id 编译
+bash scripts/build-simulator.sh CUTE4TopsSCP128Config
+```
+
+仿真器二进制存放在 `build/chipyard/simulator-<CONFIG>-<timestamp>`。
+
+### 步骤 4: 运行测试
+
+用指定 HWConfig 的仿真器运行测试二进制。
+
+```bash
+# 运行单个测试
+bash scripts/run-simulator-test.sh CUTE4TopsShuttle512D512V512M512Sysbus512Membus1CoreConfig \
+  cutetest/base_test/cute_Matmul_mnk_128_128_128_zeroinit.riscv
+```
+
+仿真输出（`.out` / `.log`）包含 Verilator printf 和 CUTETrace compact 行。
+
+### 步骤 5: 解码 Trace
+
+```bash
+# 解码 compact trace
+python3 tools/trace/decode_cute_trace.py \
+  --log <output_file> \
+  --mode jsonl \
+  -o trace_output.jsonl
+```
+
+### 完整流程图
+
+```text
+configs/chipyard_configs/<id>.yaml
+  │
+  ├── cute-check-config.py ──→ 校验通过
+  │
+  ├── generate-headers.sh ──→ build/chipyard_configs/<id>/generated_headers/
+  │                            ↑ cutelib 编译时 -I 引入
+  │
+  ├── build-simulator.sh ──→ build/chipyard/simulator-<CONFIG>-<ts>
+  │
+  └── run-simulator-test.sh ──→ <config>.out + <config>.log
+                                  │
+                                  └── decode_cute_trace.py ──→ events.jsonl
+```
+
+### TODO: 统一入口脚本
+
+当前各步骤是独立脚本，需要手动传 Config class name。后续应提供统一入口：
+
+```bash
+# 理想用法（待实现）
+python3 tools/runner/cute-build.py --hwconfig cute4tops_scp128_dramsim48 --step headers
+python3 tools/runner/cute-build.py --hwconfig cute4tops_scp128_dramsim48 --step simulator
+python3 tools/runner/cute-run.py   --hwconfig cute4tops_scp128_dramsim48 --test <test_binary>
+```
+
+统一入口从 HWConfig manifest 自动解析：
+- `chipyard_config` → ChipyardConfig manifest → `class` 字段 → 传给现有脚本
+- `memory.config` → DRAMSim INI 路径 → 传给仿真器
+- `simulator.max_cycles` → 传给仿真器
+
+这样用户只需记住 HWConfig name，不需要知道底层 Chipyard class name。
+
+---
+
 ## 详细文档
 
 | 文档 | 内容 |
