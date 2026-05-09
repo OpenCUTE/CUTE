@@ -230,9 +230,11 @@ def generate_python_catalog(catalog: Mapping[str, Any], catalog_path: str) -> st
     events_by_id = {
         item["id"]: {
             "name": item["name"],
+            "method": item["method"],
             "task": item["task"],
             "category": item["category"],
             "fields": item["fields"],
+            "render": item.get("render", ""),
         }
         for item in catalog["events"]
     }
