@@ -13,3 +13,4 @@ tool/*
 build/chipyard/simulator-*
 .metals
 .vscode
+__pycache__
