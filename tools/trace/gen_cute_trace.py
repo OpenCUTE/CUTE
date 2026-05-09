@@ -282,7 +282,10 @@ def _scala_event_method(task: Mapping[str, Any], event: Mapping[str, Any]) -> li
     lines.append(f"        categoryId = CUTETraceIds.Category.{_scala_ident(category_name)}")
     lines.append("      )(")
 
-    compact_format = "CT,1" + ",%x" * (3 + len(fields)) + "\n"
+    compact_format = "CT,1" + ",%x,%x,%x" + "".join(
+        ",%d" if field["type"] == "sint" else ",%x"
+        for field in fields
+    ) + "\n"
     compact_args = [
         "ctx.cycle",
         f"CUTETraceIds.Task.{_scala_ident(task_name)}.U",
@@ -349,6 +352,8 @@ def _scala_field_type(field: Mapping[str, Any]) -> str:
 
 
 def _scala_compact_value(field: Mapping[str, Any]) -> str:
+    if field["type"] == "sint":
+        return field["name"]
     return _as_uint_if_needed(field["name"], field["type"])
 
 
