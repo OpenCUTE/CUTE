@@ -175,11 +175,6 @@ trace/
       render.py
       generated/
         cute_trace_catalog.py
-    func/
-      level1_inst.py
-      level2_mem_cute.py
-      level2ex_all_cute.py
-      level3_mem_vector.py
     status/
       status_parser.py
       topdown.py
@@ -211,9 +206,7 @@ trace/cutetrace/src/main/scala/trace/
 | `trace/python/cutetrace/decoder.py` | 结合 catalog 把 raw record 解码成带名字和字段的事件。 |
 | `trace/python/cutetrace/render.py` | 把 decoded event 渲染成可读文本、JSONL 或检查器输入。 |
 | `trace/python/cutetrace/generated/cute_trace_catalog.py` | 生成的 Python catalog 常量和静态索引。 |
-| `trace/python/func/*.py` | 功能验证等级检查器。 |
 | `configs/schemas/cute_trace_catalog.schema.json` | catalog JSON Schema。 |
-| `configs/trace_filters/*.yaml` | trace 过滤器 manifest。 |
 | `tools/trace/gen_cute_trace.py` | catalog 到 Scala/Python 生成产物的代码生成入口。 |
 | `tools/trace/check_cute_trace.py` | catalog、filter、生成产物的一致性检查入口。 |
 | `trace/cutetrace/src/main/scala/trace/CUTETraceContext.scala` | Chisel trace 上下文。 |
