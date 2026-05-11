@@ -1,0 +1,234 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CUTE ChipyardConfig 参数目录",
+  "description": "所有可用参数的字典。人看它选参数写 chipyard_config.yaml，codegen 读它校验和生成。",
+
+  "core_kinds": {
+    "shuttle": {
+      "description": "Shuttle超标量顺序核心，支持向量扩展（Saturn RVV）和 TCM 紧耦合内存",
+      "scala_mixins": ["shuttle.common.WithShuttleTileBeatBytes", "shuttle.common.WithNShuttleCores"],
+      "supports_vector": true,
+      "supports_tcm": true,
+      "params": {
+        "shuttle_tile_beat_bytes": {
+          "description": "Shuttle tile 每拍传输字节数",
+          "type": "integer",
+          "default": 64,
+          "valid_values": [64]
+        }
+      }
+    },
+    "rocket": {
+      "description": "Rocket 顺序核心，简单轻量，不支持向量扩展",
+      "scala_mixins": ["freechips.rocketchip.rocket.WithNSmallCores"],
+      "supports_vector": false,
+      "supports_tcm": false,
+      "params": {}
+    },
+    "boom": {
+      "description": "BOOM 乱序核心，高性能，不支持向量扩展",
+      "scala_mixins": ["boom.v3.common.WithNSmallBooms"],
+      "supports_vector": false,
+      "supports_tcm": false,
+      "params": {}
+    }
+  },
+
+  "bus": {
+    "system_bits": {
+      "description": "System Bus 位宽。影响 SoC 内部总线吞吐。",
+      "type": "integer",
+      "valid_values": [64, 128, 256, 512],
+      "scala_mixin": "chipyard.config.WithSystemBusWidth"
+    },
+    "memory_bits": {
+      "description": "Memory Bus 位宽。影响对外访存带宽。",
+      "type": "integer",
+      "valid_values": [64, 128, 256, 512],
+      "scala_mixin": "freechips.rocketchip.subsystem.WithNBitMemoryBus"
+    }
+  },
+
+  "cache": {
+    "inclusive_kb": {
+      "description": "L2 inclusive cache 容量（KB）",
+      "type": "integer",
+      "valid_values": [64, 128, 256, 512, 1024],
+      "default": 512
+    },
+    "outer_latency_cycles": {
+      "description": "L2 cache 外部访问延迟周期数。影响 source 数量需求。越小吞吐越高但 source 需求越少。",
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 200,
+      "default": 40
+    },
+    "banks": {
+      "description": "Memory bank 数量",
+      "type": "integer",
+      "valid_values": [2, 4, 8],
+      "default": 4,
+      "scala_mixin": "freechips.rocketchip.subsystem.WithNBanks"
+    },
+    "cache_hash": {
+      "description": "是否启用 cache 地址 hash，减少 bank 冲突",
+      "type": "boolean",
+      "default": true,
+      "scala_mixin": "freechips.rocketchip.subsystem.WithCacheHash"
+    },
+    "tl_monitors": {
+      "description": "是否启用 TileLink monitors。仿真时关闭可加速。",
+      "type": "boolean",
+      "default": false,
+      "scala_mixin_invert": "freechips.rocketchip.subsystem.WithoutTLMonitors"
+    }
+  },
+
+  "cute_params": {
+    "description": "CUTE 加速器参数预设。由算力（Tops）和张量形状（SCP）组合。算力由 Matrix_M/N 和 ReduceWidthByte 决定；SCP 指定 Scratchpad 中存储的张量 M/N/K。",
+    "_composition": "先选算力档位（如 CUTE_4Tops），再叠加 SCP 档位（如 128SCP），组合为 CUTE_4Tops_128SCP。",
+
+    "tops_presets": {
+      "CUTE_05Tops": {
+        "description": "0.5Tops 配置。Matrix_M=2, Matrix_N=2, ReduceWidthByte=32。最小配置，用于面积验证。",
+        "Matrix_M": 2, "Matrix_N": 2, "ReduceWidthByte": 32
+      },
+      "CUTE_1Tops": {
+        "description": "1Tops 配置。Matrix_M=2, Matrix_N=2, ReduceWidthByte=64。",
+        "Matrix_M": 2, "Matrix_N": 2, "ReduceWidthByte": 64
+      },
+      "CUTE_2Tops": {
+        "description": "2Tops 配置。Matrix_M=4, Matrix_N=4, ReduceWidthByte=32。",
+        "Matrix_M": 4, "Matrix_N": 4, "ReduceWidthByte": 32
+      },
+      "CUTE_4Tops": {
+        "description": "4Tops 配置。Matrix_M=4, Matrix_N=4, ReduceWidthByte=64。",
+        "Matrix_M": 4, "Matrix_N": 4, "ReduceWidthByte": 64
+      },
+      "CUTE_8Tops": {
+        "description": "8Tops 配置。Matrix_M=8, Matrix_N=8, ReduceWidthByte=32。",
+        "Matrix_M": 8, "Matrix_N": 8, "ReduceWidthByte": 32
+      },
+      "CUTE_16Tops": {
+        "description": "16Tops 配置。Matrix_M=8, Matrix_N=8, ReduceWidthByte=64。",
+        "Matrix_M": 8, "Matrix_N": 8, "ReduceWidthByte": 64
+      },
+      "CUTE_32Tops": {
+        "description": "32Tops 配置。Matrix_M=16, Matrix_N=16, ReduceWidthByte=32。最大算力配置。",
+        "Matrix_M": 16, "Matrix_N": 16, "ReduceWidthByte": 32
+      }
+    },
+
+    "scp_presets": {
+      "64SCP": {
+        "description": "Scratchpad 存储张量形状 64x64x64（8bit/element）。最小张量 tile。",
+        "Tensor_M": 64, "Tensor_N": 64, "Tensor_K": 64
+      },
+      "128SCP": {
+        "description": "Scratchpad 存储张量形状 128x128x64。常用配置。",
+        "Tensor_M": 128, "Tensor_N": 128, "Tensor_K": 64
+      },
+      "256SCP": {
+        "description": "Scratchpad 存储张量形状 256x256x64。大张量 tile。",
+        "Tensor_M": 256, "Tensor_N": 256, "Tensor_K": 64
+      },
+      "512SCP": {
+        "description": "Scratchpad 存储张量形状 512x512x64。最大张量 tile。",
+        "Tensor_M": 512, "Tensor_N": 512, "Tensor_K": 64
+      }
+    },
+
+    "composed": {
+      "CUTE_05Tops_64SCP":     { "tops": "CUTE_05Tops", "scp": "64SCP",  "description": "0.5Tops + 64x64x64 tile" },
+      "CUTE_1Tops_64SCP":      { "tops": "CUTE_1Tops",  "scp": "64SCP",  "description": "1Tops + 64x64x64 tile" },
+      "CUTE_1Tops_128SCP":     { "tops": "CUTE_1Tops",  "scp": "128SCP", "description": "1Tops + 128x128x64 tile" },
+      "CUTE_2Tops_64SCP":      { "tops": "CUTE_2Tops",  "scp": "64SCP",  "description": "2Tops + 64x64x64 tile" },
+      "CUTE_2Tops_128SCP":     { "tops": "CUTE_2Tops",  "scp": "128SCP", "description": "2Tops + 128x128x64 tile" },
+      "CUTE_2Tops_256SCP":     { "tops": "CUTE_2Tops",  "scp": "256SCP", "description": "2Tops + 256x256x64 tile" },
+      "CUTE_4Tops_64SCP":      { "tops": "CUTE_4Tops",  "scp": "64SCP",  "description": "4Tops + 64x64x64 tile" },
+      "CUTE_4Tops_128SCP":     { "tops": "CUTE_4Tops",  "scp": "128SCP", "description": "4Tops + 128x128x64 tile" },
+      "CUTE_4Tops_128SCP_debug": { "tops": "CUTE_4Tops", "scp": "128SCP", "description": "4Tops + 128x128x64 tile + 全部 debug 开启", "debug": true },
+      "CUTE_4Tops_256SCP":     { "tops": "CUTE_4Tops",  "scp": "256SCP", "description": "4Tops + 256x256x64 tile" },
+      "CUTE_4Tops_512SCP":     { "tops": "CUTE_4Tops",  "scp": "512SCP", "description": "4Tops + 512x512x64 tile" },
+      "CUTE_8Tops_128SCP":     { "tops": "CUTE_8Tops",  "scp": "128SCP", "description": "8Tops + 128x128x64 tile" },
+      "CUTE_8Tops_256SCP":     { "tops": "CUTE_8Tops",  "scp": "256SCP", "description": "8Tops + 256x256x64 tile" },
+      "CUTE_8Tops_512SCP":     { "tops": "CUTE_8Tops",  "scp": "512SCP", "description": "8Tops + 512x512x64 tile" },
+      "CUTE_16Tops_256SCP":    { "tops": "CUTE_16Tops", "scp": "256SCP", "description": "16Tops + 256x256x64 tile" },
+      "CUTE_16Tops_512SCP":    { "tops": "CUTE_16Tops", "scp": "512SCP", "description": "16Tops + 512x512x64 tile" },
+      "CUTE_32Tops_512SCP":    { "tops": "CUTE_32Tops", "scp": "512SCP", "description": "32Tops + 512x512x64 tile" }
+    },
+
+    "raw_params": {
+      "outsideDataWidth":    { "description": "CUTE 对外访存带宽（bit）。当前仅支持 512 或 256。", "default": 512, "valid_values": [256, 512], "constraint": "必须是 2 的幂" },
+      "MemoryDataWidth":     { "description": "DRAM 访存通道的数据位宽（bit）。", "default": 64, "valid_values": [64, 128, 256, 512], "constraint": "必须是 2 的幂" },
+      "VectorWidth":         { "description": "向量流水线宽度（bit）。", "default": 256 },
+      "Tensor_M":            { "description": "Scratchpad 中存储的 M 维度大小（8bit/element）。", "default": 128, "constraint": "必须是 2 的幂" },
+      "Tensor_N":            { "description": "Scratchpad 中存储的 N 维度大小（8bit/element）。", "default": 128, "constraint": "必须是 2 的幂" },
+      "Tensor_K":            { "description": "Scratchpad 中存储的 K 维度大小（8bit/element）。", "default": 64, "constraint": "必须是 2 的幂" },
+      "Matrix_M":            { "description": "MTE 矩阵乘单元的 M 维度。", "default": 4, "constraint": "必须是 2 的幂" },
+      "Matrix_N":            { "description": "MTE 矩阵乘单元的 N 维度。", "default": 4, "constraint": "必须是 2 的幂" },
+      "ReduceWidthByte":     { "description": "ReducePE 内积数据宽度（字节）。32=16Tops/8Tops-half/4Tops-half，64=16Tops-full/4Tops-full。", "default": 64, "valid_values": [32, 64], "constraint": "outsideDataWidth >= ReduceWidthByte * 8" },
+      "ResultWidthByte":     { "description": "ReducePE 结果宽度（字节）。", "default": 4 },
+      "LLCSourceMaxNum":     { "description": "LLC 总线上 source 最大数量。必须大于 LLC 访存延迟才能满流水。", "default": 64, "constraint": "必须是 2 的幂" },
+      "MemorysourceMaxNum":  { "description": "Memory 总线上 source 最大数量。必须大于 Memory 访存延迟才能满流水。", "default": 64, "constraint": "必须是 2 的幂" },
+      "MMUAddrWidth":        { "description": "CUTE MMU 地址宽度（bit）。", "default": 39 },
+      "EnablePerfCounter":   { "description": "是否启用性能计数器。", "default": false, "type": "boolean" }
+    }
+  },
+
+  "vector": {
+    "saturn_rvv": {
+      "description": "Saturn RVV 向量单元，通过 Shuttle tile 集成",
+      "scala_mixin": "saturn.shuttle.WithShuttleVectorUnit",
+      "params": {
+        "vLen": { "description": "向量寄存器位宽", "valid_values": [512], "default": 512 },
+        "dLen": { "description": "向量数据通路位宽", "valid_values": [512], "default": 512 },
+        "mLen": { "description": "向量 mask 位宽（可选）", "valid_values": [512], "default": 512 }
+      }
+    },
+    "tcm": {
+      "description": "Shuttle TCM 紧耦合内存，用于向量数据缓冲",
+      "params": {
+        "address": { "description": "TCM 基地址", "default": "0x70000000" },
+        "size": { "description": "TCM 大小（字节）", "default": 2097152 },
+        "banks": { "description": "TCM bank 数", "default": 2 }
+      }
+    }
+  },
+
+  "debug": {
+    "debug_modes": {
+      "none":              { "description": "无 debug 输出", "scala_value": "CuteDebugParams.NoDebug" },
+      "aml_debug":         { "description": "开启 AML 调试输出", "scala_value": "CuteDebugParams.AMLDebugEnable" },
+      "cml_debug":         { "description": "开启 CML 调试输出", "scala_value": "CuteDebugParams.CMLDebugEnable" },
+      "all_debug":         { "description": "开启全部模块调试输出", "scala_value": "CuteDebugParams.AllDebugOn" },
+      "shuttle_debug_rob": { "description": "开启 Shuttle Debug ROB（仅 Shuttle 核心）", "scala_mixin": "shuttle.common.WithShuttleDebugROB" },
+      "shuttle_debug_printf": { "description": "开启 Shuttle Debug printf（仅 Shuttle 核心）", "scala_mixin": "shuttle.common.WithShuttleDebugPrintf" }
+    }
+  },
+
+  "cute_instances": {
+    "description": "CUTE 加速器实例化配置。Seq(0) = 1 个 CUTE 实例挂在 core 0 上，Seq(0,1) = 2 个实例。",
+    "note": "实例数量必须与核心数量匹配。Shuttle 1 核最多 1 实例，4 核最多 4 实例。",
+    "examples": {
+      "Seq(0)": "1 个 CUTE，挂在第 0 个核心",
+      "Seq(0,1)": "2 个 CUTE，分别挂在第 0、1 核心",
+      "Seq(0,1,2,3)": "4 个 CUTE，分别挂在第 0-3 核心"
+    }
+  },
+
+  "version_refs": {
+    "fpe_versions": {
+      "description": "FPE datatype 版本。定义支持的 dtype 组合。",
+      "ref_dir": "configs/cute_fpe_versions/"
+    },
+    "isa_versions": {
+      "description": "ISA 指令集版本。定义指令编码和 funct。",
+      "ref_dir": "configs/cute_isa_versions/"
+    },
+    "vector_versions": {
+      "description": "向量扩展版本。none = 无向量，saturn_rvv = Saturn RVV。",
+      "ref_dir": "configs/vector_versions/"
+    }
+  }
+}
