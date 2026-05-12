@@ -71,16 +71,15 @@
       "description": "乘累加 FIFO 深度",
       "default": 8
     },
-    "convolution": {
+    "tensor_task": {
       "type": "object",
-      "description": "卷积相关常量",
+      "description": "张量任务相关常量（含矩阵乘和卷积）",
       "additionalProperties": false,
       "properties": {
-        "dim_max": { "type": "integer", "description": "维度最大值" },
-        "input_max": { "type": "integer", "description": "输入高/宽最大值" },
-        "kernel_size_max": { "type": "integer", "description": "卷积核最大尺寸" },
-        "stride_size_max": { "type": "integer", "description": "步长最大值" },
-        "application_max_tensor_size": { "type": "integer", "description": "应用层最大张量维度" }
+        "application_max_tensor_size": { "type": "integer", "description": "矩阵乘 M/N/K 最大值" },
+        "conv_input_max": { "type": "integer", "description": "卷积输入高/宽最大值" },
+        "conv_kernel_size_max": { "type": "integer", "description": "卷积核最大尺寸" },
+        "conv_stride_size_max": { "type": "integer", "description": "卷积步长最大值" }
       }
     },
     "mmu": {

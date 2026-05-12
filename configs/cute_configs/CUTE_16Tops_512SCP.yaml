@@ -14,12 +14,6 @@ result_width_byte: 4
 mmu_addr_width: 39
 llc_source_max_num: 64
 result_fifo_depth: 8
-convolution:
-  dim_max: 65535
-  input_max: 16383
-  kernel_size_max: 15
-  stride_size_max: 3
-  application_max_tensor_size: 65535
 mmu:
   vpn_bits: 12
   ppn_bits: 12
@@ -41,3 +35,8 @@ wip:
   vec_task_data_buffer_depth: 4
   enable_perf_counter: false
   memory_source_max_num: 64
+tensor_task:
+  application_max_tensor_size: 65535
+  conv_input_max: 16383
+  conv_kernel_size_max: 15
+  conv_stride_size_max: 3
