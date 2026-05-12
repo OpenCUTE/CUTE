@@ -234,6 +234,8 @@ python3 tools/runner/cute-check-config.py --chipyard-config cute4tops_scp128
 - `tools/runner/cute-gen-config.py`: 从 ChipyardConfig 生成 C 头文件和
   ISA JSON。
 - `tools/runner/cute-gen-scala-config.py`: 生成、检查或更新 Scala 配置。
+- `tools/runner/cute-build.py`: 从 HWConfig 生成头文件并编译 simulator。
+- `tools/runner/cute-run.py`: 从 HWConfig 选择 simulator 并运行测试。
 - `tools/trace/check_cute_trace.py`: 校验 trace catalog 和 trace filter。
 - `tools/trace/gen_cute_trace.py`: 生成 Scala / Python trace API。
 - `tools/trace/decode_cute_trace.py`: 解码 Verilator compact trace 日志。
@@ -261,38 +263,7 @@ build/
 python3 tools/runner/cute-check-config.py --scan
 ```
 
-### 步骤 2: 生成 C 头文件和 ISA JSON
-
-```bash
-python3 tools/runner/cute-gen-config.py \
-  --chipyard-config cute4tops_scp128 \
-  --verbose
-```
-
-默认输出：
-
-```text
-build/chipyard_configs/cute4tops_scp128/generated/
-```
-
-如果输入 YAML 的指纹没有变化，脚本会跳过重复生成；需要强制重生成时加 `--force`：
-
-```bash
-python3 tools/runner/cute-gen-config.py \
-  --chipyard-config cute4tops_scp128 \
-  --force
-```
-
-生成逻辑：
-
-```text
-chipyard_configs/<id>.yaml
-  ├── cute.config       -> cute_configs/<cute_config_id>.yaml
-  ├── cute.isa.version  -> cute_isa_versions/<isa_id>.yaml
-  └── soc.vector.version -> vector_versions/<vector_id>.yaml
-```
-
-### 步骤 3: 预览生成 Scala 配置
+### 步骤 2: 预览生成 Scala 配置
 
 默认可以先生成到 review 目录：
 
@@ -332,22 +303,92 @@ python3 tools/runner/cute-gen-scala-config.py --update
 YAML 中没有显式出现的字段不会被写入生成结果；最终由 `CuteParams` case
 class 自身的默认值接管。
 
-### 步骤 4: 生成仿真目标文件
+### 步骤 3: 生成chipyard的config文件
 
-### 步骤 5: 运行测试与解码 Trace
+### 步骤 4: 生成 C 头文件和 ISA JSON
 
 ```bash
-bash scripts/run-simulator-test.sh <ChipyardConfigClassName> <test_binary>
+python3 tools/runner/cute-gen-config.py \
+  --chipyard-config cute4tops_scp128 \
+  --verbose
+```
 
+默认输出：
+
+```text
+build/chipyard_configs/cute4tops_scp128/generated/
+```
+
+如果输入 YAML 的指纹没有变化，脚本会跳过重复生成；需要强制重生成时加 `--force`：
+
+```bash
+python3 tools/runner/cute-gen-config.py \
+  --chipyard-config cute4tops_scp128 \
+  --force
+```
+
+生成逻辑：
+
+```text
+chipyard_configs/<id>.yaml
+  ├── cute.config       -> cute_configs/<cute_config_id>.yaml
+  ├── cute.isa.version  -> cute_isa_versions/<isa_id>.yaml
+  └── soc.vector.version -> vector_versions/<vector_id>.yaml
+```
+
+
+
+### 步骤 5: 生成仿真目标文件
+
+```bash
+python3 tools/runner/cute-build.py \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --step simulator
+```
+
+`cute-build.py` 会从 HWConfig 自动解析 `chipyard_config`，再从现有
+Chipyard `CuteConfig.scala` 找到对应的 Scala config class，最后调用
+Chipyard Verilator `make CONFIG=<class>`。生成出的仿真器会归档到：
+
+```text
+build/chipyard_configs/<chipyard_config_id>/simulator-verilator
+```
+
+也可以一次完成头文件生成和仿真器编译：
+
+```bash
+python3 tools/runner/cute-build.py \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --step all
+```
+
+### 步骤 6: 运行测试
+
+```bash
+python3 tools/runner/cute-run.py \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --test <test_binary>
+```
+
+运行产物默认写入：
+
+```text
+build/chipyard_runs/<hwconfig_name>/<test_name>/
+├── hwconfig.yaml
+├── run.log
+└── run.out
+```
+
+`cute-run.py` 只运行 simulator，不会自动调用 trace 解码。需要解码时手动运行：
+
+```bash
 python3 tools/trace/decode_cute_trace.py \
   --log <output_file> \
   --mode jsonl \
   -o trace_output.jsonl
 ```
 
-## TODO: 统一入口脚本
-
-当前各步骤仍是独立脚本。目标入口：
+## 统一入口摘要
 
 ```bash
 python3 tools/runner/cute-build.py \

@@ -9,7 +9,9 @@ tools/
 ├── runner/                              # Config runner / 代码生成
 │   ├── cute-check-config.py             # Config schema / 引用检查
 │   ├── cute-gen-config.py               # C 头文件和 ISA JSON 生成
-│   └── cute-gen-scala-config.py         # Scala 配置生成 / 更新 / 漂移检查
+│   ├── cute-gen-scala-config.py         # Scala 配置生成 / 更新 / 漂移检查
+│   ├── cute-build.py                    # HWConfig → genfiles / simulator
+│   └── cute-run.py                      # HWConfig → simulator run
 └── trace/                               # Trace 工具链
     ├── README.md                        # Trace 工具链详细用法
     ├── gen_cute_trace.py                # catalog → Scala/Python codegen
@@ -113,6 +115,55 @@ python3 tools/runner/cute-gen-scala-config.py \
   --isa-version cute_isa_v1 \
   --check
 ```
+
+### `runner/cute-build.py`
+
+从 `configs/hwconfigs/<name>.yaml` 出发，统一执行构建步骤：
+
+```bash
+# 生成 C 头文件和 ISA JSON
+python3 tools/runner/cute-build.py \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --step genfiles
+
+# 编译 Verilator simulator，并归档到 build/chipyard_configs/<id>/
+python3 tools/runner/cute-build.py \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --step simulator
+
+# 生成文件 + 编译 simulator
+python3 tools/runner/cute-build.py \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --step all
+```
+
+`--step config` 是 `--step genfiles` 的兼容别名。Simulator 输出位置：
+
+```text
+build/chipyard_configs/<chipyard_config_id>/simulator-verilator
+```
+
+### `runner/cute-run.py`
+
+从 HWConfig 自动选择 simulator、DRAMSim 配置和 max-cycles，运行测试二进制：
+
+```bash
+python3 tools/runner/cute-run.py \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --test <test_binary>
+```
+
+默认输出：
+
+```text
+build/chipyard_runs/<hwconfig_name>/<test_name>/
+├── hwconfig.yaml
+├── run.log
+└── run.out
+```
+
+`cute-run.py` 不会自动调用 trace 解码；需要解码时手动运行
+`tools/trace/decode_cute_trace.py`。
 
 ### `trace/` 工具链
 
