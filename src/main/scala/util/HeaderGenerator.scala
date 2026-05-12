@@ -185,12 +185,11 @@ object HeaderGenerator {
     writer.println(s"#define CUTE_MEMORY_SOURCE_MAX_NUM ${params.MemorysourceMaxNum}")
     writer.println()
 
-    writer.println("// Convolution Parameters")
-    writer.println(s"#define CUTE_CONVOLUTION_DIM_MAX ${params.ConvolutionApplicationConfigDataWidth}")
-    writer.println(s"#define CUTE_CONVOLUTION_INPUT_MAX ${params.Convolution_Input_Height_Weight_Dim_Max}")
-    writer.println(s"#define CUTE_KERNEL_SIZE_MAX ${params.KernelSizeMax}")
-    writer.println(s"#define CUTE_STRIDE_SIZE_MAX ${params.StrideSizeMax}")
+    writer.println("// Tensor Task Parameters")
     writer.println(s"#define CUTE_APPLICATION_MAX_TENSOR_SIZE ${params.ApplicationMaxTensorSize}")
+    writer.println(s"#define CUTE_CONV_INPUT_MAX ${params.Convolution_Input_Height_Weight_Dim_Max}")
+    writer.println(s"#define CUTE_CONV_KERNEL_SIZE_MAX ${params.KernelSizeMax}")
+    writer.println(s"#define CUTE_CONV_STRIDE_SIZE_MAX ${params.StrideSizeMax}")
     writer.println()
 
     // Scratchpad 相关参数（从参数计算）

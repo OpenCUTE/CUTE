@@ -6,8 +6,6 @@ import chisel3.util._
 import org.chipsalliance.cde.config._
 import cute.trace._
 import cute.trace.generated.{CUTETrace, CUTETraceIds}
-// import boom.exu.ygjk._
-// import boom.v3.util._
 
 //TaskController代表,
 class TaskController(implicit p: Parameters) extends CuteModule{
@@ -171,7 +169,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
     io.MTE_MicroTask_Config.MicroTaskValid := false.B
     io.MTE_MicroTask_Config.dataType := ElementDataType.DataTypeUndef
-    // io.MTE_MicroTask_Config.valid := false.B
 
     //AOP_MicroTask_Config 的 默认配置
     io.AOP_MicroTask_Config.ApplicationTensor_C.dataType := ElementDataType.DataTypeUndef
@@ -189,39 +186,14 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
     io.ygjkctrl.acc_running := false.B
     io.ygjkctrl.cute_return_val := 0xdeadbeefL.U
-    // io.ygjkctrl.cute_return_val.valid := false.B
     io.ygjkctrl.InstFIFO_Finish := 0.U
     io.ygjkctrl.InstFIFO_Full := 0.U
     io.ygjkctrl.InstFIFO_Info := 0.U
     io.instfifo_release := 0.U
 
-    //TODO:构思微指令Test的流程
-    
-
-    //TODO:12.17先完成宏指令的流程，然后再完成微指令的流程
     
     //宏指令描述寄存器
     val MacroInst_Reg = RegInit(0.U(new MacroInst().getWidth.W))
-    //宏指令描述的是矩阵乘任务或者卷积任务的描述
-// void CUTE_MATMUL_MarcoTask(void *A,void *B,void *C,void *D,int Application_M,int Application_N,int Application_K,int element_type,int bias_type,\
-// uint64_t stride_A,uint64_t stride_B,uint64_t stride_C,uint64_t stride_D,bool transpose_result,int conv_oh_index,int conv_ow_index,int conv_oh_max,int conv_ow_max,void * VectorOp,int VectorInst_Length)
-
-    // val Application_M = UInt(ApplicationMaxTensorSizeBitSize.W) //矩阵乘的M的大小，对于卷积来说[ohow][oc][ic]的[ohow]的大小
-    // val Application_N = UInt(ApplicationMaxTensorSizeBitSize.W) //矩阵乘的N的大小，对于卷积来说[ohow][oc][ic]的[oc]的大小
-    // val Application_K = UInt(ApplicationMaxTensorSizeBitSize.W) //矩阵乘的K的大小，对于卷积来说[ohow][oc][ic]的[ic]的大小
-
-    // val element_type = UInt(ElementDataType.DataTypeBitWidth.W) //矩阵元素的数据类型
-    // val bias_type = UInt(CMemoryLoaderTaskType.TypeBitWidth.W) //矩阵乘的bias的数据类型
-
-    // val transpose_result = Bool() //结果是否需要转置，用于attention加速
-    // // val conv_oh_index = UInt(log2Ceil(ConvolutionDIM_Max).W)
-    // // val conv_ow_index = UInt(log2Ceil(ConvolutionDIM_Max).W)
-    // val conv_stride = UInt(log2Ceil(StrideSizeMax).W) //卷积的stride步长
-    // val conv_oh_max = UInt(log2Ceil(ConvolutionDIM_Max).W) //卷积的oh长度，用于和stride配合完成padding等操作
-    // val conv_ow_max = UInt(log2Ceil(ConvolutionDIM_Max).W) //卷积的ow长度，用于和stride配合完成padding等操作
-    // val kernel_size = UInt(log2Ceil(KernelSizeMax).W) //卷积核的大小
-    // val kernel_stride = UInt((64.W)) //kernel_stride是每一个index的卷积核的大小，我们要求卷积核的数据排布是(kh,kw,oc,ic)
-
     //宏指令MarcroInst_FIFO,深度为4
     //宏指令描述的是矩阵乘任务或者卷积任务的描述
     val MacroInst_FIFO = RegInit(VecInit(Seq.fill(MarcoInstFIFODepth)(0.U(new MacroInst().getWidth.W))))
@@ -269,11 +241,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
     when(io.ygjkctrl.config.valid)
     {
-        // //输出指令
-        // if (YJPDebugEnable)
-        // {
-        //     printf("TaskController: func = %d, cfgData1 = %d, cfgData2 = %d\n",io.DebugTimeStampe, io.ygjkctrl.config.bits.func, io.ygjkctrl.config.bits.cfgData1, io.ygjkctrl.config.bits.cfgData2)
-        // }
 
         val MacroInst_Reg_Wire = Wire(new MacroInst)
         MacroInst_Reg_Wire := MacroInst_Reg.asTypeOf(MacroInst_Reg_Wire)
@@ -427,7 +394,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             val cfg1Fields = CuteInstConfigs.ConfigTensorDim.cfgData1Fields.get
             val cfg2Fields = CuteInstConfigs.ConfigTensorDim.cfgData2Fields.get
 
-            // ✅ 简洁：只需字段名和Wire，传入cfgData1Fields自动查找
             applyFieldMappings(Seq(
               FieldMapping("Application_M", MacroInst_Reg_Wire.Application_M),
               FieldMapping("Application_N", MacroInst_Reg_Wire.Application_N),
@@ -446,7 +412,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             val cfg1Fields = CuteInstConfigs.ConfigConvParams.cfgData1Fields.get
             val cfg2Fields = CuteInstConfigs.ConfigConvParams.cfgData2Fields.get
 
-            // ✅ 简洁：只需字段名和Wire，传入cfgData1Fields自动查找
             applyFieldMappings(Seq(
               FieldMapping("element_type", MacroInst_Reg_Wire.element_type),
               FieldMapping("bias_type", MacroInst_Reg_Wire.bias_type),
@@ -581,37 +546,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     val Store_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new StoreMicroInst_Resource_Info().getWidth.W))))
     val Compute_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new ComputeMicroInst_Resource_Info().getWidth.W))))
 
-    //Load指令只能被Compute/clear指令从信息队列中取出
-    //Compute指令只能被Store/clear指令从信息队列中取出
-    //Store指令完成后，会取检查是否需要给某一条宏指令标记完成
-
-    //目前假设所有资源信息都ok，不考虑资源信息变化
-
-    // val ApplicationTensor_A_BaseVaddr = UInt(64.W) //矩阵A的起始地址
-    // val ApplicationTensor_B_BaseVaddr = UInt(64.W) //矩阵B的起始地址
-    // val ApplicationTensor_C_BaseVaddr = UInt(64.W) //矩阵C的起始地址
-    // val ApplicationTensor_D_BaseVaddr = UInt(64.W) //矩阵D的起始地址
-
-    // val ApplicationTensor_A_Stride = UInt(64.W) //矩阵A的stride,代表下一组Reduce_DIM需要增加多少地址偏移量，对于矩阵A[M][N]来说就是M+1需要增加多少地址偏移量，对于卷积[hw][c]来说，就是hw+1需要增加多少地址偏移量
-    // val ApplicationTensor_B_Stride = UInt(64.W) //矩阵B的stride,代表下一组Reduce_DIM需要增加多少地址偏移量
-    // val ApplicationTensor_C_Stride = UInt(64.W) //矩阵C的stride,代表下一组Reduce_DIM需要增加多少地址偏移量
-    // val ApplicationTensor_D_Stride = UInt(64.W) //矩阵D的stride,代表下一组Reduce_DIM需要增加多少地址偏移量
-
-    // val Application_M = UInt(ApplicationMaxTensorSizeBitSize.W) //矩阵乘的M的大小，对于卷积来说[ohow][oc][ic]的[ohow]的大小
-    // val Application_N = UInt(ApplicationMaxTensorSizeBitSize.W) //矩阵乘的N的大小，对于卷积来说[ohow][oc][ic]的[oc]的大小
-    // val Application_K = UInt(ApplicationMaxTensorSizeBitSize.W) //矩阵乘的K的大小，对于卷积来说[ohow][oc][ic]的[ic]的大小
-
-    // val element_type = UInt(ElementDataType.DataTypeBitWidth.W) //矩阵元素的数据类型
-    // val bias_type = UInt(CMemoryLoaderTaskType.TypeBitWidth.W) //矩阵乘的bias的数据类型
-
-    // val transpose_result = Bool() //结果是否需要转置，用于attention加速
-    // val conv_oh_index = UInt(log2Ceil(ConvolutionDIM_Max).W)
-    // val conv_ow_index = UInt(log2Ceil(ConvolutionDIM_Max).W)
-    // val conv_stride = UInt(log2Ceil(StrideSizeMax).W) //卷积的stride步长
-    // val conv_oh_max = UInt(log2Ceil(ConvolutionDIM_Max).W) //卷积的oh长度，用于和stride配合完成padding等操作
-    // val conv_ow_max = UInt(log2Ceil(ConvolutionDIM_Max).W) //卷积的ow长度，用于和stride配合完成padding等操作
-    // val kernel_size = UInt(log2Ceil(KernelSizeMax).W) //卷积核的大小
-    // val kernel_stride = UInt((64.W)) //kernel_stride是每一个index的卷积核的大小，我们要求卷积核的数据排布是(kh,kw,oc,ic)
 
     val Current_Tile_M_Iter = RegInit(0.U(ApplicationMaxTensorSizeBitSize.W))//MNK切块
     val Current_Tile_N_Iter = RegInit(0.U(ApplicationMaxTensorSizeBitSize.W))//MNK切块
@@ -689,26 +623,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             val LoadMicroInst_Have_C_work = WireInit(false.B)//由宏指令拆解出的微指令，只有K/IC迭代完成后才有C的Load任务
 
             val StoreMicroInst_Is_Last_Store = WireInit(false.B)//由宏指令拆解出的微指令，只有最后一次Store任务将指令置位已完成
-
-            // if (YJPDebugEnable)
-            // {
-            //     //Load_MicroInst_FIFO_Full，Load_MicroInst_FIFO_Head，Load_MicroInst_FIFO_Tail，Load_MicroInst_FINISH_Head等值
-            //     printf("[TaskController<%d>]:MacroInst Decode!  Load_MicroInst_FIFO_Full = %d, Load_MicroInst_FIFO_Head = %d, Load_MicroInst_FIFO_Tail = %d, Load_MicroInst_FINISH_Head = %d\n",io.DebugTimeStampe, Load_MicroInst_FIFO_Full, Load_MicroInst_FIFO_Head, Load_MicroInst_FIFO_Tail, Load_MicroInst_FINISH_Head)
-            //     //Store_MicroInst_FIFO_Full，Store_MicroInst_FIFO_Head，Store_MicroInst_FIFO_Tail，Store_MicroInst_FINISH_HEAD等值
-            //     printf("[TaskController<%d>]:MacroInst Decode!  Store_MicroInst_FIFO_Full = %d, Store_MicroInst_FIFO_Head = %d, Store_MicroInst_FIFO_Tail = %d, Store_MicroInst_FINISH_HEAD = %d\n",io.DebugTimeStampe, Store_MicroInst_FIFO_Full, Store_MicroInst_FIFO_Head, Store_MicroInst_FIFO_Tail, Store_MicroInst_FINISH_HEAD)
-            //     //Compute_MicroInst_FIFO_Full，Compute_MicroInst_FIFO_Head，Compute_MicroInst_FIFO_Tail，Compute_MicroInst_FINISH_HEAD等值
-            //     printf("[TaskController<%d>]:MacroInst Decode!  Compute_MicroInst_FIFO_Full = %d, Compute_MicroInst_FIFO_Head = %d, Compute_MicroInst_FIFO_Tail = %d, Compute_MicroInst_FINISH_HEAD = %d\n",io.DebugTimeStampe, Compute_MicroInst_FIFO_Full, Compute_MicroInst_FIFO_Head, Compute_MicroInst_FIFO_Tail, Compute_MicroInst_FINISH_HEAD)
-
-            // }
-
-            when(!Can_Decode_More_Micro_Inst)
-            {
-                //不能译码就输出微指令队列的头尾
-                // if (YJPDebugEnable)
-                // {
-                //     printf("[TaskController<%d>]:MacroInst cant Decode!  Load_MicroInst_FIFO_Head = %d, Load_MicroInst_FIFO_Tail = %d, Compute_MicroInst_FIFO_Head = %d, Compute_MicroInst_FIFO_Tail = %d, Store_MicroInst_FIFO_Head = %d, Store_MicroInst_FIFO_Tail = %d\n",io.DebugTimeStampe, Load_MicroInst_FIFO_Head, Load_MicroInst_FIFO_Tail, Compute_MicroInst_FIFO_Head, Compute_MicroInst_FIFO_Tail, Store_MicroInst_FIFO_Head, Store_MicroInst_FIFO_Tail)
-                // }
-            }
 
             when(Can_Decode_More_Micro_Inst)
             {
@@ -898,10 +812,10 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             Compute_MicroInst.ScaratchpadTensor_K := Current_ScaratchpadTensor_K
             Compute_MicroInst.Have_Store_Micro_Inst := Have_Store_Micro_Inst
             Compute_MicroInst.DataType   := Decoding_MacroInst.element_type
-            Compute_MicroInst.DataType_A := PEDataType.AdataByteWidth(Decoding_MacroInst.element_type) //8bit
-            Compute_MicroInst.DataType_B := PEDataType.BdataByteWidth(Decoding_MacroInst.element_type) //8bit
-            Compute_MicroInst.DataType_C := PEDataType.CdataByteWidth(Decoding_MacroInst.element_type) //32bit
-            Compute_MicroInst.DataType_D := PEDataType.DdataByteWidth(Decoding_MacroInst.element_type) //32bit
+            Compute_MicroInst.DataType_A := PEDataType.AdataByteWidth(Decoding_MacroInst.element_type) 
+            Compute_MicroInst.DataType_B := PEDataType.BdataByteWidth(Decoding_MacroInst.element_type) 
+            Compute_MicroInst.DataType_C := PEDataType.CdataByteWidth(Decoding_MacroInst.element_type) 
+            Compute_MicroInst.DataType_D := PEDataType.DdataByteWidth(Decoding_MacroInst.element_type) 
 
             val Have_After_Ops = WireInit(false.B)
             Have_After_Ops := Have_Store_Micro_Inst
@@ -970,31 +884,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             }
         }
     }
-
-    // 微指令队列
-    // val Load_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new LoadMicroInst().getWidth.W))))
-    // val Store_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new StoreMicroInst().getWidth.W))))
-    // val Compute_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new ComputeMicroInst().getWidth.W))))
-
-    // val Load_MicroInst_FIFO_Head = RegInit(0.U(2.W))
-    // val Load_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
-    // val Load_MicroInst_FIFO_Empty = Load_MicroInst_FIFO_Head === Load_MicroInst_FIFO_Tail
-    // val Load_MicroInst_FIFO_Full = WrapInc(Load_MicroInst_FIFO_Head, 4) === Load_MicroInst_FIFO_Tail
-
-    // val Store_MicroInst_FIFO_Head = RegInit(0.U(2.W))
-    // val Store_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
-    // val Store_MicroInst_FIFO_Empty = Store_MicroInst_FIFO_Head === Store_MicroInst_FIFO_Tail
-    // val Store_MicroInst_FIFO_Full = WrapInc(Store_MicroInst_FIFO_Head, 4) === Store_MicroInst_FIFO_Tail
-
-    // val Compute_MicroInst_FIFO_Head = RegInit(0.U(2.W))
-    // val Compute_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
-    // val Compute_MicroInst_FIFO_Empty = Compute_MicroInst_FIFO_Head === Compute_MicroInst_FIFO_Tail
-    // val Compute_MicroInst_FIFO_Full = WrapInc(Compute_MicroInst_FIFO_Head, 4) === Compute_MicroInst_FIFO_Tail
-
-    // //微指令执行状态队列
-    // val Load_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new LoadMicroInst_Resource_Info().getWidth.W))))
-    // val Store_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new StoreMicroInst_Resource_Info().getWidth.W))))
-    // val Compute_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new ComputeMicroInst_Resource_Info().getWidth.W))))
 
     val Current_ADC_SCP_ID = RegInit(0.U(2.W))
     val Current_BDC_SCP_ID = RegInit(0.U(2.W))
@@ -1237,14 +1126,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         if (EnablePerfCounter)
         {io.ctrlCounter.computeInstCanIssue := Can_Issue_Compute_Micro_Inst && Compute_Micro_Inst_Issue_State_Reg === issue_state_idle}
 
-        // if (YJPDebugEnable)
-        // {
-        //     printf("[TaskController<%d>]:Compute_MicroInst_FIFO_Head = %d, Compute_MicroInst_FIFO_Tail = %d\n",io.DebugTimeStampe, Compute_MicroInst_FIFO_Head, Compute_MicroInst_FIFO_Tail)
-        //     printf("[TaskController<%d>]:Compute_MicroInst_FINISH_HEAD = %d\n",io.DebugTimeStampe, Compute_MicroInst_FINISH_HEAD)
-        //     printf("[TaskController<%d>]:Load_MicroInst_FINISH_Ready_GO = %x, Load_MicroInst_FINISH_Ready_Commit = %x\n",io.DebugTimeStampe, Load_MicroInst_FINISH_Ready_GO.asUInt, Load_MicroInst_FINISH_Ready_Commit.asUInt)
-        //     //io.ADC_MicroTask_Config.MicroTaskReady, io.BDC_MicroTask_Config.MicroTaskReady, io.CDC_MicroTask_Config.MicroTaskReady Compute_MicroInst_Resource_Info.Load_Micro_Inst_FIFO_Index
-        //     printf("[TaskController<%d>]:ADC_MicroTaskReady = %d, BDC_MicroTaskReady = %d, CDC_MicroTaskReady = %d, Load_Micro_Inst_FIFO_Index = %d\n",io.DebugTimeStampe, io.ADC_MicroTask_Config.MicroTaskReady, io.BDC_MicroTask_Config.MicroTaskReady, io.CDC_MicroTask_Config.MicroTaskReady, Compute_MicroInst_Resource_Info.Load_Micro_Inst_FIFO_Index)
-        // }
 
         when(Can_Issue_Compute_Micro_Inst && Compute_Micro_Inst_Issue_State_Reg === issue_state_idle)
         {
@@ -1285,16 +1166,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             io.CDC_MicroTask_Config.Is_Reorder_Only_Ops := Compute_MicroInst.Is_Reorder_Only_Ops
             io.CDC_MicroTask_Config.Is_EasyScale_Only_Ops := false.B        //TODO:需要修改
             io.CDC_MicroTask_Config.Is_VecFIFO_Ops := false.B               //TODO:需要修改
-
-            // io.AOP_MicroTask_Config.ScaratchpadTensor_M := Compute_MicroInst.ScaratchpadTensor_M
-            // io.AOP_MicroTask_Config.ScaratchpadTensor_N := Compute_MicroInst.ScaratchpadTensor_N
-            // io.AOP_MicroTask_Config.ScaratchpadTensor_K := Compute_MicroInst.ScaratchpadTensor_K
-            // io.AOP_MicroTask_Config.ApplicationTensor_D.dataType := ElementDataType.DataTypeWidth32 //TODO:需要修改
-            // io.AOP_MicroTask_Config.Is_EasyScale_Only_Ops := Compute_MicroInst.Is_EasyScale_Only_Ops
-            // io.AOP_MicroTask_Config.Is_VecFIFO_Ops := Compute_MicroInst.Is_VecFIFO_Ops
-            // io.AOP_MicroTask_Config.Is_Transpose := Compute_MicroInst.Is_Transpose
-            // io.AOP_MicroTask_Config.Is_Reorder_Only_Ops := Compute_MicroInst.Is_Reorder_Only_Ops
-            // io.AOP_MicroTask_Config.CUTEuop := Compute_MicroInst.CUTEuop
 
             io.MTE_MicroTask_Config.dataType := Compute_MicroInst.DataType
             io.MTE_MicroTask_Config.MicroTaskValid := true.B

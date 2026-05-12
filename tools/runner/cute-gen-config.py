@@ -502,60 +502,60 @@ class ConfigGenerator:
         lines.append("// CuteConfig: %s" % cc.get("id", ""))
 
         # CUTE accelerator
-        tensor = cc.get("tensor", {})
-        matrix = cc.get("matrix", {})
-        reduce_wb = cc.get("reduce_width_byte", 0)
-        result_wb = cc.get("result_width_byte", 0)
+        reduce_wb = cc.get("ReduceWidthByte", 0)
+        result_wb = cc.get("ResultWidthByte", 0)
 
         lines.append("")
         lines.append("// === CUTE Accelerator (from cute_config) ===")
-        lines.append("#define CUTE_TENSOR_M             %s" % tensor.get("M"))
-        lines.append("#define CUTE_TENSOR_N             %s" % tensor.get("N"))
-        lines.append("#define CUTE_TENSOR_K             %s" % tensor.get("K"))
-        lines.append("#define CUTE_MATRIX_M             %s" % matrix.get("M"))
-        lines.append("#define CUTE_MATRIX_N             %s" % matrix.get("N"))
+        lines.append("#define CUTE_TENSOR_M             %s" % cc.get("Tensor_M"))
+        lines.append("#define CUTE_TENSOR_N             %s" % cc.get("Tensor_N"))
+        lines.append("#define CUTE_TENSOR_K             %s" % cc.get("Tensor_K"))
+        lines.append("#define CUTE_MATRIX_M             %s" % cc.get("Matrix_M"))
+        lines.append("#define CUTE_MATRIX_N             %s" % cc.get("Matrix_N"))
         lines.append("#define CUTE_REDUCE_WIDTH_BYTE    %s" % reduce_wb)
         lines.append("#define CUTE_REDUCE_WIDTH         %s    // reduce_width_byte * 8" % (reduce_wb * 8))
         lines.append("#define CUTE_RESULT_WIDTH_BYTE    %s" % result_wb)
         lines.append("#define CUTE_RESULT_WIDTH         %s     // result_width_byte * 8" % (result_wb * 8))
-        lines.append("#define CUTE_RESULT_FIFO_DEPTH    %s" % cc.get("result_fifo_depth"))
-        lines.append("#define CUTE_OUTSIDE_DATA_WIDTH   %s" % cc.get("outside_data_width"))
-        lines.append("#define CUTE_MMU_ADDR_WIDTH       %s" % cc.get("mmu_addr_width"))
-        lines.append("#define CUTE_LLC_SOURCE_MAX_NUM   %s" % cc.get("llc_source_max_num"))
+        lines.append("#define CUTE_RESULT_FIFO_DEPTH    %s" % cc.get("ResultFIFODepth"))
+        lines.append("#define CUTE_OUTSIDE_DATA_WIDTH   %s" % cc.get("outsideDataWidth"))
+        lines.append("#define CUTE_MMU_ADDR_WIDTH       %s" % cc.get("MMUAddrWidth"))
+        lines.append("#define CUTE_LLC_SOURCE_MAX_NUM   %s" % cc.get("LLCSourceMaxNum"))
         if reduce_wb:
-            lines.append("#define CUTE_REDUCE_GROUP_SIZE    %s" % (tensor.get("K", 0) // reduce_wb))
+            lines.append("#define CUTE_REDUCE_GROUP_SIZE    %s" % (cc.get("Tensor_K", 0) // reduce_wb))
 
         # Tensor task
-        tt = cc.get("tensor_task", {})
-        if tt:
+        if any(key in cc for key in (
+            "ApplicationMaxTensorSize",
+            "Convolution_Input_Height_Weight_Dim_Max",
+            "KernelSizeMax",
+            "StrideSizeMax",
+        )):
             lines.append("")
-            lines.append("// === Tensor Task (from cute_config.tensor_task) ===")
-            lines.append("#define CUTE_APPLICATION_MAX_TENSOR_SIZE %s" % tt.get("application_max_tensor_size"))
-            lines.append("#define CUTE_CONV_INPUT_MAX      %s" % tt.get("conv_input_max"))
-            lines.append("#define CUTE_CONV_KERNEL_SIZE_MAX %s" % tt.get("conv_kernel_size_max"))
-            lines.append("#define CUTE_CONV_STRIDE_SIZE_MAX %s" % tt.get("conv_stride_size_max"))
+            lines.append("// === Tensor Task (from cute_config) ===")
+            lines.append("#define CUTE_APPLICATION_MAX_TENSOR_SIZE %s" % cc.get("ApplicationMaxTensorSize"))
+            lines.append("#define CUTE_CONV_INPUT_MAX      %s" % cc.get("Convolution_Input_Height_Weight_Dim_Max"))
+            lines.append("#define CUTE_CONV_KERNEL_SIZE_MAX %s" % cc.get("KernelSizeMax"))
+            lines.append("#define CUTE_CONV_STRIDE_SIZE_MAX %s" % cc.get("StrideSizeMax"))
 
         # MMU
-        mmu = cc.get("mmu", {})
+        mmu = cc.get("MMUParams", {})
         if mmu:
             lines.append("")
-            lines.append("// === MMU (from cute_config.mmu) ===")
-            lines.append("#define CUTE_MMU_VPN_BITS         %s" % mmu.get("vpn_bits"))
-            lines.append("#define CUTE_MMU_PPN_BITS         %s" % mmu.get("ppn_bits"))
-            lines.append("#define CUTE_MMU_PGIDX_BITS       %s" % mmu.get("pgidx_bits"))
-            lines.append("#define CUTE_MMU_VADDR_BITS       %s" % mmu.get("vaddr_bits"))
-            lines.append("#define CUTE_MMU_PADDR_BITS       %s" % mmu.get("paddr_bits"))
-            lines.append("#define CUTE_MMU_CORE_PADDR_BITS  %s" % mmu.get("core_paddr_bits"))
+            lines.append("// === MMU (from cute_config.MMUParams) ===")
+            lines.append("#define CUTE_MMU_VPN_BITS         %s" % mmu.get("vpnBits"))
+            lines.append("#define CUTE_MMU_PPN_BITS         %s" % mmu.get("ppnBits"))
+            lines.append("#define CUTE_MMU_PGIDX_BITS       %s" % mmu.get("pgIdxBits"))
+            lines.append("#define CUTE_MMU_VADDR_BITS       %s" % mmu.get("vaddrBits"))
+            lines.append("#define CUTE_MMU_PADDR_BITS       %s" % mmu.get("paddrBits"))
+            lines.append("#define CUTE_MMU_CORE_PADDR_BITS  %s" % mmu.get("corePAddrBits"))
 
         # FPE
-        fpe = cc.get("fpe", {})
+        fpe = cc.get("FPEparams", {})
         if fpe:
             lines.append("")
-            lines.append("// === FPE (from cute_config.fpe) ===")
-            lines.append("#define CUTE_FPE_MIN_GROUP_SIZE   %s" % fpe.get("min_group_size"))
-            lines.append("#define CUTE_FPE_MIN_DATA_TYPE_WIDTH %s" % fpe.get("min_data_type_width"))
-            lines.append("#define CUTE_FPE_COMP_TREE_LAYERS %s" % fpe.get("comp_tree_layers"))
-            lines.append("#define CUTE_FPE_FP8_COMP_TREE_LAYERS %s" % fpe.get("fp8_comp_tree_layers"))
+            lines.append("// === FPE (from cute_config.FPEparams) ===")
+            lines.append("#define CUTE_FPE_MIN_GROUP_SIZE   %s" % fpe.get("MinGroupSize"))
+            lines.append("#define CUTE_FPE_MIN_DATA_TYPE_WIDTH %s" % fpe.get("MinDataTypeWidth"))
 
         # SoC
         soc = cy.get("soc", {})
@@ -581,11 +581,6 @@ class ConfigGenerator:
             lines.append("")
             lines.append("// === TCM (shuttle + vector) ===")
             lines.append("#define CUTE_TCM_SUPPORTED 1")
-
-        # wip not generated
-        lines.append("")
-        lines.append("// === WIP params (not generated, reserved for future use) ===")
-        lines.append("")
 
         lines.append("#endif // CUTE_CONFIG_H")
         out.write_text("\n".join(lines), encoding="utf-8")

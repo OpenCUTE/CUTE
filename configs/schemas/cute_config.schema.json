@@ -1,153 +1,173 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CUTE Config",
-  "description": "CUTE 加速器参数预设。定义 scratchpad 形状、矩阵单元形状、访存带宽、MMU、FPE 等所有硬件参数。是 cute_config.h 和 CuteConfig.scala 的共同真相源。",
+  "description": "CUTE 加速器参数预设。字段名直接对齐 cute.CuteParams / CuteMMUParams / CuteFPEParams 的 Scala 参数名，codegen 不再做 snake_case 到 Scala 名的额外映射。",
   "type": "object",
-  "required": ["version", "id", "description", "tensor", "matrix", "reduce_width_byte"],
+  "required": [
+    "version",
+    "id",
+    "description",
+    "Tensor_M",
+    "Tensor_N",
+    "Tensor_K",
+    "Matrix_M",
+    "Matrix_N",
+    "ReduceWidthByte"
+  ],
   "additionalProperties": false,
   "properties": {
     "version": {
       "type": "integer",
       "const": 1,
-      "description": "Schema 版本，当前固定为 1"
+      "description": "Schema 版本，当前固定为 1",
+      "x-scala-emit": false
     },
     "id": {
       "type": "string",
       "pattern": "^[A-Z][A-Za-z0-9_]*$",
-      "description": "预设唯一标识，如 CUTE_4Tops_128SCP。文件名必须与 id 一致。"
+      "description": "预设唯一标识，如 CUTE_4Tops_128SCP。文件名必须与 id 一致。",
+      "x-scala-emit": false
     },
     "description": {
       "type": "string",
-      "description": "预设用途简述"
+      "description": "预设用途简述",
+      "x-scala-emit": false
     },
-    "tensor": {
-      "type": "object",
-      "required": ["M", "N", "K"],
-      "additionalProperties": false,
-      "description": "Scratchpad 中存储的张量形状（8bit/element）",
-      "properties": {
-        "M": { "type": "integer", "minimum": 1, "description": "张量 M 维度" },
-        "N": { "type": "integer", "minimum": 1, "description": "张量 N 维度" },
-        "K": { "type": "integer", "minimum": 1, "description": "张量 K 维度" }
-      }
+
+    "outsideDataWidth": {
+      "type": "integer",
+      "enum": [256, 512],
+      "description": "CUTE 对外访存带宽（bit）。对应 CuteParams.outsideDataWidth。"
     },
-    "matrix": {
-      "type": "object",
-      "required": ["M", "N"],
-      "additionalProperties": false,
-      "description": "MTE 矩阵乘计算单元形状",
-      "properties": {
-        "M": { "type": "integer", "minimum": 1, "description": "矩阵 M 维度" },
-        "N": { "type": "integer", "minimum": 1, "description": "矩阵 N 维度" }
-      }
+    "MemoryDataWidth": {
+      "type": "integer",
+      "description": "直连 DDR 的数据线束位宽（bit）。对应 CuteParams.MemoryDataWidth。"
     },
-    "reduce_width_byte": {
+    "VectorWidth": {
+      "type": "integer",
+      "description": "向量流水线宽度（bit）。对应 CuteParams.VectorWidth。"
+    },
+
+    "ConvolutionApplicationConfigDataWidth": {
+      "type": "integer",
+      "description": "卷积相关配置信息宽度。对应 CuteParams.ConvolutionApplicationConfigDataWidth。"
+    },
+    "ConvolutionDIM_Max": {
+      "type": "integer",
+      "description": "卷积相关维度最大值。对应 CuteParams.ConvolutionDIM_Max。"
+    },
+    "Convolution_Input_Height_Weight_Dim_Max": {
+      "type": "integer",
+      "description": "卷积输入高/宽最大值。对应 CuteParams.Convolution_Input_Height_Weight_Dim_Max。"
+    },
+    "KernelSizeMax": {
+      "type": "integer",
+      "description": "卷积核最大尺寸。对应 CuteParams.KernelSizeMax。"
+    },
+    "StrideSizeMax": {
+      "type": "integer",
+      "description": "卷积步长最大值。对应 CuteParams.StrideSizeMax。"
+    },
+    "ApplicationMaxTensorSize": {
+      "type": "integer",
+      "description": "矩阵乘 M/N/K 最大值。对应 CuteParams.ApplicationMaxTensorSize。"
+    },
+
+    "MMUAddrWidth": {
+      "type": "integer",
+      "description": "CUTE MMU 地址宽度（bit）。对应 CuteParams.MMUAddrWidth。"
+    },
+    "LLCSourceMaxNum": {
+      "type": "integer",
+      "description": "LLC 总线 source 最大数量。对应 CuteParams.LLCSourceMaxNum。"
+    },
+    "MemorysourceMaxNum": {
+      "type": "integer",
+      "description": "Memory 总线 source 最大数量。对应 CuteParams.MemorysourceMaxNum。"
+    },
+
+    "Tensor_M": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Scratchpad 中存储的张量 M 维度。对应 CuteParams.Tensor_M。"
+    },
+    "Tensor_N": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Scratchpad 中存储的张量 N 维度。对应 CuteParams.Tensor_N。"
+    },
+    "Tensor_K": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Scratchpad 中存储的张量 K 维度。对应 CuteParams.Tensor_K。"
+    },
+
+    "Matrix_M": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "MTE 矩阵乘计算单元 M 维度。对应 CuteParams.Matrix_M。"
+    },
+    "Matrix_N": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "MTE 矩阵乘计算单元 N 维度。对应 CuteParams.Matrix_N。"
+    },
+    "ReduceWidthByte": {
       "type": "integer",
       "enum": [32, 64],
-      "description": "ReducePE 内积数据宽度（字节）"
+      "description": "ReducePE 内积数据宽度（字节）。对应 CuteParams.ReduceWidthByte。"
     },
-    "outside_data_width": {
+    "ResultWidthByte": {
       "type": "integer",
-      "description": "CUTE 对外访存带宽（bit）",
-      "default": 512
+      "description": "ReducePE 结果宽度（字节）。对应 CuteParams.ResultWidthByte。"
     },
-    "result_width_byte": {
+    "ResultFIFODepth": {
       "type": "integer",
-      "description": "ReducePE 结果宽度（字节）",
-      "default": 4
+      "description": "乘累加 FIFO 深度。对应 CuteParams.ResultFIFODepth。"
     },
-    "mmu_addr_width": {
+
+    "AMemoryLoaderReadFromMemoryFIFODepth": {
       "type": "integer",
-      "description": "CUTE MMU 地址宽度（bit）",
-      "default": 39
+      "description": "AML read-from-memory FIFO 深度。对应 CuteParams.AMemoryLoaderReadFromMemoryFIFODepth。"
     },
-    "llc_source_max_num": {
+    "BMemoryLoaderReadFromMemoryFIFODepth": {
       "type": "integer",
-      "description": "LLC 总线 source 最大数量",
-      "default": 64
+      "description": "BML read-from-memory FIFO 深度。对应 CuteParams.BMemoryLoaderReadFromMemoryFIFODepth。"
     },
-    "result_fifo_depth": {
+    "CMemoryLoaderReadFromScratchpadFIFODepth": {
       "type": "integer",
-      "description": "乘累加 FIFO 深度",
-      "default": 8
+      "description": "CML read-from-scratchpad FIFO 深度。对应 CuteParams.CMemoryLoaderReadFromScratchpadFIFODepth。"
     },
-    "tensor_task": {
+    "CMemoryLoaderReadFromMemoryFIFODepth": {
+      "type": "integer",
+      "description": "CML read-from-memory FIFO 深度。对应 CuteParams.CMemoryLoaderReadFromMemoryFIFODepth。"
+    },
+
+    "MMUParams": {
       "type": "object",
-      "description": "张量任务相关常量（含矩阵乘和卷积）",
+      "description": "MMU 参数。生成 Scala 时写作 MMUParams = CuteMMUParams(...)。",
+      "x-scala-constructor": "CuteMMUParams",
       "additionalProperties": false,
       "properties": {
-        "application_max_tensor_size": { "type": "integer", "description": "矩阵乘 M/N/K 最大值" },
-        "conv_input_max": { "type": "integer", "description": "卷积输入高/宽最大值" },
-        "conv_kernel_size_max": { "type": "integer", "description": "卷积核最大尺寸" },
-        "conv_stride_size_max": { "type": "integer", "description": "卷积步长最大值" }
+        "vpnBits": { "type": "integer" },
+        "ppnBits": { "type": "integer" },
+        "pgIdxBits": { "type": "integer" },
+        "vaddrBits": { "type": "integer" },
+        "paddrBits": { "type": "integer" },
+        "corePAddrBits": { "type": "integer" }
       }
     },
-    "mmu": {
+    "FPEparams": {
       "type": "object",
-      "description": "MMU 参数",
+      "description": "FPE 参数。生成 Scala 时写作 FPEparams = CuteFPEParams(...)。",
+      "x-scala-constructor": "CuteFPEParams",
       "additionalProperties": false,
       "properties": {
-        "vpn_bits": { "type": "integer" },
-        "ppn_bits": { "type": "integer" },
-        "pgidx_bits": { "type": "integer" },
-        "vaddr_bits": { "type": "integer" },
-        "paddr_bits": { "type": "integer" },
-        "core_paddr_bits": { "type": "integer" }
-      }
-    },
-    "fpe": {
-      "type": "object",
-      "description": "FPE 参数",
-      "additionalProperties": false,
-      "properties": {
-        "min_group_size": { "type": "integer" },
-        "min_data_type_width": { "type": "integer" },
-        "scale_element_width": { "type": "integer" },
-        "comp_tree_layers": { "type": "integer" },
-        "fp8_comp_tree_layers": { "type": "integer" }
-      }
-    },
-    "wip": {
-      "type": "object",
-      "description": "WIP（Work In Progress）参数。接口尚未稳定，仅供内部开发使用，codegen 暂不生成这些字段对应的宏。",
-      "additionalProperties": false,
-      "properties": {
-        "vector_width": {
-          "type": "integer",
-          "description": "向量流水线宽度（bit）",
-          "default": 256
-        },
-        "memory_data_width": {
-          "type": "integer",
-          "description": "直连 DDR 的数据线束位宽（bit）",
-          "default": 64
-        },
-        "vec_task_inst_buffer_depth": {
-          "type": "integer",
-          "description": "VecTask 指令缓冲深度",
-          "default": 32
-        },
-        "vec_task_inst_buffer_size": {
-          "type": "integer",
-          "description": "VecTask 指令缓冲数量",
-          "default": 8
-        },
-        "vec_task_data_buffer_depth": {
-          "type": "integer",
-          "description": "VecTask 数据缓冲深度",
-          "default": 4
-        },
-        "enable_perf_counter": {
-          "type": "boolean",
-          "description": "是否启用性能计数器",
-          "default": false
-        },
-        "memory_source_max_num": {
-          "type": "integer",
-          "description": "Memory 总线 source 最大数量",
-          "default": 64
-        }
+        "MinGroupSize": { "type": "integer" },
+        "MinDataTypeWidth": { "type": "integer" },
+        "ScaleElementWidth": { "type": "integer" }
       }
     }
+
   }
 }

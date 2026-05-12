@@ -1,35 +1,32 @@
 version: 1
 id: CUTE_4Tops_128SCP
 description: 4Tops + 128x128x64 tile
-tensor:
-  M: 128
-  N: 128
-  K: 64
-matrix:
-  M: 4
-  N: 4
-reduce_width_byte: 64
-outside_data_width: 512
-result_width_byte: 4
-mmu_addr_width: 39
-llc_source_max_num: 64
-result_fifo_depth: 8
-mmu:
-  vpn_bits: 12
-  ppn_bits: 12
-  pgidx_bits: 12
-  vaddr_bits: 39
-  paddr_bits: 39
-  core_paddr_bits: 64
-fpe:
-  min_group_size: 16
-  min_data_type_width: 4
-  scale_element_width: 8
-  comp_tree_layers: 4
-  fp8_comp_tree_layers: 4
-
-tensor_task:
-  application_max_tensor_size: 65535
-  conv_input_max: 16383
-  conv_kernel_size_max: 15
-  conv_stride_size_max: 3
+outsideDataWidth: 512
+ConvolutionDIM_Max: 65535
+Convolution_Input_Height_Weight_Dim_Max: 16383
+KernelSizeMax: 15
+StrideSizeMax: 3
+ApplicationMaxTensorSize: 65535
+MMUAddrWidth: 39
+LLCSourceMaxNum: 64
+Tensor_M: 128
+Tensor_N: 128
+Tensor_K: 64
+Matrix_M: 4
+Matrix_N: 4
+ReduceWidthByte: 64
+ResultWidthByte: 4
+ResultFIFODepth: 8
+MMUParams:
+  vpnBits: 12
+  ppnBits: 12
+  pgIdxBits: 12
+  vaddrBits: 39
+  paddrBits: 39
+  corePAddrBits: 64
+FPEparams:
+  MinGroupSize: 16
+  MinDataTypeWidth: 4
+  ScaleElementWidth: 8
+  cmptreelayers: 4
+  fp8cmptreelayers: 4

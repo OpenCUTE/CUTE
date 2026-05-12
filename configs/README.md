@@ -59,6 +59,8 @@ HWConfig（可运行目标）
 ### CuteConfig
 
 `cute_configs/*.yaml` 描述 CUTE 加速器本体的硬件参数预设，是 `CuteParams` 静态预设的 YAML 版本。
+字段名直接对齐 Scala `CuteParams` 参数名；二级对象用 schema 中的
+`x-scala-constructor` 标注构造器，例如 `MMUParams = CuteMMUParams(...)`。
 
 ```yaml
 # configs/cute_configs/CUTE_4Tops_128SCP.yaml
@@ -66,35 +68,37 @@ version: 1
 id: CUTE_4Tops_128SCP
 description: 4Tops + 128x128x64 tile
 
-tensor: { M: 128, N: 128, K: 64 }
-matrix: { M: 4, N: 4 }
-reduce_width_byte: 64
-outside_data_width: 512
-result_width_byte: 4
-mmu_addr_width: 39
-llc_source_max_num: 64
-result_fifo_depth: 8
+Tensor_M: 128
+Tensor_N: 128
+Tensor_K: 64
+Matrix_M: 4
+Matrix_N: 4
+ReduceWidthByte: 64
+outsideDataWidth: 512
+ResultWidthByte: 4
+MMUAddrWidth: 39
+LLCSourceMaxNum: 64
+ResultFIFODepth: 8
+ApplicationMaxTensorSize: 65535
+ConvolutionDIM_Max: 65535
+Convolution_Input_Height_Weight_Dim_Max: 16383
+KernelSizeMax: 15
+StrideSizeMax: 3
 
-mmu:
-  vpn_bits: 12
-  ppn_bits: 12
-  pgidx_bits: 12
-  vaddr_bits: 39
-  paddr_bits: 39
-  core_paddr_bits: 64
+MMUParams:
+  vpnBits: 12
+  ppnBits: 12
+  pgIdxBits: 12
+  vaddrBits: 39
+  paddrBits: 39
+  corePAddrBits: 64
 
-fpe:
-  min_group_size: 16
-  min_data_type_width: 4
-  scale_element_width: 8
-  comp_tree_layers: 4
-  fp8_comp_tree_layers: 4
-
-tensor_task:
-  application_max_tensor_size: 65535
-  conv_input_max: 16383
-  conv_kernel_size_max: 15
-  conv_stride_size_max: 3
+FPEparams:
+  MinGroupSize: 16
+  MinDataTypeWidth: 4
+  ScaleElementWidth: 8
+  cmptreelayers: 4
+  fp8cmptreelayers: 4
 ```
 
 ### ChipyardConfig
@@ -268,6 +272,13 @@ build/generated-scala/
 ├── HardwareConfig.scala
 └── InstConfig.scala
 ```
+
+`HardwareConfig.scala` 的字段顺序和二级对象构造器由
+`configs/schemas/cute_config.schema.json` 描述。普通字段名直接等于 Scala
+参数名；带 `x-scala-constructor` 的对象会生成嵌套构造器调用。
+
+YAML 中没有显式出现的字段不会被写入生成结果；最终由 `CuteParams` case
+class 自身的默认值接管。
 
 这两个文件目前用于 review 和下一阶段迁移准备。真正启用时，应先从
 `CUTEParameters.scala` 移除同名手写定义，再把输出目录切到
