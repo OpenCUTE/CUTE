@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CUTE ChipyardConfig",
-  "description": "现有 Chipyard Scala Config class 的结构化 contract。Phase 0 只描述 existing_class，不生成 Scala。",
+  "description": "ChipyardConfig 是一个完整的 SoC 配置描述。从它生成 CuteConfig.scala 和 cute_config.h。",
   "type": "object",
-  "required": ["version", "id", "class", "source_file", "mode", "cute", "soc", "capability"],
+  "required": ["version", "id", "cute", "soc", "capability"],
   "additionalProperties": false,
   "properties": {
     "version": {
@@ -14,49 +14,23 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]*$",
-      "description": "ChipyardConfig 唯一标识，如 cute2tops_scp64"
-    },
-    "class": {
-      "type": "string",
-      "pattern": "^[A-Za-z_][A-Za-z0-9_.]*$",
-      "description": "Chipyard Config 类全名，如 chipyard.CUTE2TopsSCP64Config"
-    },
-    "source_file": {
-      "type": "string",
-      "description": "定义该 class 的源码路径，相对 CUTE 根目录"
-    },
-    "mode": {
-      "type": "string",
-      "enum": ["existing_class"],
-      "description": "Phase 0 只允许引用现有 Scala Config class"
+      "description": "ChipyardConfig 唯一标识，如 cute4tops_scp128。生成的 Scala class 名由此推导。"
     },
     "cute": {
       "type": "object",
-      "required": ["params_symbol", "instances", "isa", "generated_headers"],
+      "required": ["config", "instances", "isa"],
       "additionalProperties": false,
       "properties": {
-        "params_symbol": {
+        "config": {
           "type": "string",
-          "description": "CuteParams 符号，如 CuteParams.CUTE_2Tops_64SCP"
+          "pattern": "^[A-Z][A-Za-z0-9_]*$",
+          "description": "CUTE 加速器参数预设 id，引用 configs/cute_configs/<id>.yaml"
         },
         "instances": {
           "type": "array",
           "items": { "type": "integer", "minimum": 0 },
           "minItems": 1,
           "description": "WithCUTE(Seq(...)) 中挂载 CUTE 的 core id 列表"
-        },
-        "fpe": {
-          "type": "object",
-          "required": ["version"],
-          "additionalProperties": false,
-          "description": "FPE 版本引用（已废弃，datatype 信息现在从 ISA YAML 的 enums.ElementDataType 获取）。保留此字段仅为向后兼容。",
-          "properties": {
-            "version": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9_]*$",
-              "description": "CUTE 内部 FPE/计算格式版本，引用 configs/cute_fpe_versions/<version>.yaml"
-            }
-          }
         },
         "isa": {
           "type": "object",
@@ -66,28 +40,7 @@
             "version": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_]*$",
-              "description": "CUTE 内部指令集版本，引用 configs/cute_isa_versions/<version>.yaml"
-            }
-          }
-        },
-        "generated_headers": {
-          "type": "object",
-          "required": ["output_dir", "mode", "fingerprint"],
-          "additionalProperties": false,
-          "properties": {
-            "output_dir": {
-              "type": "string",
-              "description": "生成头文件输出目录，默认 build/chipyard_configs/<id>/generated_headers"
-            },
-            "mode": {
-              "type": "string",
-              "enum": ["generate_from_chipyard_config", "reuse_existing"],
-              "description": "generate_from_chipyard_config: 从现有 Chipyard Config 生成; reuse_existing: 复用已有头文件"
-            },
-            "fingerprint": {
-              "type": "string",
-              "pattern": "^(auto|manual:.+)$",
-              "description": "auto: 自动计算; manual:<hash>: 手动指定"
+              "description": "指令集版本，引用 configs/cute_isa_versions/<version>.yaml"
             }
           }
         }

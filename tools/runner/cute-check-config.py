@@ -22,6 +22,7 @@ except ImportError as exc:  # pragma: no cover - dependency preflight
 
 SCHEMA_FILES = {
     "chipyard_config": "configs/schemas/chipyard_config.schema.json",
+    "cute_config": "configs/schemas/cute_config.schema.json",
     "cute_isa_version": "configs/schemas/cute_isa_version.schema.json",
     "vector_version": "configs/schemas/vector_version.schema.json",
     "hwconfig": "configs/schemas/hwconfig.schema.json",
@@ -31,6 +32,7 @@ SCHEMA_FILES = {
 
 MANIFEST_DIRS = {
     "chipyard_config": "configs/chipyard_configs",
+    "cute_config": "configs/cute_configs",
     "cute_isa_version": "configs/cute_isa_versions",
     "vector_version": "configs/vector_versions",
     "hwconfig": "configs/hwconfigs",
@@ -65,7 +67,7 @@ class ResolvedHWConfig:
     instructions: List[str]
     vector_features: Dict[str, Any]
     capability: Dict[str, Any]
-    generated_headers: Optional[str]
+    cute_config_id: str
     memory: Dict[str, Any]
     simulator: Dict[str, Any]
 
@@ -252,19 +254,6 @@ class Checker:
                 return vector.get("version")
         return None
 
-    def chipyard_generated_headers(self, chipyard: Dict[str, Any]) -> Optional[str]:
-        export = chipyard.get("export", {})
-        if isinstance(export, dict):
-            generated = export.get("generated_headers", {})
-            if isinstance(generated, dict) and generated.get("output_dir"):
-                return generated.get("output_dir")
-        cute = chipyard.get("cute", {})
-        if isinstance(cute, dict):
-            generated = cute.get("generated_headers", {})
-            if isinstance(generated, dict):
-                return generated.get("output_dir")
-        return None
-
     def chipyard_capability(self, chipyard: Dict[str, Any]) -> Dict[str, Any]:
         capability_labels = chipyard.get("capability_labels")
         if isinstance(capability_labels, dict):
@@ -303,32 +292,20 @@ class Checker:
         issues: List[Issue] = []
         issues.extend(self.check_id_matches_file(chipyard, path, "id"))
 
-        source_file = chipyard.get("source_file")
-        if isinstance(source_file, str):
-            source_path = self.resolve_declared_path(source_file)
-            self.log("check source_file exists: %s" % self.rel(source_path))
-            if not source_path.exists():
-                issues.append(Issue("ERROR", "%s:source_file" % self.rel(path), "source_file does not exist: %s" % source_file))
-
-        class_name = chipyard.get("class")
-        if isinstance(class_name, str) and not re.match(r"^[A-Za-z_][A-Za-z0-9_.]*$", class_name):
-            issues.append(Issue("ERROR", "%s:class" % self.rel(path), "class is not a Scala-like fully qualified name"))
-
-        generated_headers = self.chipyard_generated_headers(chipyard)
-        if generated_headers is not None and str(generated_headers).strip() == "":
-            issues.append(Issue("ERROR", "%s:generated_headers.output_dir" % self.rel(path), "output_dir is empty"))
-        elif generated_headers is not None:
-            self.log("record generated_headers output_dir metadata: %s" % generated_headers)
-
         if not check_refs:
             return issues
 
-        isa_version = self.chipyard_isa_version(chipyard)
-        vector_version = self.chipyard_vector_version(chipyard)
-        self.log("resolved compatibility: isa=%s vector=%s" % (isa_version, vector_version))
-        self.log("skip Scala parsing and generated header checks in Phase 0")
-        issues.extend(self.check_manifest_reference("cute_isa_version", isa_version, "%s:isa.version" % self.rel(path)))
-        issues.extend(self.check_manifest_reference("vector_version", vector_version, "%s:vector.version" % self.rel(path)))
+        cute = chipyard.get("cute", {})
+        if isinstance(cute, dict):
+            cute_config_id = cute.get("config")
+            if isinstance(cute_config_id, str):
+                issues.extend(self.check_manifest_reference("cute_config", cute_config_id, "%s:cute.config" % self.rel(path)))
+
+            isa_version = self.chipyard_isa_version(chipyard)
+            vector_version = self.chipyard_vector_version(chipyard)
+            self.log("resolved references: isa=%s vector=%s" % (isa_version, vector_version))
+            issues.extend(self.check_manifest_reference("cute_isa_version", isa_version, "%s:isa.version" % self.rel(path)))
+            issues.extend(self.check_manifest_reference("vector_version", vector_version, "%s:vector.version" % self.rel(path)))
         return issues
 
     def check_isa_version_manifest(self, isa: Dict[str, Any], path: Path) -> List[Issue]:
@@ -528,7 +505,7 @@ class Checker:
             instructions=self.extract_instruction_names(isa),
             vector_features=dict(vector.get("features", {}) or {}),
             capability=self.chipyard_capability(chipyard),
-            generated_headers=self.chipyard_generated_headers(chipyard),
+            cute_config_id=str(chipyard.get("cute", {}).get("config", "") or ""),
             memory=dict(hwconfig.get("memory", {}) or {}),
             simulator=dict(hwconfig.get("simulator", {}) or {}),
         )
@@ -745,7 +722,7 @@ class Checker:
         resolved_hwconfigs: List[ResolvedHWConfig] = []
         projects: List[Tuple[Path, Dict[str, Any]]] = []
 
-        for kind in ("cute_isa_version", "vector_version", "chipyard_config", "trace_filter"):
+        for kind in ("cute_config", "cute_isa_version", "vector_version", "chipyard_config", "trace_filter"):
             manifest_dir = self.root / MANIFEST_DIRS[kind]
             for manifest_path in sorted(manifest_dir.glob("*.yaml")):
                 manifest_issues, _doc, _path = self.collect_manifest(kind, manifest_path)

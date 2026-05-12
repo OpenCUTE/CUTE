@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CUTE Config",
+  "description": "CUTE 加速器参数预设。定义 scratchpad 形状、矩阵单元形状、访存带宽、MMU、FPE 等所有硬件参数。是 cute_config.h 和 CuteConfig.scala 的共同真相源。",
+  "type": "object",
+  "required": ["version", "id", "description", "tensor", "matrix", "reduce_width_byte"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema 版本，当前固定为 1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9_]*$",
+      "description": "预设唯一标识，如 CUTE_4Tops_128SCP。文件名必须与 id 一致。"
+    },
+    "description": {
+      "type": "string",
+      "description": "预设用途简述"
+    },
+    "tensor": {
+      "type": "object",
+      "required": ["M", "N", "K"],
+      "additionalProperties": false,
+      "description": "Scratchpad 中存储的张量形状（8bit/element）",
+      "properties": {
+        "M": { "type": "integer", "minimum": 1, "description": "张量 M 维度" },
+        "N": { "type": "integer", "minimum": 1, "description": "张量 N 维度" },
+        "K": { "type": "integer", "minimum": 1, "description": "张量 K 维度" }
+      }
+    },
+    "matrix": {
+      "type": "object",
+      "required": ["M", "N"],
+      "additionalProperties": false,
+      "description": "MTE 矩阵乘计算单元形状",
+      "properties": {
+        "M": { "type": "integer", "minimum": 1, "description": "矩阵 M 维度" },
+        "N": { "type": "integer", "minimum": 1, "description": "矩阵 N 维度" }
+      }
+    },
+    "reduce_width_byte": {
+      "type": "integer",
+      "enum": [32, 64],
+      "description": "ReducePE 内积数据宽度（字节）"
+    },
+    "outside_data_width": {
+      "type": "integer",
+      "description": "CUTE 对外访存带宽（bit）",
+      "default": 512
+    },
+    "result_width_byte": {
+      "type": "integer",
+      "description": "ReducePE 结果宽度（字节）",
+      "default": 4
+    },
+    "mmu_addr_width": {
+      "type": "integer",
+      "description": "CUTE MMU 地址宽度（bit）",
+      "default": 39
+    },
+    "llc_source_max_num": {
+      "type": "integer",
+      "description": "LLC 总线 source 最大数量",
+      "default": 64
+    },
+    "result_fifo_depth": {
+      "type": "integer",
+      "description": "乘累加 FIFO 深度",
+      "default": 8
+    },
+    "convolution": {
+      "type": "object",
+      "description": "卷积相关常量",
+      "additionalProperties": false,
+      "properties": {
+        "dim_max": { "type": "integer", "description": "维度最大值" },
+        "input_max": { "type": "integer", "description": "输入高/宽最大值" },
+        "kernel_size_max": { "type": "integer", "description": "卷积核最大尺寸" },
+        "stride_size_max": { "type": "integer", "description": "步长最大值" },
+        "application_max_tensor_size": { "type": "integer", "description": "应用层最大张量维度" }
+      }
+    },
+    "mmu": {
+      "type": "object",
+      "description": "MMU 参数",
+      "additionalProperties": false,
+      "properties": {
+        "vpn_bits": { "type": "integer" },
+        "ppn_bits": { "type": "integer" },
+        "pgidx_bits": { "type": "integer" },
+        "vaddr_bits": { "type": "integer" },
+        "paddr_bits": { "type": "integer" },
+        "core_paddr_bits": { "type": "integer" }
+      }
+    },
+    "fpe": {
+      "type": "object",
+      "description": "FPE 参数",
+      "additionalProperties": false,
+      "properties": {
+        "min_group_size": { "type": "integer" },
+        "min_data_type_width": { "type": "integer" },
+        "scale_element_width": { "type": "integer" },
+        "comp_tree_layers": { "type": "integer" },
+        "fp8_comp_tree_layers": { "type": "integer" }
+      }
+    },
+    "wip": {
+      "type": "object",
+      "description": "WIP（Work In Progress）参数。接口尚未稳定，仅供内部开发使用，codegen 暂不生成这些字段对应的宏。",
+      "additionalProperties": false,
+      "properties": {
+        "vector_width": {
+          "type": "integer",
+          "description": "向量流水线宽度（bit）",
+          "default": 256
+        },
+        "memory_data_width": {
+          "type": "integer",
+          "description": "直连 DDR 的数据线束位宽（bit）",
+          "default": 64
+        },
+        "vec_task_inst_buffer_depth": {
+          "type": "integer",
+          "description": "VecTask 指令缓冲深度",
+          "default": 32
+        },
+        "vec_task_inst_buffer_size": {
+          "type": "integer",
+          "description": "VecTask 指令缓冲数量",
+          "default": 8
+        },
+        "vec_task_data_buffer_depth": {
+          "type": "integer",
+          "description": "VecTask 数据缓冲深度",
+          "default": 4
+        },
+        "enable_perf_counter": {
+          "type": "boolean",
+          "description": "是否启用性能计数器",
+          "default": false
+        },
+        "memory_source_max_num": {
+          "type": "integer",
+          "description": "Memory 总线 source 最大数量",
+          "default": 64
+        }
+      }
+    }
+  }
+}

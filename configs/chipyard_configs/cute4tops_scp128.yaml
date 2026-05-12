@@ -1,18 +1,11 @@
 version: 1
 id: cute4tops_scp128
-class: chipyard.CUTE4TopsSCP128Config
-source_file: chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
-mode: existing_class
 
 cute:
-  params_symbol: CuteParams.CUTE_4Tops_128SCP
+  config: CUTE_4Tops_128SCP
   instances: [0]
   isa:
     version: cute_isa_v1
-  generated_headers:
-    output_dir: build/chipyard_configs/cute4tops_scp128/generated_headers
-    mode: generate_from_chipyard_config
-    fingerprint: auto
 
 soc:
   core:

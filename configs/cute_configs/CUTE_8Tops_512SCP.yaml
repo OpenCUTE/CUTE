@@ -1,0 +1,43 @@
+version: 1
+id: CUTE_8Tops_512SCP
+description: 8Tops + 512x512x64 tile
+tensor:
+  M: 512
+  N: 512
+  K: 64
+matrix:
+  M: 8
+  N: 8
+reduce_width_byte: 32
+outside_data_width: 512
+result_width_byte: 4
+mmu_addr_width: 39
+llc_source_max_num: 64
+result_fifo_depth: 8
+convolution:
+  dim_max: 65535
+  input_max: 16383
+  kernel_size_max: 15
+  stride_size_max: 3
+  application_max_tensor_size: 65535
+mmu:
+  vpn_bits: 12
+  ppn_bits: 12
+  pgidx_bits: 12
+  vaddr_bits: 39
+  paddr_bits: 39
+  core_paddr_bits: 64
+fpe:
+  min_group_size: 16
+  min_data_type_width: 4
+  scale_element_width: 8
+  comp_tree_layers: 4
+  fp8_comp_tree_layers: 4
+wip:
+  vector_width: 256
+  memory_data_width: 64
+  vec_task_inst_buffer_depth: 32
+  vec_task_inst_buffer_size: 8
+  vec_task_data_buffer_depth: 4
+  enable_perf_counter: false
+  memory_source_max_num: 64
