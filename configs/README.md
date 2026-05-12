@@ -1,8 +1,11 @@
 # CUTE configs 目录说明
 
-`configs/` 是 CUTE 的声明式配置层。这里的 YAML 描述 CUTE 加速器参数、Chipyard SoC 组合、ISA/datatype、向量能力、内存模型和运行策略。
+`configs/` 是 CUTE 的声明式配置层。这里的 YAML 描述 CUTE
+加速器参数、Chipyard SoC 组合、ISA/datatype、向量能力、内存模型和运行策略。
 
-当前方向是：**Config YAML 是真相源**。C 侧头文件已经由 YAML 生成；Scala 侧仍有一部分静态配置保留在 `src/main/scala/CUTEParameters.scala`，后续会拆到 `HardwareConfig.scala` 和 `InstConfig.scala`。
+当前方向是：**Config YAML 是真相源**。C 侧头文件已经由 YAML 生成；
+Scala 侧配置由 `HardwareConfig.scala` 和 `InstConfig.scala` 承载，
+并可由 YAML 直接检查或更新。
 
 ## 目录结构
 
@@ -43,7 +46,6 @@ configs/
     └── trace_filter.schema.json
 ```
 
-
 ## 配置层级关系
 
 ```text
@@ -58,7 +60,8 @@ HWConfig（可运行目标）
 
 ### CuteConfig
 
-`cute_configs/*.yaml` 描述 CUTE 加速器本体的硬件参数预设，是 `CuteParams` 静态预设的 YAML 版本。
+`cute_configs/*.yaml` 描述 CUTE 加速器本体的硬件参数预设，是
+`CuteParams` 静态预设的 YAML 版本。
 字段名直接对齐 Scala `CuteParams` 参数名；二级对象用 schema 中的
 `x-scala-constructor` 标注构造器，例如 `MMUParams = CuteMMUParams(...)`。
 
@@ -103,7 +106,9 @@ FPEparams:
 
 ### ChipyardConfig
 
-`chipyard_configs/*.yaml` 描述一个 Chipyard SoC 配置：它通过 `cute.config` 引用 CUTE 参数预设，通过 `cute.isa.version` 引用 ISA 版本，并声明 core/bus/cache/vector 等 SoC 事实。
+`chipyard_configs/*.yaml` 描述一个 Chipyard SoC 配置：它通过
+`cute.config` 引用 CUTE 参数预设，通过 `cute.isa.version` 引用 ISA
+版本，并声明 core/bus/cache/vector 等 SoC 事实。
 
 ```yaml
 # configs/chipyard_configs/cute4tops_scp128.yaml
@@ -139,10 +144,11 @@ capability:
   fused_ops: []
 ```
 
-
 ### HWConfig
 
-`hwconfigs/*.yaml` 定义一个可运行目标：`ChipyardConfig + MemoryConfig + SimulatorPolicy`。同一个 ChipyardConfig 可以搭配不同 DRAMSim 配置。
+`hwconfigs/*.yaml` 定义一个可运行目标：
+`ChipyardConfig + MemoryConfig + SimulatorPolicy`。同一个 ChipyardConfig
+可以搭配不同 DRAMSim 配置。
 
 ```yaml
 # configs/hwconfigs/cute4tops_scp128_dramsim48.yaml
@@ -172,15 +178,16 @@ simulator:
 - cfgData 字段布局
 - enum，例如 `ElementDataType` 和 `CMemoryLoaderTaskType`
 
-`ElementDataType` 是当前 datatype 的唯一数据源。C 侧 `cute_fpe.h` 和后续 Scala `ElementDataType` 都应从这里生成。
+`ElementDataType` 是当前 datatype 的唯一数据源。C 侧 `cute_fpe.h`
+和 Scala `ElementDataType` 都应从这里生成。
 
 ### VectorVersion
 
 `vector_versions/*.yaml` 描述 SoC 中是否有软件可见的向量实现：
 
-| id | 含义 |
-|----|------|
-| `none` | 不启用向量扩展 |
+| id           | 含义                 |
+|--------------|----------------------|
+| `none`       | 不启用向量扩展       |
 | `saturn_rvv` | 使用 Saturn RVV 路径 |
 
 ## 校验
@@ -188,7 +195,7 @@ simulator:
 所有 YAML manifest 都应通过 schema 和跨文件引用校验：
 
 ```bash
-python3 tools/runner/cute-check-config.py
+python3 tools/runner/cute-check-config.py --scan
 ```
 
 校验内容：
@@ -198,6 +205,38 @@ python3 tools/runner/cute-check-config.py
 - 跨文件引用存在：`HWConfig -> ChipyardConfig -> CuteConfig / ISA / Vector`
 - `memory.config` 对应的 DRAMSim2 配置目录存在
 - ISA 指令 funct、字段和 enum 基本一致性
+
+常用细分检查：
+
+```bash
+# 检查所有 CuteConfig
+python3 tools/runner/cute-check-config.py --cute-config --all
+
+# 检查单个 CuteConfig
+python3 tools/runner/cute-check-config.py --cute-config CUTE_2Tops_64SCP
+
+# 检查所有 HWConfig，并递归检查引用的 config
+python3 tools/runner/cute-check-config.py --hwconfig --all
+
+# 检查单个 ChipyardConfig，并递归检查它引用的 config
+python3 tools/runner/cute-check-config.py --chipyard-config cute4tops_scp128
+```
+
+`--all` 可用于 `--chipyard-config`、`--cute-config`、
+`--cute-isa-version`、`--vector-version`、`--trace-filter`、
+`--hwconfig` 和 `--project`。输出会列出本次检查过的 config/YAML
+和使用到的 JSON schema。
+
+## 关键脚本
+
+- `tools/runner/cute-check-config.py`: 校验 config YAML、JSON schema
+  和跨文件引用。
+- `tools/runner/cute-gen-config.py`: 从 ChipyardConfig 生成 C 头文件和
+  ISA JSON。
+- `tools/runner/cute-gen-scala-config.py`: 生成、检查或更新 Scala 配置。
+- `tools/trace/check_cute_trace.py`: 校验 trace catalog 和 trace filter。
+- `tools/trace/gen_cute_trace.py`: 生成 Scala / Python trace API。
+- `tools/trace/decode_cute_trace.py`: 解码 Verilator compact trace 日志。
 
 ## 从 Config 到产物
 
@@ -219,7 +258,7 @@ build/
 ### 步骤 1: 校验配置
 
 ```bash
-python3 tools/runner/cute-check-config.py
+python3 tools/runner/cute-check-config.py --scan
 ```
 
 ### 步骤 2: 生成 C 头文件和 ISA JSON
@@ -236,6 +275,14 @@ python3 tools/runner/cute-gen-config.py \
 build/chipyard_configs/cute4tops_scp128/generated/
 ```
 
+如果输入 YAML 的指纹没有变化，脚本会跳过重复生成；需要强制重生成时加 `--force`：
+
+```bash
+python3 tools/runner/cute-gen-config.py \
+  --chipyard-config cute4tops_scp128 \
+  --force
+```
+
 生成逻辑：
 
 ```text
@@ -245,19 +292,9 @@ chipyard_configs/<id>.yaml
   └── soc.vector.version -> vector_versions/<vector_id>.yaml
 ```
 
-### 步骤 3: 编译 Verilator 仿真器
+### 步骤 3: 预览生成 Scala 配置
 
-仿真器编译脚本仍沿用现有 Chipyard 流程：
-
-```bash
-bash scripts/build-simulator.sh <ChipyardConfigClassName>
-```
-
-当前这一步还需要手动传 Chipyard Scala config class。后续应由 `chipyard_configs/*.yaml` 生成 Chipyard `CuteConfig.scala`，再由统一入口根据 HWConfig 自动调用。
-
-### 步骤 4: 预览生成 Scala 配置
-
-Scala 拆分还没有接入源码树时，可以先生成到 review 目录：
+默认可以先生成到 review 目录：
 
 ```bash
 python3 tools/runner/cute-gen-scala-config.py \
@@ -273,6 +310,21 @@ build/generated-scala/
 └── InstConfig.scala
 ```
 
+当前源码树已经有生成版 Scala 配置时，可以直接检查是否漂移：
+
+```bash
+python3 tools/runner/cute-gen-scala-config.py --check
+```
+
+需要把 YAML 生成结果同步到 `src/main/scala` 时使用 `--update`：
+
+```bash
+python3 tools/runner/cute-gen-scala-config.py --update
+```
+
+`--update` 只会写入内容变化的文件；如果生成内容与现有文件一致，会输出
+`[SKIP]` 并保持文件不变。比较时会忽略自动生成头里的 `Generated at` 时间戳。
+
 `HardwareConfig.scala` 的字段顺序和二级对象构造器由
 `configs/schemas/cute_config.schema.json` 描述。普通字段名直接等于 Scala
 参数名；带 `x-scala-constructor` 的对象会生成嵌套构造器调用。
@@ -280,9 +332,7 @@ build/generated-scala/
 YAML 中没有显式出现的字段不会被写入生成结果；最终由 `CuteParams` case
 class 自身的默认值接管。
 
-这两个文件目前用于 review 和下一阶段迁移准备。真正启用时，应先从
-`CUTEParameters.scala` 移除同名手写定义，再把输出目录切到
-`src/main/scala`。
+### 步骤 4: 生成仿真目标文件
 
 ### 步骤 5: 运行测试与解码 Trace
 
@@ -295,59 +345,22 @@ python3 tools/trace/decode_cute_trace.py \
   -o trace_output.jsonl
 ```
 
-## Scala 参数拆分计划
-
-当前 `src/main/scala/CUTEParameters.scala` 仍同时包含：
-
-- `CuteParams` 静态预设，例如 `CUTE_4Tops_128SCP`
-- `CuteParams` 数据结构、校验和派生参数
-- 指令配置，例如 `CuteInstConfigs` / `YGJKInstConfigs`
-- datatype enum，例如 `ElementDataType`
-- Chisel Bundle / IO / helper
-
-后续拆分目标：
-
-```text
-src/main/scala/HardwareConfig.scala
-  从 configs/cute_configs/*.yaml 生成或半生成
-  保存 CUTE_4Tops_128SCP 这类 CuteParams 预设
-
-src/main/scala/InstConfig.scala
-  从 configs/cute_isa_versions/*.yaml 生成或半生成
-  保存 InstField、CuteInstConfig、YGJKInstConfigs、CuteInstConfigs、
-  ElementDataType、CMemoryLoaderTaskType
-
-src/main/scala/CUTEParameters.scala
-  手写保留
-  保存 CuteParams case class、require、派生 def、CUTEImplParameters、
-  CuteModule/CuteBundle 和各类 Bundle/IO
-```
-
-迁移时需要保留兼容 facade：
-
-```scala
-object CuteParams {
-  def baseParams = CuteParams()
-  def CUTE_4Tops_128SCP = HardwareConfig.CUTE_4Tops_128SCP
-}
-```
-
-这样现有 Chipyard 代码中的 `CuteParams.CUTE_4Tops_128SCP` 可以继续编译，同时新增配置以 YAML 为真相源。
-
-详细拆分计划见：
-
-```text
-CUTE/plans/cx/cute_config_scala_refactor_plan.md
-```
-
 ## TODO: 统一入口脚本
 
 当前各步骤仍是独立脚本。目标入口：
 
 ```bash
-python3 tools/runner/cute-build.py --hwconfig cute4tops_scp128_dramsim48 --step config
-python3 tools/runner/cute-build.py --hwconfig cute4tops_scp128_dramsim48 --step simulator
-python3 tools/runner/cute-run.py   --hwconfig cute4tops_scp128_dramsim48 --test <test_binary>
+python3 tools/runner/cute-build.py \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --step genfiles
+
+python3 tools/runner/cute-build.py \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --step simulator
+
+python3 tools/runner/cute-run.py \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --test <test_binary>
 ```
 
 统一入口应从 HWConfig 自动解析：
@@ -361,11 +374,9 @@ python3 tools/runner/cute-run.py   --hwconfig cute4tops_scp128_dramsim48 --test 
 
 ## 详细文档
 
-| 文档 | 内容 |
-|------|------|
-| `configs/plan.md` | Config-driven 构建流程总计划 |
-| `plans/cx/cute_config_scala_refactor_plan.md` | README 与 Scala 参数拆分计划 |
-| `configs/schemas/cute_config.schema.json` | CuteConfig schema |
-| `configs/schemas/chipyard_config.schema.json` | ChipyardConfig schema |
-| `configs/schemas/cute_isa_version.schema.json` | ISA/datatype schema |
-| `configs/schemas/hwconfig.schema.json` | HWConfig schema |
+- `configs/plan.md`: Config-driven 构建流程总计划。
+- `plans/cx/cute_config_scala_refactor_plan.md`: README 与 Scala 参数拆分计划。
+- `configs/schemas/cute_config.schema.json`: CuteConfig schema。
+- `configs/schemas/chipyard_config.schema.json`: ChipyardConfig schema。
+- `configs/schemas/cute_isa_version.schema.json`: ISA/datatype schema。
+- `configs/schemas/hwconfig.schema.json`: HWConfig schema。

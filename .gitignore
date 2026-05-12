@@ -11,6 +11,7 @@ target/
 # *.*
 tool/*
 build/chipyard/simulator-*
+build/generated-scala/
 .metals
 .vscode
 __pycache__

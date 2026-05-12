@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Generate Scala config facts from CUTE YAML manifests.
 
-This generator intentionally defaults to build/generated-scala instead of
-src/main/scala. CUTEParameters.scala still owns the live definitions today, so
-generated files should be reviewed before they are moved into the source tree.
+This generator defaults to build/generated-scala for review, and can also
+update src/main/scala directly once generated Scala files are the source-tree
+truth.
 """
 
 from __future__ import annotations
@@ -71,6 +71,19 @@ def sorted_yaml_files(directory: Path) -> List[Path]:
         path for path in directory.glob("*.yaml")
         if path.is_file() and not path.name.startswith(".")
     )
+
+
+def normalize_generated_content(text: str) -> str:
+    """Return generated text with volatile header fields removed."""
+    lines = [
+        line for line in text.splitlines()
+        if not line.startswith("// Generated at:")
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def generated_content_matches(existing: str, generated: str) -> bool:
+    return normalize_generated_content(existing) == normalize_generated_content(generated)
 
 
 class ScalaConfigGenerator:
@@ -200,13 +213,11 @@ class ScalaConfigGenerator:
         lines.append(")")
         return lines
 
-    def generate_hardware_config(
+    def render_hardware_config(
         self,
         sources: List[CuteConfigSource],
         schema: SchemaSource,
-        output_dir: Path,
-    ) -> Path:
-        out = output_dir / "HardwareConfig.scala"
+    ) -> str:
         lines = self.emit_header(
             "configs/cute_configs/*.yaml and %s" % schema.path.relative_to(self.root)
         )
@@ -242,7 +253,16 @@ class ScalaConfigGenerator:
         lines.append("}")
         lines.append("")
 
-        out.write_text("\n".join(lines), encoding="utf-8")
+        return "\n".join(lines)
+
+    def generate_hardware_config(
+        self,
+        sources: List[CuteConfigSource],
+        schema: SchemaSource,
+        output_dir: Path,
+    ) -> Path:
+        out = output_dir / "HardwareConfig.scala"
+        out.write_text(self.render_hardware_config(sources, schema), encoding="utf-8")
         self.log("generated: %s" % out)
         return out
 
@@ -403,8 +423,7 @@ class ScalaConfigGenerator:
         lines.append("")
         return lines
 
-    def generate_inst_config(self, isa: IsaSource, output_dir: Path) -> Path:
-        out = output_dir / "InstConfig.scala"
+    def render_inst_config(self, isa: IsaSource) -> str:
         isa_id = str(isa.doc.get("id", isa.path.stem))
         lines = self.emit_header("configs/cute_isa_versions/%s.yaml" % isa_id)
         lines.extend([
@@ -430,36 +449,116 @@ class ScalaConfigGenerator:
             if enum_name not in emitted:
                 lines.extend(self.emit_enum_object(enum_name, enums[enum_name] or {}))
 
-        out.write_text("\n".join(lines), encoding="utf-8")
+        return "\n".join(lines)
+
+    def generate_inst_config(self, isa: IsaSource, output_dir: Path) -> Path:
+        out = output_dir / "InstConfig.scala"
+        out.write_text(self.render_inst_config(isa), encoding="utf-8")
         self.log("generated: %s" % out)
         return out
+
+    def generated_outputs(self, isa_id: str) -> Dict[str, str]:
+        cute_configs = self.load_cute_configs()
+        isa = self.load_isa(isa_id)
+        cute_schema = self.load_cute_schema()
+        return {
+            "HardwareConfig.scala": self.render_hardware_config(cute_configs, cute_schema),
+            "InstConfig.scala": self.render_inst_config(isa),
+        }
+
+    def write_outputs(
+        self,
+        output_dir: Path,
+        outputs: Dict[str, str],
+        skip_unchanged: bool,
+    ) -> Dict[Path, str]:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        results: Dict[Path, str] = {}
+        for filename, content in outputs.items():
+            path = output_dir / filename
+            if path.exists() and skip_unchanged:
+                existing = path.read_text(encoding="utf-8")
+                if generated_content_matches(existing, content):
+                    results[path] = "unchanged"
+                    continue
+                results[path] = "updated"
+            elif path.exists():
+                results[path] = "updated"
+            else:
+                results[path] = "created"
+            path.write_text(content, encoding="utf-8")
+        return results
+
+    def check_outputs(self, output_dir: Path, outputs: Dict[str, str]) -> Dict[Path, str]:
+        results: Dict[Path, str] = {}
+        for filename, content in outputs.items():
+            path = output_dir / filename
+            if not path.exists():
+                results[path] = "missing"
+                continue
+            existing = path.read_text(encoding="utf-8")
+            results[path] = "ok" if generated_content_matches(existing, content) else "stale"
+        return results
+
+    def print_write_results(self, results: Dict[Path, str]) -> None:
+        labels = {
+            "created": "CREATE",
+            "updated": "UPDATE",
+            "unchanged": "SKIP",
+        }
+        for path, status in results.items():
+            print("[%s] %s" % (labels[status], path))
+
+    def print_check_results(self, results: Dict[Path, str]) -> None:
+        labels = {
+            "ok": "OK",
+            "missing": "MISSING",
+            "stale": "STALE",
+        }
+        for path, status in results.items():
+            print("[%s] %s" % (labels[status], path))
 
     def run(
         self,
         output_dir: Path,
         isa_id: str,
         force: bool,
+        update: bool,
+        check: bool,
     ) -> int:
         output_dir = output_dir.resolve()
-        output_dir.mkdir(parents=True, exist_ok=True)
+        outputs = self.generated_outputs(isa_id)
 
-        hardware_out = output_dir / "HardwareConfig.scala"
-        inst_out = output_dir / "InstConfig.scala"
+        if check:
+            results = self.check_outputs(output_dir, outputs)
+            self.print_check_results(results)
+            stale = [path for path, status in results.items() if status != "ok"]
+            if stale:
+                print("[FAIL] generated Scala config files are stale in %s" % output_dir)
+                return 1
+            print("[OK] generated Scala config files are up to date in %s" % output_dir)
+            return 0
+
+        if update:
+            results = self.write_outputs(output_dir, outputs, skip_unchanged=True)
+            self.print_write_results(results)
+            changed = [path for path, status in results.items() if status != "unchanged"]
+            if changed:
+                print("[OK] updated Scala config files in %s" % output_dir)
+            else:
+                print("[OK] no Scala config changes in %s" % output_dir)
+            return 0
+
         if not force:
-            existing = [str(path) for path in (hardware_out, inst_out) if path.exists()]
+            existing = [str(output_dir / filename) for filename in outputs if (output_dir / filename).exists()]
             if existing:
                 raise ConfigError(
                     "refusing to overwrite existing generated Scala files without --force: "
                     + ", ".join(existing)
                 )
 
-        cute_configs = self.load_cute_configs()
-        isa = self.load_isa(isa_id)
-        cute_schema = self.load_cute_schema()
-
-        self.generate_hardware_config(cute_configs, cute_schema, output_dir)
-        self.generate_inst_config(isa, output_dir)
-
+        results = self.write_outputs(output_dir, outputs, skip_unchanged=False)
+        self.print_write_results(results)
         print("[OK] generated Scala config files in %s" % output_dir)
         return 0
 
@@ -476,7 +575,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Output directory (default: build/generated-scala)",
+        help="Output directory for preview generation (default: build/generated-scala)",
     )
     parser.add_argument(
         "--isa-version",
@@ -486,7 +585,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite existing generated Scala files",
+        help="Overwrite existing generated Scala files in output-dir mode",
+    )
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Update generated files directly in src/main/scala, skipping unchanged files",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Check whether generated files are up to date without writing (default target: src/main/scala)",
     )
     parser.add_argument(
         "--verbose",
@@ -501,13 +610,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
     try:
         root = Path(args.root).resolve() if args.root else find_cute_root()
+        if args.update and args.check:
+            raise ConfigError("--update cannot be combined with --check")
+        if args.update and args.output_dir:
+            raise ConfigError("--update writes to src/main/scala and cannot be combined with --output-dir")
         output_dir = (
             Path(args.output_dir)
             if args.output_dir
+            else root / "src" / "main" / "scala"
+            if args.update or args.check
             else root / "build" / "generated-scala"
         )
         gen = ScalaConfigGenerator(root, verbose=args.verbose)
-        return gen.run(output_dir, args.isa_version, args.force)
+        return gen.run(output_dir, args.isa_version, args.force, args.update, args.check)
     except ConfigError as exc:
         print("ERROR: %s" % exc, file=sys.stderr)
         return 2

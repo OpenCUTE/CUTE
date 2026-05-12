@@ -39,6 +39,8 @@ MANIFEST_DIRS = {
     "trace_filter": "configs/trace_filters",
 }
 
+ALL_SELECTED = "__all__"
+
 class CheckError(RuntimeError):
     pass
 
@@ -48,6 +50,7 @@ class Issue:
     severity: str
     location: str
     message: str
+    source: Optional[str] = None
 
     def is_error(self) -> bool:
         return self.severity == "ERROR"
@@ -111,6 +114,10 @@ class Checker:
         self.cwd = Path.cwd().resolve()
         self.verbose = verbose
         self._schema_cache: Dict[str, Dict[str, Any]] = {}
+        self._checked_configs: List[Path] = []
+        self._checked_config_keys: Set[str] = set()
+        self._used_json: List[Path] = []
+        self._used_json_keys: Set[str] = set()
 
     def log(self, message: str) -> None:
         if self.verbose:
@@ -122,11 +129,26 @@ class Checker:
         except ValueError:
             return str(path)
 
+    def record_checked_config(self, path: Path) -> None:
+        key = str(path.resolve())
+        if key not in self._checked_config_keys:
+            self._checked_config_keys.add(key)
+            self._checked_configs.append(path)
+
+    def record_used_json(self, path: Path) -> None:
+        key = str(path.resolve())
+        if key not in self._used_json_keys:
+            self._used_json_keys.add(key)
+            self._used_json.append(path)
+
     def schema_path(self, kind: str) -> Path:
         return self.root / SCHEMA_FILES[kind]
 
     def manifest_path(self, kind: str, manifest_id: str) -> Path:
         return self.root / MANIFEST_DIRS[kind] / ("%s.yaml" % manifest_id)
+
+    def manifest_paths(self, kind: str) -> List[Path]:
+        return sorted((self.root / MANIFEST_DIRS[kind]).glob("*.yaml"))
 
     def resolve_arg_path(self, value: str, kind: Optional[str] = None) -> Path:
         raw = Path(value)
@@ -177,17 +199,19 @@ class Checker:
         return data
 
     def schema(self, kind: str) -> Dict[str, Any]:
+        self.record_used_json(self.schema_path(kind))
         if kind not in self._schema_cache:
             self._schema_cache[kind] = self.load_json(self.schema_path(kind))
         return self._schema_cache[kind]
 
     def validate_schema(self, doc: Dict[str, Any], schema_kind: str, doc_path: Path) -> List[Issue]:
         schema = self.schema(schema_kind)
+        schema_source = self.rel(self.schema_path(schema_kind))
         validator = jsonschema.Draft7Validator(schema)
         issues: List[Issue] = []
         for error in sorted(validator.iter_errors(doc), key=lambda err: list(err.absolute_path)):
             location = "%s:%s" % (self.rel(doc_path), json_path(error.absolute_path))
-            issues.append(Issue("ERROR", location, error.message))
+            issues.append(Issue("ERROR", location, error.message, source=schema_source))
         return issues
 
     def try_load_yaml(self, path: Path, issues: List[Issue], location: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -203,6 +227,7 @@ class Checker:
 
     def collect_manifest(self, kind: str, path: Path) -> Tuple[List[Issue], Optional[Dict[str, Any]], Path]:
         issues: List[Issue] = []
+        self.record_checked_config(path)
         self.log("load %s: %s" % (kind, self.rel(path)))
         doc = self.try_load_yaml(path, issues)
         if doc is None:
@@ -221,6 +246,9 @@ class Checker:
 
     def collect_chipyard_config(self, value: str) -> Tuple[List[Issue], Optional[Dict[str, Any]], Path]:
         return self.collect_manifest("chipyard_config", self.resolve_arg_path(value, "chipyard_config"))
+
+    def collect_cute_config(self, value: str) -> Tuple[List[Issue], Optional[Dict[str, Any]], Path]:
+        return self.collect_manifest("cute_config", self.resolve_arg_path(value, "cute_config"))
 
     def collect_isa_version(self, value: str) -> Tuple[List[Issue], Optional[Dict[str, Any]], Path]:
         return self.collect_manifest("cute_isa_version", self.resolve_arg_path(value, "cute_isa_version"))
@@ -280,6 +308,7 @@ class Checker:
         ref_path = self.manifest_path(kind, version_id)
         self.log("resolve %s '%s' -> %s" % (kind, version_id, self.rel(ref_path)))
         if not ref_path.exists():
+            self.record_checked_config(ref_path)
             issues.append(Issue("ERROR", location, "referenced %s '%s' not found at %s" % (kind, version_id, self.rel(ref_path))))
             return issues
         ref_issues, _doc, _path = self.collect_manifest(kind, ref_path)
@@ -448,6 +477,7 @@ class Checker:
         if isinstance(chipyard_id, str):
             chipyard_path = self.manifest_path("chipyard_config", chipyard_id)
             if not chipyard_path.exists():
+                self.record_checked_config(chipyard_path)
                 issues.append(Issue("ERROR", "%s:chipyard_config" % self.rel(path), "missing chipyard config: %s" % self.rel(chipyard_path)))
         memory = hwconfig.get("memory", {})
         if isinstance(memory, dict) and memory.get("model") == "dramsim2":
@@ -463,6 +493,7 @@ class Checker:
     def collect_hwconfig(self, value: str) -> Tuple[List[Issue], Optional[ResolvedHWConfig], Optional[Dict[str, Any]], Path]:
         path = self.resolve_arg_path(value, "hwconfig")
         issues: List[Issue] = []
+        self.record_checked_config(path)
         self.log("load hwconfig: %s" % self.rel(path))
         hwconfig = self.try_load_yaml(path, issues)
         if hwconfig is None:
@@ -528,6 +559,7 @@ class Checker:
     def collect_project(self, value: str) -> Tuple[List[Issue], Optional[Dict[str, Any]], Path]:
         path = self.resolve_arg_path(value)
         issues: List[Issue] = []
+        self.record_checked_config(path)
         self.log("load project: %s" % self.rel(path))
         project = self.try_load_yaml(path, issues)
         if project is None:
@@ -559,6 +591,7 @@ class Checker:
                 filter_path = self.manifest_path("trace_filter", str(filter_name))
                 self.log("resolve trace filter '%s' -> %s" % (filter_name, self.rel(filter_path)))
                 if not filter_path.exists():
+                    self.record_checked_config(filter_path)
                     issues.append(Issue("ERROR", "%s:trace.default_filters" % self.rel(path), "missing trace filter: %s" % filter_name))
                     continue
                 filter_issues, _doc, _path = self.collect_manifest("trace_filter", filter_path)
@@ -654,25 +687,56 @@ class Checker:
 
     def print_issues(self, issues: Sequence[Issue]) -> None:
         for issue in issues:
-            print("%s: %s: %s" % (issue.severity, issue.location, issue.message), file=sys.stderr)
+            source = " [schema: %s]" % issue.source if issue.source else ""
+            print("%s: %s%s: %s" % (issue.severity, issue.location, source, issue.message), file=sys.stderr)
+
+    def print_path_list(self, title: str, paths: Sequence[Path]) -> None:
+        print("%s (%d):" % (title, len(paths)))
+        if not paths:
+            print("  - (none)")
+            return
+        for path in paths:
+            print("  - %s" % self.rel(path))
 
     def finish(self, label: str, issues: Sequence[Issue]) -> int:
         errors = sum(1 for issue in issues if issue.is_error())
         warnings = len(issues) - errors
         if errors:
             print("[FAIL] %s (%d error%s, %d warning%s)" % (label, errors, "" if errors == 1 else "s", warnings, "" if warnings == 1 else "s"))
+            self.print_path_list("checked configs", self._checked_configs)
+            self.print_path_list("used json", self._used_json)
             self.print_issues(issues)
             return 1
         if warnings:
             print("[OK] %s (%d warning%s)" % (label, warnings, "" if warnings == 1 else "s"))
+            self.print_path_list("checked configs", self._checked_configs)
+            self.print_path_list("used json", self._used_json)
             self.print_issues(issues)
             return 0
         print("[OK] %s" % label)
+        self.print_path_list("checked configs", self._checked_configs)
+        self.print_path_list("used json", self._used_json)
         return 0
 
     def check_chipyard_config_cli(self, value: str) -> int:
         issues, _doc, path = self.collect_chipyard_config(value)
         return self.finish("chipyard-config %s" % self.rel(path), issues)
+
+    def check_cute_config_cli(self, value: str) -> int:
+        issues, _doc, path = self.collect_cute_config(value)
+        return self.finish("cute-config %s" % self.rel(path), issues)
+
+    def check_manifest_cli(self, kind: str, label: str, value: str) -> int:
+        issues, _doc, path = self.collect_manifest(kind, self.resolve_arg_path(value, kind))
+        return self.finish("%s %s" % (label, self.rel(path)), issues)
+
+    def check_manifest_all_cli(self, kind: str, label: str) -> int:
+        issues: List[Issue] = []
+        paths = self.manifest_paths(kind)
+        for path in paths:
+            manifest_issues, _doc, _path = self.collect_manifest(kind, path)
+            issues.extend(manifest_issues)
+        return self.finish("%s all (%d file%s)" % (label, len(paths), "" if len(paths) == 1 else "s"), issues)
 
     def check_hwconfig_cli(self, value: str) -> int:
         issues, resolved, _doc, path = self.collect_hwconfig(value)
@@ -684,6 +748,14 @@ class Checker:
             )
         return rc
 
+    def check_hwconfig_all_cli(self) -> int:
+        issues: List[Issue] = []
+        paths = sorted((self.root / "configs/hwconfigs").glob("*.yaml"))
+        for path in paths:
+            hw_issues, _resolved, _doc, _path = self.collect_hwconfig(str(path))
+            issues.extend(hw_issues)
+        return self.finish("hwconfig all (%d file%s)" % (len(paths), "" if len(paths) == 1 else "s"), issues)
+
     def check_project_cli(self, value: str) -> int:
         issues, project, path = self.collect_project(value)
         rc = self.finish("project %s" % self.rel(path), issues)
@@ -691,6 +763,14 @@ class Checker:
             variant_names = [str(variant.get("name")) for variant in self.variants(project)]
             print("variants: %s" % (", ".join(variant_names) if variant_names else "(none)"))
         return rc
+
+    def check_project_all_cli(self) -> int:
+        issues: List[Issue] = []
+        paths = sorted((self.root / "cute-sdk").glob("**/project.yaml"))
+        for path in paths:
+            project_issues, _project, _path = self.collect_project(str(path))
+            issues.extend(project_issues)
+        return self.finish("project all (%d file%s)" % (len(paths), "" if len(paths) == 1 else "s"), issues)
 
     def check_hw_project_cli(self, hw_value: str, project_value: str) -> int:
         hw_issues, resolved, _hw_doc, hw_path = self.collect_hwconfig(hw_value)
@@ -701,6 +781,8 @@ class Checker:
 
         all_match = True
         print("[OK] hwconfig/project inputs")
+        self.print_path_list("checked configs", self._checked_configs)
+        self.print_path_list("used json", self._used_json)
         for variant in self.variants(project):
             result = self.match_project_variant(project, variant, resolved)
             if result.status != "MATCH":
@@ -744,6 +826,8 @@ class Checker:
             return self.finish("scan inputs", issues)
 
         print("[OK] scan inputs")
+        self.print_path_list("checked configs", self._checked_configs)
+        self.print_path_list("used json", self._used_json)
         rows: List[Tuple[str, str, str, str, str]] = []
         for project_path, project in projects:
             for variant in self.variants(project):
@@ -776,9 +860,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Phase 0 CUTE manifest/schema/reference checker")
     parser.add_argument("--root", help="CUTE root directory. Defaults to auto-detection.")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed check steps.")
-    parser.add_argument("--chipyard-config", help="Check one configs/chipyard_configs/*.yaml manifest or id.")
-    parser.add_argument("--hwconfig", help="Check one configs/hwconfigs/*.yaml manifest or id.")
-    parser.add_argument("--project", help="Check one cute-sdk/**/project.yaml manifest.")
+    parser.add_argument("--chipyard-config", nargs="?", const=ALL_SELECTED, metavar="ID_OR_PATH", help="Check one configs/chipyard_configs/*.yaml manifest or id.")
+    parser.add_argument("--cute-config", nargs="?", const=ALL_SELECTED, metavar="ID_OR_PATH", help="Check one configs/cute_configs/*.yaml manifest or id.")
+    parser.add_argument("--cute-isa-version", nargs="?", const=ALL_SELECTED, metavar="ID_OR_PATH", help="Check one configs/cute_isa_versions/*.yaml manifest or id.")
+    parser.add_argument("--vector-version", nargs="?", const=ALL_SELECTED, metavar="ID_OR_PATH", help="Check one configs/vector_versions/*.yaml manifest or id.")
+    parser.add_argument("--trace-filter", nargs="?", const=ALL_SELECTED, metavar="ID_OR_PATH", help="Check one configs/trace_filters/*.yaml manifest or id.")
+    parser.add_argument("--hwconfig", nargs="?", const=ALL_SELECTED, metavar="ID_OR_PATH", help="Check one configs/hwconfigs/*.yaml manifest or id.")
+    parser.add_argument("--project", nargs="?", const=ALL_SELECTED, metavar="PATH", help="Check one cute-sdk/**/project.yaml manifest.")
+    parser.add_argument("--all", action="store_true", help="Check all manifests for the selected kind, e.g. --cute-config --all.")
     parser.add_argument("--scan", action="store_true", help="Scan all HWConfigs and projects and print the match matrix.")
     return parser
 
@@ -788,19 +877,65 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         root = Path(args.root).resolve() if args.root else find_cute_root()
         checker = Checker(root, verbose=args.verbose)
-        selected = sum(1 for value in (args.chipyard_config, args.hwconfig, args.project) if value) + (1 if args.scan else 0)
+        modes = {
+            "chipyard_config": ("--chipyard-config", args.chipyard_config),
+            "cute_config": ("--cute-config", args.cute_config),
+            "cute_isa_version": ("--cute-isa-version", args.cute_isa_version),
+            "vector_version": ("--vector-version", args.vector_version),
+            "trace_filter": ("--trace-filter", args.trace_filter),
+            "hwconfig": ("--hwconfig", args.hwconfig),
+            "project": ("--project", args.project),
+        }
+        selected_modes = [kind for kind, (_flag, value) in modes.items() if value]
+        selected = len(selected_modes) + (1 if args.scan else 0)
         if selected == 0:
-            raise CheckError("select --chipyard-config, --hwconfig, --project, --hwconfig+--project, or --scan")
-        if args.scan and selected > 1:
+            raise CheckError(
+                "select --chipyard-config, --cute-config, --cute-isa-version, --vector-version, "
+                "--trace-filter, --hwconfig, --project, --hwconfig+--project, or --scan"
+            )
+        if args.scan and (selected > 1 or args.all):
             raise CheckError("--scan cannot be combined with other modes")
         if args.scan:
             return checker.scan_cli()
-        if args.hwconfig and args.project and not args.chipyard_config:
+
+        if args.all:
+            if len(selected_modes) != 1:
+                raise CheckError("--all requires exactly one selected kind")
+            kind = selected_modes[0]
+            flag, value = modes[kind]
+            if value != ALL_SELECTED:
+                raise CheckError("%s --all does not take an id/path value" % flag)
+            if kind == "hwconfig":
+                return checker.check_hwconfig_all_cli()
+            if kind == "project":
+                return checker.check_project_all_cli()
+            labels = {
+                "chipyard_config": "chipyard-config",
+                "cute_config": "cute-config",
+                "cute_isa_version": "cute-isa-version",
+                "vector_version": "vector-version",
+                "trace_filter": "trace-filter",
+            }
+            return checker.check_manifest_all_cli(kind, labels[kind])
+
+        for _kind, (flag, value) in modes.items():
+            if value == ALL_SELECTED:
+                raise CheckError("provide an id/path for %s, or add --all" % flag)
+
+        if args.hwconfig and args.project and not any((args.chipyard_config, args.cute_config, args.cute_isa_version, args.vector_version, args.trace_filter)):
             return checker.check_hw_project_cli(args.hwconfig, args.project)
         if selected > 1:
             raise CheckError("only --hwconfig and --project may be combined")
         if args.chipyard_config:
             return checker.check_chipyard_config_cli(args.chipyard_config)
+        if args.cute_config:
+            return checker.check_cute_config_cli(args.cute_config)
+        if args.cute_isa_version:
+            return checker.check_manifest_cli("cute_isa_version", "cute-isa-version", args.cute_isa_version)
+        if args.vector_version:
+            return checker.check_manifest_cli("vector_version", "vector-version", args.vector_version)
+        if args.trace_filter:
+            return checker.check_manifest_cli("trace_filter", "trace-filter", args.trace_filter)
         if args.hwconfig:
             return checker.check_hwconfig_cli(args.hwconfig)
         if args.project:

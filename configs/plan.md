@@ -184,7 +184,7 @@ python3 tools/runner/cute-build.py --hwconfig cute4tops_scp128_dramsim48 --step 
 1. 加载 `configs/hwconfigs/<name>.yaml`
 2. 从 `chipyard_config` 字段加载 ChipyardConfig manifest
 3. 从 `cute.isa.version` / `cute.fpe.version` 加载版本 manifests
-4. `--step config`：调用 `cute-gen-config.py` 生成头文件到 `build/chipyard_configs/<id>/generated/`
+4. `--step genfiles`：调用 `cute-gen-config.py` 生成头文件到 `build/chipyard_configs/<id>/generated/`
 5. `--step simulator`：调用 `scripts/build-simulator.sh`，复制仿真器到 `build/chipyard_configs/<id>/simulator-verilator`
 
 ### Step 3: `cute-run.py` — 统一运行入口
@@ -199,23 +199,7 @@ python3 tools/runner/cute-run.py --hwconfig cute4tops_scp128_dramsim48 --test <t
 2. 找到仿真器：`build/chipyard_configs/<id>/simulator-verilator`
 3. 找到 DRAMSim INI：`configs/memconfigs/<model>/<config>/`
 4. 运行仿真，输出到 `build/chipyard_runs/<hwconfig_name>/<test_name>/`
-5. 自动调用 `decode_cute_trace.py` 生成 `events.jsonl`
-
-### Step 4: Config vs Chipyard 漂移检查
-
-写 `tools/runner/cute-check-drift.py`，比对 Config 声明与 Chipyard 实际值。
-
-```bash
-python3 tools/runner/cute-check-drift.py --chipyard-config cute4tops_scp128
-```
-
-检查方式：
-
-1. 从 Chipyard Config class 导出实际参数（仍用一次 HeaderGenerator 或 sbt 提取）
-2. 与 ChipyardConfig manifest 中的 `cute` / `soc` 字段比对
-3. 不一致时报错并显示差异
-
-这个检查不需要每次构建都跑。CI 或手动定期检查即可。
+5. 自动调用 `decode_cute_trace.py` 生成 `events.jsonl` 
 
 ### Step 5: cutelib 编译路径
 

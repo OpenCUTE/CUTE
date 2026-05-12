@@ -28,5 +28,4 @@ FPEparams:
   MinGroupSize: 16
   MinDataTypeWidth: 4
   ScaleElementWidth: 8
-  cmptreelayers: 4
-  fp8cmptreelayers: 4
+
