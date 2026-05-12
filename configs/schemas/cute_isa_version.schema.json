@@ -6,6 +6,14 @@
   "required": ["version", "id", "source", "groups"],
   "additionalProperties": false,
   "properties": {
+    "enums": {
+      "type": "object",
+      "description": "指令字段中使用的枚举类型定义。codegen 依此生成 C 枚举宏。key 为枚举类型名，与 field 的 enum_ref 对应。",
+      "patternProperties": {
+        "^[A-Za-z][A-Za-z0-9_]*$": { "$ref": "#/definitions/enum_def" }
+      },
+      "additionalProperties": false
+    },
     "version": {
       "type": "integer",
       "const": 1,
@@ -117,6 +125,121 @@
         "return_description": {
           "type": "string",
           "description": "从 Scala CuteInstConfig.returnDescription 抄录的返回值说明。"
+        },
+        "fields": {
+          "type": "object",
+          "description": "指令 cfgData1 / cfgData2 中的字段布局。无参数指令不设此字段。",
+          "additionalProperties": false,
+          "properties": {
+            "cfgData1": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/field" },
+              "description": "cfgData1 (rs1) 中的字段列表，按 lo 从小到大排列。"
+            },
+            "cfgData2": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/field" },
+              "description": "cfgData2 (rs2) 中的字段列表，按 lo 从小到大排列。"
+            }
+          }
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": ["name", "hi", "lo"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+          "description": "字段名（与 Scala CuteInstConfig 中的字段名一致）。"
+        },
+        "hi": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63,
+          "description": "字段高位 bit 索引（inclusive）。"
+        },
+        "lo": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63,
+          "description": "字段低位 bit 索引（inclusive）。"
+        },
+        "description": {
+          "type": "string",
+          "description": "字段含义说明。"
+        },
+        "max_value": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "软件填值不应超过此值（(1 << width) - 1 或更小的约束值）。"
+        },
+        "enum_ref": {
+          "type": "string",
+          "description": "引用 enums 下定义的枚举类型名。codegens 依此生成 C 枚举宏并校验合法值。"
+        }
+      }
+    },
+    "enum_def": {
+      "type": "object",
+      "required": ["bit_width", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "枚举类型用途说明。"
+        },
+        "scala_object": {
+          "type": "string",
+          "description": "对应 Scala object 全名（仅作参考）。"
+        },
+        "bit_width": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "枚举值位宽。"
+        },
+        "values": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/enum_value" },
+          "description": "枚举值列表，按 value 从小到大排列。"
+        }
+      }
+    },
+    "enum_value": {
+      "type": "object",
+      "required": ["name", "value", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+          "description": "枚举成员名（用于生成 C 宏名）。"
+        },
+        "value": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "枚举数值。"
+        },
+        "description": {
+          "type": "string",
+          "description": "枚举成员含义。"
+        },
+        "a_bits": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "A 操作数位宽（bit）。用于生成 datatype.h 的位宽查询宏。"
+        },
+        "b_bits": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "B 操作数位宽（bit）。用于生成 datatype.h 的位宽查询宏。"
+        },
+        "c_bits": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "累加结果位宽（bit）。用于生成 datatype.h 的位宽查询宏。"
         }
       }
     }

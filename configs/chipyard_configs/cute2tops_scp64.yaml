@@ -7,8 +7,6 @@ mode: existing_class
 cute:
   params_symbol: CuteParams.CUTE_2Tops_64SCP
   instances: [0]
-  fpe:
-    version: cute_fpe_v1
   isa:
     version: cute_isa_v1
   generated_headers:

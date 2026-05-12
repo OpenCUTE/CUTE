@@ -191,19 +191,47 @@
       "params": {
         "address": { "description": "TCM 基地址", "default": "0x70000000" },
         "size": { "description": "TCM 大小（字节）", "default": 2097152 },
-        "banks": { "description": "TCM bank 数", "default": 2 }
+        "banks": { "description": "TCM bank 数", "default": 2 },
+        "software_alias_base": {
+          "description": "软件应使用的 TCM 高地址 alias 基地址。高地址 alias 不受 PMA/TLB access fault 影响，比低地址窗口更稳妥",
+          "formula": "alias_base(tile_id) = address + nextPowerOf2(num_tiles) * size + size * tile_id",
+          "derivation": [
+            "replicationSize = nextPowerOf2(num_tiles) * size",
+            "AddressOffsetter 将低地址窗口 OR 上 replicationSize 得到高地址 alias",
+            "tcmMasterReplicator 减掉低半区后，本地 master 路径仅可见高地址 alias"
+          ],
+          "examples_default_2MiB": {
+            "_note": "默认 address=0x70000000, size=0x200000(2MiB)",
+            "1_tile": {
+              "replicationSize": "0x200000",
+              "tile_0": "0x70200000"
+            },
+            "2_tiles": {
+              "replicationSize": "0x400000",
+              "tile_0": "0x70400000",
+              "tile_1": "0x70600000"
+            },
+            "4_tiles": {
+              "replicationSize": "0x800000",
+              "tile_0": "0x70800000",
+              "tile_1": "0x70A00000",
+              "tile_2": "0x70C00000",
+              "tile_3": "0x70E00000"
+            },
+            "8_tiles": {
+              "replicationSize": "0x1000000",
+              "tile_0": "0x71000000",
+              "tile_1": "0x71200000",
+              "tile_2": "0x71400000",
+              "tile_3": "0x71600000",
+              "tile_4": "0x71800000",
+              "tile_5": "0x71A00000",
+              "tile_6": "0x71C00000",
+              "tile_7": "0x71E00000"
+            }
+          }
+        }
       }
-    }
-  },
-
-  "debug": {
-    "debug_modes": {
-      "none":              { "description": "无 debug 输出", "scala_value": "CuteDebugParams.NoDebug" },
-      "aml_debug":         { "description": "开启 AML 调试输出", "scala_value": "CuteDebugParams.AMLDebugEnable" },
-      "cml_debug":         { "description": "开启 CML 调试输出", "scala_value": "CuteDebugParams.CMLDebugEnable" },
-      "all_debug":         { "description": "开启全部模块调试输出", "scala_value": "CuteDebugParams.AllDebugOn" },
-      "shuttle_debug_rob": { "description": "开启 Shuttle Debug ROB（仅 Shuttle 核心）", "scala_mixin": "shuttle.common.WithShuttleDebugROB" },
-      "shuttle_debug_printf": { "description": "开启 Shuttle Debug printf（仅 Shuttle 核心）", "scala_mixin": "shuttle.common.WithShuttleDebugPrintf" }
     }
   },
 

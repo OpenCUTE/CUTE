@@ -12,6 +12,108 @@ rocc:
   opcode: "0x0B"
   cute_internal_offset: 64
 
+enums:
+  ElementDataType:
+    description: 矩阵元素数据类型。软件通过 CONFIG_CONV_PARAMS.element_type 字段填入。同时也是 datatype.h 的唯一数据源。
+    scala_object: cute.ElementDataType
+    bit_width: 4
+    values:
+      - name: DataTypeI8I8I32
+        value: 0
+        description: Int8 * Int8 -> Int32
+        a_bits: 8
+        b_bits: 8
+        c_bits: 32
+      - name: DataTypeF16F16F32
+        value: 1
+        description: FP16 * FP16 -> FP32
+        a_bits: 16
+        b_bits: 16
+        c_bits: 32
+      - name: DataTypeBF16BF16F32
+        value: 2
+        description: BF16 * BF16 -> FP32
+        a_bits: 16
+        b_bits: 16
+        c_bits: 32
+      - name: DataTypeTF32TF32F32
+        value: 3
+        description: TF32 * TF32 -> FP32
+        a_bits: 32
+        b_bits: 32
+        c_bits: 32
+      - name: DataTypeI8U8I32
+        value: 4
+        description: Int8 * UInt8 -> Int32
+        a_bits: 8
+        b_bits: 8
+        c_bits: 32
+      - name: DataTypeU8I8I32
+        value: 5
+        description: UInt8 * Int8 -> Int32
+        a_bits: 8
+        b_bits: 8
+        c_bits: 32
+      - name: DataTypeU8U8I32
+        value: 6
+        description: UInt8 * UInt8 -> Int32
+        a_bits: 8
+        b_bits: 8
+        c_bits: 32
+      - name: DataTypeMxfp8e4m3F32
+        value: 7
+        description: MXFP8 E4M3 * MXFP8 E4M3 -> FP32
+        a_bits: 8
+        b_bits: 8
+        c_bits: 32
+      - name: DataTypeMxfp8e5m2F32
+        value: 8
+        description: MXFP8 E5M2 * MXFP8 E5M2 -> FP32
+        a_bits: 8
+        b_bits: 8
+        c_bits: 32
+      - name: DataTypenvfp4F32
+        value: 9
+        description: NVFP4 * NVFP4 -> FP32
+        a_bits: 4
+        b_bits: 4
+        c_bits: 32
+      - name: DataTypemxfp4F32
+        value: 10
+        description: MXFP4 * MXFP4 -> FP32
+        a_bits: 4
+        b_bits: 4
+        c_bits: 32
+      - name: DataTypefp8e4m3F32
+        value: 11
+        description: FP8 E4M3 * FP8 E4M3 -> FP32
+        a_bits: 8
+        b_bits: 8
+        c_bits: 32
+      - name: DataTypefp8e5m2F32
+        value: 12
+        description: FP8 E5M2 * FP8 E5M2 -> FP32
+        a_bits: 8
+        b_bits: 8
+        c_bits: 32
+  CMemoryLoaderTaskType:
+    description: C 张量（bias / 结果）加载模式。软件通过 CONFIG_CONV_PARAMS.bias_type 字段填入。
+    scala_object: cute.CMemoryLoaderTaskType
+    bit_width: 4
+    values:
+      - name: TaskTypeUndef
+        value: 0
+        description: 未定义
+      - name: TaskTypeTensorZeroLoad
+        value: 1
+        description: 填充零（不加载，C张量初始化为0）
+      - name: TaskTypeTensorRepeatRowLoad
+        value: 2
+        description: 重复加载一行（bias向量广播）
+      - name: TaskTypeTensorLoad
+        value: 3
+        description: 完整加载所有数据
+
 groups:
   ygjk:
     scala_object: cute.YGJKInstConfigs
@@ -73,41 +175,179 @@ groups:
         rocc_funct: 65
         description: 配置A张量的基地址和步长
         return_description: 未使用
+        fields:
+          cfgData1:
+            - name: ApplicationTensor_A_BaseVaddr
+              hi: 63
+              lo: 0
+              description: A张量的基地址
+          cfgData2:
+            - name: ApplicationTensor_A_Stride
+              hi: 63
+              lo: 0
+              description: A张量的步长
       - name: CONFIG_TENSOR_B
         funct: 2
         rocc_funct: 66
         description: 配置B张量的基地址和步长
         return_description: 未使用
+        fields:
+          cfgData1:
+            - name: ApplicationTensor_B_BaseVaddr
+              hi: 63
+              lo: 0
+              description: B张量的基地址
+          cfgData2:
+            - name: ApplicationTensor_B_Stride
+              hi: 63
+              lo: 0
+              description: B张量的步长
       - name: CONFIG_TENSOR_C
         funct: 3
         rocc_funct: 67
         description: 配置C张量的基地址和步长
         return_description: 未使用
+        fields:
+          cfgData1:
+            - name: ApplicationTensor_C_BaseVaddr
+              hi: 63
+              lo: 0
+              description: C张量的基地址
+          cfgData2:
+            - name: ApplicationTensor_C_Stride
+              hi: 63
+              lo: 0
+              description: C张量的步长
       - name: CONFIG_TENSOR_D
         funct: 4
         rocc_funct: 68
         description: 配置D张量的基地址和步长
         return_description: 未使用
+        fields:
+          cfgData1:
+            - name: ApplicationTensor_D_BaseVaddr
+              hi: 63
+              lo: 0
+              description: D张量的基地址
+          cfgData2:
+            - name: ApplicationTensor_D_Stride
+              hi: 63
+              lo: 0
+              description: D张量的步长
       - name: CONFIG_TENSOR_DIM
         funct: 5
         rocc_funct: 69
         description: 配置张量维度(M,N,K)，对于卷积则是(ohow,oc,ic)
         return_description: 未使用
+        fields:
+          cfgData1:
+            - name: Application_M
+              hi: 19
+              lo: 0
+              description: 张量M维度 (max=65536)
+              max_value: 65535
+            - name: Application_N
+              hi: 39
+              lo: 20
+              description: 张量N维度 (max=65536)
+              max_value: 65535
+            - name: Application_K
+              hi: 59
+              lo: 40
+              description: 张量K维度 (max=65536)
+              max_value: 65535
+          cfgData2:
+            - name: kernel_stride
+              hi: 63
+              lo: 0
+              description: 卷积核步长（矩阵乘时为0），64位地址无约束
       - name: CONFIG_CONV_PARAMS
         funct: 6
         rocc_funct: 70
         description: 配置卷积相关参数（element_type, bias_type, kernel_size等）
         return_description: 未使用
+        fields:
+          cfgData1:
+            - name: element_type
+              hi: 7
+              lo: 0
+              description: 元素数据类型
+              max_value: 15
+              enum_ref: ElementDataType
+            - name: bias_type
+              hi: 15
+              lo: 8
+              description: C张量（bias）加载模式
+              max_value: 3
+              enum_ref: CMemoryLoaderTaskType
+            - name: transpose_result
+              hi: 23
+              lo: 16
+              description: 是否转置结果 (Bool, max=1)
+              max_value: 1
+            - name: conv_stride
+              hi: 31
+              lo: 24
+              description: 卷积步长 (max=4)
+              max_value: 3
+            - name: conv_oh_max
+              hi: 47
+              lo: 32
+              description: 卷积输出高度最大值 (max=16384)
+              max_value: 16383
+            - name: conv_ow_max
+              hi: 63
+              lo: 48
+              description: 卷积输出宽度最大值 (max=16384)
+              max_value: 16383
+          cfgData2:
+            - name: kernel_size
+              hi: 7
+              lo: 0
+              description: 卷积核大小 (max=16)
+              max_value: 15
+            - name: conv_oh_per_add
+              hi: 25
+              lo: 16
+              description: 卷积输出高度每次增加量 (max=1024)
+              max_value: 1023
+            - name: conv_ow_per_add
+              hi: 35
+              lo: 26
+              description: 卷积输出宽度每次增加量 (max=1024)
+              max_value: 1023
+            - name: conv_oh_index
+              hi: 45
+              lo: 36
+              description: 卷积输出的高起始值
+              max_value: 1023
+            - name: conv_ow_index
+              hi: 55
+              lo: 46
+              description: 卷积输出的宽起始值
+              max_value: 1023
       - name: CONFIG_SCALE_A
         funct: 7
         rocc_funct: 71
         description: 配置A Scale（量化参数）的基地址
         return_description: 未使用
+        fields:
+          cfgData1:
+            - name: ApplicationScale_A_BaseVaddr
+              hi: 63
+              lo: 0
+              description: A Scale的基地址
       - name: CONFIG_SCALE_B
         funct: 8
         rocc_funct: 72
         description: 配置B Scale（量化参数）的基地址
         return_description: 未使用
+        fields:
+          cfgData1:
+            - name: ApplicationScale_B_BaseVaddr
+              hi: 63
+              lo: 0
+              description: B Scale的基地址
       - name: CLEAR_INST
         funct: 16
         rocc_funct: 80

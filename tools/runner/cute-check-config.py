@@ -22,7 +22,6 @@ except ImportError as exc:  # pragma: no cover - dependency preflight
 
 SCHEMA_FILES = {
     "chipyard_config": "configs/schemas/chipyard_config.schema.json",
-    "cute_fpe_version": "configs/schemas/cute_fpe_version.schema.json",
     "cute_isa_version": "configs/schemas/cute_isa_version.schema.json",
     "vector_version": "configs/schemas/vector_version.schema.json",
     "hwconfig": "configs/schemas/hwconfig.schema.json",
@@ -32,7 +31,6 @@ SCHEMA_FILES = {
 
 MANIFEST_DIRS = {
     "chipyard_config": "configs/chipyard_configs",
-    "cute_fpe_version": "configs/cute_fpe_versions",
     "cute_isa_version": "configs/cute_isa_versions",
     "vector_version": "configs/vector_versions",
     "hwconfig": "configs/hwconfigs",
@@ -211,8 +209,6 @@ class Checker:
         issues.extend(self.validate_schema(doc, kind, path))
         if kind == "chipyard_config":
             issues.extend(self.check_chipyard_config_manifest(doc, path, check_refs=True))
-        elif kind == "cute_fpe_version":
-            issues.extend(self.check_fpe_version_manifest(doc, path))
         elif kind == "cute_isa_version":
             issues.extend(self.check_isa_version_manifest(doc, path))
         elif kind == "vector_version":
@@ -224,27 +220,11 @@ class Checker:
     def collect_chipyard_config(self, value: str) -> Tuple[List[Issue], Optional[Dict[str, Any]], Path]:
         return self.collect_manifest("chipyard_config", self.resolve_arg_path(value, "chipyard_config"))
 
-    def collect_fpe_version(self, value: str) -> Tuple[List[Issue], Optional[Dict[str, Any]], Path]:
-        return self.collect_manifest("cute_fpe_version", self.resolve_arg_path(value, "cute_fpe_version"))
-
     def collect_isa_version(self, value: str) -> Tuple[List[Issue], Optional[Dict[str, Any]], Path]:
         return self.collect_manifest("cute_isa_version", self.resolve_arg_path(value, "cute_isa_version"))
 
     def collect_vector_version(self, value: str) -> Tuple[List[Issue], Optional[Dict[str, Any]], Path]:
         return self.collect_manifest("vector_version", self.resolve_arg_path(value, "vector_version"))
-
-    def chipyard_fpe_version(self, chipyard: Dict[str, Any]) -> Optional[str]:
-        compat = chipyard.get("compatibility", {})
-        if isinstance(compat, dict):
-            fpe = compat.get("fpe", {})
-            if isinstance(fpe, dict) and fpe.get("version"):
-                return fpe.get("version")
-        cute = chipyard.get("cute", {})
-        if isinstance(cute, dict):
-            fpe = cute.get("fpe", {})
-            if isinstance(fpe, dict):
-                return fpe.get("version")
-        return None
 
     def chipyard_isa_version(self, chipyard: Dict[str, Any]) -> Optional[str]:
         compat = chipyard.get("compatibility", {})
@@ -343,38 +323,12 @@ class Checker:
         if not check_refs:
             return issues
 
-        fpe_version = self.chipyard_fpe_version(chipyard)
         isa_version = self.chipyard_isa_version(chipyard)
         vector_version = self.chipyard_vector_version(chipyard)
-        self.log("resolved compatibility: fpe=%s isa=%s vector=%s" % (fpe_version, isa_version, vector_version))
+        self.log("resolved compatibility: isa=%s vector=%s" % (isa_version, vector_version))
         self.log("skip Scala parsing and generated header checks in Phase 0")
-        issues.extend(self.check_manifest_reference("cute_fpe_version", fpe_version, "%s:fpe.version" % self.rel(path)))
         issues.extend(self.check_manifest_reference("cute_isa_version", isa_version, "%s:isa.version" % self.rel(path)))
         issues.extend(self.check_manifest_reference("vector_version", vector_version, "%s:vector.version" % self.rel(path)))
-        return issues
-
-    def check_fpe_version_manifest(self, fpe: Dict[str, Any], path: Path) -> List[Issue]:
-        issues: List[Issue] = []
-        issues.extend(self.check_id_matches_file(fpe, path, "id"))
-        datatypes = fpe.get("datatypes", [])
-        if isinstance(datatypes, list):
-            self.log("check FPE datatypes: %d entries" % len(datatypes))
-            seen: Set[str] = set()
-            for index, dtype in enumerate(datatypes):
-                loc = "%s:datatypes[%d]" % (self.rel(path), index)
-                if not isinstance(dtype, str):
-                    issues.append(Issue("ERROR", loc, "datatype name must be a string"))
-                    continue
-                if not re.match(r"^[A-Za-z][A-Za-z0-9_]*$", dtype):
-                    issues.append(Issue("ERROR", loc, "datatype name has invalid characters: %s" % dtype))
-                if dtype in seen:
-                    issues.append(Issue("ERROR", loc, "duplicate datatype: %s" % dtype))
-                seen.add(dtype)
-        source = fpe.get("source", {})
-        if isinstance(source, dict):
-            scala_object = source.get("scala_object")
-            if scala_object is not None and not re.match(r"^[A-Za-z_][A-Za-z0-9_.]*$", str(scala_object)):
-                issues.append(Issue("ERROR", "%s:source.scala_object" % self.rel(path), "invalid Scala object name"))
         return issues
 
     def check_isa_version_manifest(self, isa: Dict[str, Any], path: Path) -> List[Issue]:
@@ -549,13 +503,17 @@ class Checker:
         if chipyard is None or has_errors(issues):
             return issues, None, hwconfig, path
 
-        fpe_id = self.chipyard_fpe_version(chipyard) or ""
         isa_id = self.chipyard_isa_version(chipyard) or ""
         vector_id = self.chipyard_vector_version(chipyard) or ""
-        self.log("build resolved HWConfig: fpe=%s isa=%s vector=%s" % (fpe_id, isa_id, vector_id))
-        fpe = self.load_yaml(self.manifest_path("cute_fpe_version", fpe_id))
+        self.log("build resolved HWConfig: isa=%s vector=%s" % (isa_id, vector_id))
         isa = self.load_yaml(self.manifest_path("cute_isa_version", isa_id))
         vector = self.load_yaml(self.manifest_path("vector_version", vector_id))
+
+        # Extract datatypes from ISA enums.ElementDataType
+        isa_enums = isa.get("enums", {}) or {}
+        element_dt = isa_enums.get("ElementDataType", {}) or {}
+        isa_values = element_dt.get("values", []) or []
+        datatypes = [v["name"] for v in isa_values if "name" in v]
 
         resolved = ResolvedHWConfig(
             name=str(hwconfig["name"]),
@@ -563,10 +521,10 @@ class Checker:
             tags=list(hwconfig.get("tags", []) or []),
             chipyard_id=chipyard_id,
             chipyard_path=chipyard_path,
-            fpe_version=fpe_id,
+            fpe_version="",
             isa_version=isa_id,
             vector_version=vector_id,
-            datatypes=list(fpe.get("datatypes", []) or []),
+            datatypes=datatypes,
             instructions=self.extract_instruction_names(isa),
             vector_features=dict(vector.get("features", {}) or {}),
             capability=self.chipyard_capability(chipyard),
@@ -642,8 +600,6 @@ class Checker:
             requires = target.get("requires", {})
             if not isinstance(requires, dict):
                 continue
-            for version_id in requires.get("fpe_versions", []) or []:
-                issues.extend(self.check_manifest_reference("cute_fpe_version", str(version_id), "%s:target.requires.fpe_versions" % self.rel(path)))
             for version_id in requires.get("isa_versions", []) or []:
                 issues.extend(self.check_manifest_reference("cute_isa_version", str(version_id), "%s:target.requires.isa_versions" % self.rel(path)))
             for version_id in requires.get("vector_versions", []) or []:
@@ -696,12 +652,6 @@ class Checker:
             return MatchResult("HW_TAG_MISS", reasons)
 
         requires = merged["requires"]
-        fpe_versions = requires.get("fpe_versions", []) or []
-        if fpe_versions and resolved_hw.fpe_version not in fpe_versions:
-            return MatchResult(
-                "FPE_VERSION_MISS",
-                ["requires %s, hw has %s" % (",".join(fpe_versions), resolved_hw.fpe_version)],
-            )
         isa_versions = requires.get("isa_versions", []) or []
         if isa_versions and resolved_hw.isa_version not in isa_versions:
             return MatchResult(
@@ -752,8 +702,8 @@ class Checker:
         rc = self.finish("hwconfig %s" % self.rel(path), issues)
         if rc == 0 and resolved:
             print(
-                "resolved: chipyard=%s fpe=%s isa=%s vector=%s tags=%s"
-                % (resolved.chipyard_id, resolved.fpe_version, resolved.isa_version, resolved.vector_version, ",".join(resolved.tags))
+                "resolved: chipyard=%s isa=%s vector=%s tags=%s"
+                % (resolved.chipyard_id, resolved.isa_version, resolved.vector_version, ",".join(resolved.tags))
             )
         return rc
 
@@ -795,7 +745,7 @@ class Checker:
         resolved_hwconfigs: List[ResolvedHWConfig] = []
         projects: List[Tuple[Path, Dict[str, Any]]] = []
 
-        for kind in ("cute_fpe_version", "cute_isa_version", "vector_version", "chipyard_config", "trace_filter"):
+        for kind in ("cute_isa_version", "vector_version", "chipyard_config", "trace_filter"):
             manifest_dir = self.root / MANIFEST_DIRS[kind]
             for manifest_path in sorted(manifest_dir.glob("*.yaml")):
                 manifest_issues, _doc, _path = self.collect_manifest(kind, manifest_path)
