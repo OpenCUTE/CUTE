@@ -296,7 +296,7 @@ python3 tools/runner/cute-gen-config.py \
 ```text
 Step 1.0 (ISA YAML 字段+枚举)  ──已完成
 Step 1.1 (CuteConfig 预设)      ──已完成
-Step 1.2 (实现 codegen)          ──待实现
+Step 1.2 (实现 codegen)          ──已完成
 Step 1.3 (验证)                  ──待实现
 ```
 

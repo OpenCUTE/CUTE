@@ -62,18 +62,19 @@ cutelib 编译时：
 |------|------|------|
 | ChipyardConfig / HWConfig / ISA / FPE / Vector YAML manifests | 已有 | `configs/` 下完整 |
 | JSON Schema 校验 | 已有 | `cute-check-config.py` |
+| Config Codegen | 已完成 | `cute-gen-config.py`，详见 `doc/sdk-doc/cute-gen-config.md` |
 | 编译 Verilator 仿真器 | 已有脚本 | `scripts/build-simulator.sh` |
 | 运行仿真测试 | 已有脚本 | `scripts/run-simulator-test.sh` |
 | Trace 解码 | 已有 | `tools/trace/decode_cute_trace.py` |
-| **参数目录 `chipyard_config_params.json`** | 待实现 | 可用参数字典，人看它选参数，codegen 读它校验 |
-| **ISA codegen**（YAML → `instruction.h` + `isa.json`） | 待实现 | Phase 0.7 |
-| **FPE codegen**（YAML → `cute_fpe.h`） | 待实现 | 从 cute_fpe_versions 生成 datatype 宏 |
-| **SoC config codegen**（YAML → `cute_config.h`） | 待实现 | 从 ChipyardConfig 的 soc/cute 字段生成参数宏 |
+| **参数目录 `chipyard_config_params.json`** | 已有 | 可用参数字典 |
+| **ISA codegen**（YAML → `instruction.h` + `isa.json`） | 已完成 | `cute-gen-config.py` |
+| **FPE codegen**（YAML → `cute_fpe.h`） | 已完成 | 从 `enums.ElementDataType` 生成 datatype 宏，不再需要单独 FPE YAML |
+| **SoC config codegen**（YAML → `cute_config.h`） | 已完成 | 从 ChipyardConfig + CuteConfig 生成参数宏 |
 | **Scala codegen**（YAML → `CuteConfig.scala`） | 待实现 | 从所有 chipyard_config YAML 生成 Chipyard Config class |
 | **统一构建入口 `cute-build.py`** | 待实现 | 从 HWConfig name 出发，自动解析参数 |
 | **统一运行入口 `cute-run.py`** | 待实现 | 自动找仿真器 + DRAMSim + 输出目录 |
 | **Config vs Chipyard 漂移检查** | 待实现 | 比对 Config 声明与 Chipyard 实际导出值 |
-| **头文件按 config id 组织** | 待实现 | 产物输出到 `build/chipyard_configs/<id>/` |
+| **头文件按 config id 组织** | 已完成 | 产物输出到 `build/chipyard_configs/<id>/generated/` |
 | ~~HeaderGenerator~~ | 废弃 | 不再从 Chipyard 提取参数生成头文件 |
 
 ## 实施步骤
@@ -112,28 +113,29 @@ cutelib 编译时：
 - `cute-gen-config.py` 从参数生成 Scala Config class 和 C 头文件
 - `cute-update-chipyard-configs.py` 从参数目录 + YAML 生成完整 CuteConfig.scala
 
-### Step 1: Config Codegen 工具链
+### Step 1: Config Codegen 工具链（已完成）
 
-写 `tools/runner/cute-gen-config.py`，从 Config YAML 生成头文件和 JSON。
+`tools/runner/cute-gen-config.py` 从 Config YAML 生成头文件和 JSON。详细文档见 `doc/sdk-doc/cute-gen-config.md`。
 
 ```bash
 python3 tools/runner/cute-gen-config.py \
   --chipyard-config cute4tops_scp128 \
-  --isa-version cute_isa_v1 \
-  --fpe-version cute_fpe_v1 \
-  --output build/chipyard_configs/cute4tops_scp128/generated/
+  --verbose
 ```
+
+输入 YAML 自动从 chipyard_config 的引用链解析（`cute.config` → CuteConfig 预设，`cute.isa.version` → ISA YAML，`soc.vector.version` → Vector YAML）。
 
 产物：
 
 | 输入 | 产物 | 说明 |
 |------|------|------|
-| `cute_isa_versions/cute_isa_v1.yaml` | `instruction.h` | 指令编码、funct、opcode 宏 |
-| `cute_isa_versions/cute_isa_v1.yaml` | `isa.json` | 结构化 ISA 定义 |
-| `cute_fpe_versions/cute_fpe_v1.yaml` | `cute_fpe.h` | datatype 枚举和宏 |
-| `chipyard_configs/cute4tops_scp128.yaml` | `cute_config.h` | Tensor_M/N/K、bus width 等 SoC 参数宏 |
+| `cute_isa_versions/<isa>.yaml` | `instruction.h` | 指令 funct 编码、字段宏、RoCC 编码原语（内联）、wrapper 函数 |
+| `cute_isa_versions/<isa>.yaml` | `isa.json` | 结构化 ISA 定义 |
+| `cute_isa_versions/<isa>.yaml` 的 `enums.ElementDataType` | `cute_fpe.h` | datatype 枚举、A/B 位宽查询宏、名称字符串 |
+| `cute_configs/<preset>.yaml` + `chipyard_configs/<id>.yaml` | `cute_config.h` | CUTE 加速器参数、tensor_task、MMU、FPE、SoC 参数宏 |
+| 所有输入 | `config_fingerprint.txt` | SHA256 漂移检查 |
 
-同时生成 `config_fingerprint.txt`（输入 YAML 的 sha256），用于后续漂移检查。
+共享工具逻辑在 `tools/runner/cute_config_common.py`。`instruction.h` 是自包含的（内联 YGJK_INS_RRR，无需额外 include）。
 
 ### Step 1.5: `cute-update-chipyard-configs.py` — Scala Config 生成
 
