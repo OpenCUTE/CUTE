@@ -10,6 +10,11 @@ import org.chipsalliance.cde.config._
 class CUTETopIO()(implicit p: Parameters) extends CuteBundle{
     val mmu2llc = Flipped(new MMU2TLIO)
     val ctrl2top = Flipped(new YGJKControl)
+    val ame_cmd = Flipped(Valid(new AMECommand))
+    val ame_stall = Output(Bool())
+    val ame_resp_data = Output(UInt(64.W))
+    val ame_resp_valid = Output(Bool())
+    val ame_all_idle = Output(Bool())
     val instfifo_head_id = Output(UInt(MarcoInstFIFODepthBitSize.W))
     val instfifo_tail_id = Output(UInt(MarcoInstFIFODepthBitSize.W))
     val instfifo_release = Output(Bool())
@@ -46,8 +51,10 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     val VecSIf = Module(new VectorStreamInterface)
 
     val TaskCtrl = Module(new TaskController)
-    
+
     val MTE = Module(new MatrixTE)
+
+    val AMEDec = Module(new AMEDecoder)
 
     val MMU = Module(new LocalMMU)
 
@@ -169,6 +176,35 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     io.instfifo_head_id := TaskCtrl.io.instfifo_tail_id//原先代码里head/tail写反了
     io.instfifo_tail_id := TaskCtrl.io.instfifo_head_id//原先代码里head/tail写反了
     io.instfifo_release := TaskCtrl.io.instfifo_release
+
+    // AMEDecoder wiring
+    AMEDec.io.ame_cmd <> io.ame_cmd
+    AMEDec.io.load_fifo_full    := TaskCtrl.io.ame_inject.load_fifo_full
+    AMEDec.io.compute_fifo_full := TaskCtrl.io.ame_inject.compute_fifo_full
+    AMEDec.io.store_fifo_full   := TaskCtrl.io.ame_inject.store_fifo_full
+    AMEDec.io.all_fifo_empty    := TaskCtrl.io.ame_inject.all_fifo_empty
+    AMEDec.io.load_fifo_head    := TaskCtrl.io.ame_inject.load_fifo_head
+    AMEDec.io.compute_fifo_head := TaskCtrl.io.ame_inject.compute_fifo_head
+    io.ame_stall      := AMEDec.io.stall
+    io.ame_resp_data  := AMEDec.io.resp_data
+    io.ame_resp_valid := AMEDec.io.resp_valid
+    io.ame_all_idle   := TaskCtrl.io.ame_inject.all_fifo_empty
+    AMEDec.io.DebugTimeStampe := DebugTimeStampe
+
+    TaskCtrl.io.ame_inject.load_inject_valid          := AMEDec.io.load_inject.valid
+    TaskCtrl.io.ame_inject.load_inject_bits            := AMEDec.io.load_inject.bits.asUInt
+    TaskCtrl.io.ame_inject.load_resource_inject_valid  := AMEDec.io.load_resource_inject.valid
+    TaskCtrl.io.ame_inject.load_resource_inject_bits   := AMEDec.io.load_resource_inject.bits.asUInt
+    TaskCtrl.io.ame_inject.compute_inject_valid          := AMEDec.io.compute_inject.valid
+    TaskCtrl.io.ame_inject.compute_inject_bits            := AMEDec.io.compute_inject.bits.asUInt
+    TaskCtrl.io.ame_inject.compute_resource_inject_valid  := AMEDec.io.compute_resource_inject.valid
+    TaskCtrl.io.ame_inject.compute_resource_inject_bits   := AMEDec.io.compute_resource_inject.bits.asUInt
+    TaskCtrl.io.ame_inject.store_inject_valid          := AMEDec.io.store_inject.valid
+    TaskCtrl.io.ame_inject.store_inject_bits            := AMEDec.io.store_inject.bits.asUInt
+    TaskCtrl.io.ame_inject.store_resource_inject_valid  := AMEDec.io.store_resource_inject.valid
+    TaskCtrl.io.ame_inject.store_resource_inject_bits   := AMEDec.io.store_resource_inject.bits.asUInt
+    TaskCtrl.io.ame_inject.scp_override_valid          := AMEDec.io.scp_override.valid
+    TaskCtrl.io.ame_inject.scp_override_bits           := AMEDec.io.scp_override.bits
 
     //给每个SCP的输入进行defuat的赋值
     for (i <- 0 until 2){

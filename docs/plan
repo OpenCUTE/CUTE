@@ -1,0 +1,30 @@
+我要在CUTE上实现AME指令兼容。
+CUTE是一个chipyard下的张量加速器，AME（附加矩阵扩展）是与向量扩展（RVV）解耦的架构，核心扩展是：定义额外的矩阵寄存器、CSR、扩展指令。
+4 个 Tile 寄存器：tr0~tr3，用于存放输入矩阵 A 和 B（或 BT）。
+4 个累加寄存器：acc0~acc3，用于存放输出矩阵 C 以及累加中间结果。三个基本常量参数：
+ELEN		矩阵元素最大位宽（≥8）
+TLEN		单个 tile 寄存器的总位数
+TRLEN		tile 寄存器中一行的位数
+AME Tile Register / Accumulator → CUTE Scratchpad 映射:
+tr0  ─→  ASCP[0] (A matrix, bank 0) │ tr1  ─→  ASCP[1] (A matrix, bank 1) 
+tr2  ─→  BSCP[0] (B matrix, bank 0) │ tr3  ─→  BSCP[1] (B matrix, bank 1) 
+acc0 ─→  CSCP[0] (C/D accumulator, bank 0) │acc1 ─→  CSCP[1] (C/D accumulator, bank 1)  
+acc2 、acc3 ─→  未来扩展
+软件通过显式交替指定 tr0/tr1 和 tr2/tr3 即可自然实现双缓冲。AMEDecoder 是纯静态查表。
+引入CSR：用RoCC配置指令，直接修改CUTE内CSR
+AME 指令不经过 MacroInst_FIFO，直接注入三个微指令 FIFO：
+
+mmload  tr0, (addr)   mmload  tr2, (addr)
+ 		↓
+AME decoder 	
+ 		↓
+Load_MicroInst_FIFO
+mmadd acc1, tr0, tr2
+ 		↓
+AME decoder 	
+ 		↓
+Compute_MicroInst_FIFO
+
+生成一个实现方案，参考riscv_matrix_extension_proposal（AME提案）以及CUTE源码
+
+

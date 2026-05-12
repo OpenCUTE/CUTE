@@ -1,8 +1,8 @@
 # CUTE 私有 L2 缓存与 AME 指令集集成设计提案
 
-> 版本: v0.4
-> 日期: 2026-04-23
-> 状态: Draft (新增 TMA 后台搬运引擎)
+> 版本: v0.5
+> 日期: 2026-04-24
+> 状态: Draft (L2 Cache 改用 InclusiveCache 节点实现)
 
 ---
 
@@ -120,12 +120,10 @@ graph TB
         end
 
         subgraph PL2["Private L2 Cache + TMA"]
-            PL2_CTRL["L2 Controller"]
-            PL2_TAG["Tag Store"]
-            PL2_CACHE_DATA["Cache Banks (Bank N~M)"]
-            PL2_TCM_DATA["TCM Banks (Bank 0~N-1)<br/>直连 CUTE"]
+            PL2_IC["InclusiveCache<br/>(Chipyard L2 Node)<br/>管理 Cache Banks, TileLink"]
+            PL2_TCM_DATA["TCM Banks<br/>(独立 SRAM, 无 Tag)"]
             TCM_CTRL["TCM Controller"]
-            TMA["TMA<br/>(Tensor Memory Accelerator)<br/>后台搬运引擎"]
+            TMA["TMA<br/>(Tensor Memory Accelerator)<br/>独立 TL Client, 后台搬运"]
         end
     end
 

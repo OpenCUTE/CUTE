@@ -198,10 +198,43 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
 
     mem.io.mmu <> acc.io.mmu2llc
 
+    // --- AME instruction routing ---
+    // All AME instructions use CUSTOM1 opcode (0x2B). The inst word carries the full AME encoding.
+    val is_ame_inst = io.cmd.valid && io.cmd.bits.inst.opcode === "h2B".U
+    // fence.m and mstatus are intercepted here, NOT forwarded to AMEDecoder
+    val is_ame_fence  = is_ame_inst && io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_FENCE_M
+    val is_ame_status = is_ame_inst && io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_MSTATUS
+    val is_ame_normal = is_ame_inst && !is_ame_fence && !is_ame_status
+
+    // Only forward normal AME instructions (not fence/mstatus) to AMEDecoder
+    acc.io.ame_cmd.valid         := io.cmd.fire && is_ame_normal
+    acc.io.ame_cmd.bits.inst     := io.cmd.bits.inst.asUInt
+    acc.io.ame_cmd.bits.funct    := io.cmd.bits.inst.funct
+    acc.io.ame_cmd.bits.rd_id    := io.cmd.bits.inst.rd
+    acc.io.ame_cmd.bits.rs1_id   := io.cmd.bits.inst.rs1
+    acc.io.ame_cmd.bits.rs2_id   := io.cmd.bits.inst.rs2
+    acc.io.ame_cmd.bits.rs1_data := io.cmd.bits.rs1
+    acc.io.ame_cmd.bits.rs2_data := io.cmd.bits.rs2
+
+    // fence.m stall: block CPU until all AME FIFOs are empty
+    val ame_fence_stall = is_ame_fence && !acc.io.ame_all_idle
+
+    if (ZZHDebugEnable) {
+      when(io.cmd.fire && is_ame_inst) {
+        printf("[AME-ROCC] inst=%x funct=%x rd=%d rs1=%d rs2=%d rs1_data=%x rs2_data=%x stall=%d fence_stall=%d all_idle=%d\n",
+          io.cmd.bits.inst.asUInt, io.cmd.bits.inst.funct,
+          io.cmd.bits.inst.rd, io.cmd.bits.inst.rs1, io.cmd.bits.inst.rs2,
+          io.cmd.bits.rs1, io.cmd.bits.rs2, acc.io.ame_stall, ame_fence_stall, acc.io.ame_all_idle)
+      }
+    }
 
     //一拍的时间接受指令，下一拍的时间返回结果
     //后面可以设置成一个指令fifo
-    io.cmd.ready := !canResp
+    // ame_stall only applies to normal AME instructions (not fence/mstatus which are handled locally)
+    val is_fence_or_status_bits = io.cmd.bits.inst.opcode === "h2B".U &&
+      (io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_FENCE_M || io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_MSTATUS)
+    val ame_normal_stall = !is_fence_or_status_bits && acc.io.ame_stall
+    io.cmd.ready := !canResp && !ame_normal_stall && !ame_fence_stall
     when(io.cmd.fire && io.cmd.bits.inst.xd === true.B){
       canResp := true.B
     }.elsewhen(io.resp.fire){
@@ -238,6 +271,14 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
       rd_data := acc.io.ctrl2top.InstFIFO_Info
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct >= 64.U){
       rd_data := acc.io.ctrl2top.cute_return_val
+    }.elsewhen(io.cmd.fire && is_ame_status){
+      // mstatus: return AME pipeline status directly
+      // bit[0]: busy (not idle), bit[4]: all_idle
+      val ame_idle = acc.io.ame_all_idle
+      rd_data := Cat(0.U(59.W), ame_idle, !ame_idle, 0.U(3.W))
+      if(ZZHDebugEnable){
+        printf("[AME-ROCC] mstatus query: all_idle=%d\n", ame_idle)
+      }
     }
 
     when(acc.io.mmu2llc.Request.fire){

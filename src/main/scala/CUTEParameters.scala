@@ -201,6 +201,10 @@ object CuteParams {
         Debug = CuteDebugParams.AllDebugOn
     )
 
+    def CUTE_4Tops_128SCP_zzhdebug = CUTE_4Tops_128SCP.copy(
+        Debug = CuteDebugParams.ZZHDebug
+    )
+
     def CUTE_2Tops_debug = baseParams.copy(
         outsideDataWidth = 512,
         LLCSourceMaxNum = 64,
@@ -293,6 +297,10 @@ object CuteDebugParams {
     YJPMACDebugEnable = true,
     YJPPEDebugEnable = true,
     YJPAfterOpsDebugEnable = true)
+
+  def ZZHDebug = NoDebug.copy(
+    ZZHDebugEnable = true,
+  )
 }
 
 case class CuteDebugParams(
@@ -308,6 +316,7 @@ case class CuteDebugParams(
     val YJPMACDebugEnable :Boolean  = false,
     val YJPPEDebugEnable :Boolean   = false,
     val YJPAfterOpsDebugEnable :Boolean   = false,
+    val ZZHDebugEnable :Boolean     = false,
 )
 
 object CuteMMUParams {
@@ -1057,6 +1066,7 @@ trait CUTEImplParameters{
     val YJPMACDebugEnable         = DebugParams.YJPMACDebugEnable
     val YJPPEDebugEnable          = DebugParams.YJPPEDebugEnable
     val YJPAfterOpsDebugEnable    = DebugParams.YJPAfterOpsDebugEnable
+    val ZZHDebugEnable            = DebugParams.ZZHDebugEnable
 
     val ConvolutionApplicationConfigDataWidth = cuteParams.ConvolutionApplicationConfigDataWidth
     val ConvolutionDIM_Max = cuteParams.ConvolutionDIM_Max
@@ -1696,6 +1706,29 @@ class SCPControlInfo()(implicit p: Parameters) extends CuteBundle{
     val AML_SCP_ID = UInt(1.W)
     val BML_SCP_ID = UInt(1.W)
     val CML_SCP_ID = UInt(1.W)
+}
+
+class AMEInjectIO()(implicit p: Parameters) extends CuteBundle {
+    val load_inject_valid          = Input(Bool())
+    val load_inject_bits           = Input(UInt(new LoadMicroInst().getWidth.W))
+    val load_resource_inject_valid = Input(Bool())
+    val load_resource_inject_bits  = Input(UInt(new LoadMicroInst_Resource_Info().getWidth.W))
+    val compute_inject_valid          = Input(Bool())
+    val compute_inject_bits           = Input(UInt(new ComputeMicroInst().getWidth.W))
+    val compute_resource_inject_valid = Input(Bool())
+    val compute_resource_inject_bits  = Input(UInt(new ComputeMicroInst_Resource_Info().getWidth.W))
+    val store_inject_valid          = Input(Bool())
+    val store_inject_bits           = Input(UInt(new StoreMicroInst().getWidth.W))
+    val store_resource_inject_valid = Input(Bool())
+    val store_resource_inject_bits  = Input(UInt(new StoreMicroInst_Resource_Info().getWidth.W))
+    val scp_override_valid          = Input(Bool())
+    val scp_override_bits           = Input(new SCPControlInfo)
+    val load_fifo_full          = Output(Bool())
+    val compute_fifo_full       = Output(Bool())
+    val store_fifo_full         = Output(Bool())
+    val all_fifo_empty          = Output(Bool())
+    val load_fifo_head          = Output(UInt(2.W))
+    val compute_fifo_head       = Output(UInt(2.W))
 }
 
 

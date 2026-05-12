@@ -31,8 +31,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         val SCP_CtrlInfo               = (new SCPControlInfo)
         val DebugTimeStampe = Input(UInt(32.W))
         val ctrlCounter = Output(new CTRLCounter)
-        // val MMU_Config_Info = (new MMUConfigInfo)
-        // val MatrixTE_MicroTask_Config = DecoupledIO(new MatrixTEMicroTaskConfigIO)
+        // AME injection interface
+        val ame_inject = new AMEInjectIO
     })
 
     val get_configred = RegInit(false.B)
@@ -563,6 +563,14 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     val Store_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new StoreMicroInst_Resource_Info().getWidth.W))))
     val Compute_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new ComputeMicroInst_Resource_Info().getWidth.W))))
 
+    // --- AME injection: FIFO status outputs ---
+    io.ame_inject.load_fifo_full    := Load_MicroInst_FIFO_Full
+    io.ame_inject.compute_fifo_full := Compute_MicroInst_FIFO_Full
+    io.ame_inject.store_fifo_full   := Store_MicroInst_FIFO_Full
+    io.ame_inject.all_fifo_empty    := false.B // placeholder, real assignment after issue state machines
+    io.ame_inject.load_fifo_head    := Load_MicroInst_FIFO_Head
+    io.ame_inject.compute_fifo_head := Compute_MicroInst_FIFO_Head
+
     //Load指令只能被Compute/clear指令从信息队列中取出
     //Compute指令只能被Store/clear指令从信息队列中取出
     //Store指令完成后，会取检查是否需要给某一条宏指令标记完成
@@ -948,6 +956,38 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         }
     }
 
+    // --- AME micro-instruction injection ---
+    // AME path injects directly into FIFOs, bypassing MacroInst decode.
+    // In practice, AME and MacroInst paths are mutually exclusive at runtime.
+    when(io.ame_inject.load_inject_valid) {
+        Load_MicroInst_FIFO(Load_MicroInst_FIFO_Head) := io.ame_inject.load_inject_bits
+        Load_MicroInst_Resource_Info_FIFO(Load_MicroInst_FIFO_Head) := io.ame_inject.load_resource_inject_bits
+        Load_MicroInst_FINISH_Ready_GO(Load_MicroInst_FIFO_Head) := false.B
+        Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FIFO_Head) := false.B
+        Load_MicroInst_FIFO_Head := WrapInc(Load_MicroInst_FIFO_Head, 4)
+        if (ZZHDebugEnable) {
+            printf("[AME-TC<%d>] Load FIFO enqueue at head=%d\n", io.DebugTimeStampe, Load_MicroInst_FIFO_Head)
+        }
+    }
+    when(io.ame_inject.compute_inject_valid) {
+        Compute_MicroInst_FIFO(Compute_MicroInst_FIFO_Head) := io.ame_inject.compute_inject_bits
+        Compute_MicroInst_Resource_Info_FIFO(Compute_MicroInst_FIFO_Head) := io.ame_inject.compute_resource_inject_bits
+        Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FIFO_Head) := false.B
+        Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FIFO_Head) := false.B
+        Compute_MicroInst_FIFO_Head := WrapInc(Compute_MicroInst_FIFO_Head, 4)
+        if (ZZHDebugEnable) {
+            printf("[AME-TC<%d>] Compute FIFO enqueue at head=%d\n", io.DebugTimeStampe, Compute_MicroInst_FIFO_Head)
+        }
+    }
+    when(io.ame_inject.store_inject_valid) {
+        Store_MicroInst_FIFO(Store_MicroInst_FIFO_Head) := io.ame_inject.store_inject_bits
+        Store_MicroInst_Resource_Info_FIFO(Store_MicroInst_FIFO_Head) := io.ame_inject.store_resource_inject_bits
+        Store_MicroInst_FIFO_Head := WrapInc(Store_MicroInst_FIFO_Head, 4)
+        if (ZZHDebugEnable) {
+            printf("[AME-TC<%d>] Store FIFO enqueue at head=%d\n", io.DebugTimeStampe, Store_MicroInst_FIFO_Head)
+        }
+    }
+
     // 微指令队列
     // val Load_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new LoadMicroInst().getWidth.W))))
     // val Store_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new StoreMicroInst().getWidth.W))))
@@ -986,6 +1026,16 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.SCP_CtrlInfo.AML_SCP_ID := Current_AML_SCP_ID
     io.SCP_CtrlInfo.BML_SCP_ID := Current_BML_SCP_ID
     io.SCP_CtrlInfo.CML_SCP_ID := Current_CML_SCP_ID
+
+    // AME SCP override (must be after Current_*_SCP_ID definitions)
+    when(io.ame_inject.scp_override_valid) {
+        Current_AML_SCP_ID := io.ame_inject.scp_override_bits.AML_SCP_ID
+        Current_BML_SCP_ID := io.ame_inject.scp_override_bits.BML_SCP_ID
+        Current_CML_SCP_ID := io.ame_inject.scp_override_bits.CML_SCP_ID
+        Current_ADC_SCP_ID := io.ame_inject.scp_override_bits.ADC_SCP_ID
+        Current_BDC_SCP_ID := io.ame_inject.scp_override_bits.BDC_SCP_ID
+        Current_CDC_SCP_ID := io.ame_inject.scp_override_bits.CDC_SCP_ID
+    }
 
     //看每个队列里面的微指令，如果有可以发射的微指令，就发射
     val Will_Issuse_CML_Load = WireInit(false.B)
@@ -1088,7 +1138,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
             Will_Issuse_CML_Load := Need_Issue_CML_Micro_Inst
 
-            if (YJPDebugEnable)
+            if (ZZHDebugEnable)
             {
                 printf("[TaskController<%d>]:Load MicroInst Issue! Issue AML_MicroTask = %d, Issue BML_MicroTask = %d, Issue CML_MicroTask = %d\n",io.DebugTimeStampe, Need_Issue_AML_Micro_Inst, Need_Issue_BML_Micro_Inst, Need_Issue_CML_Micro_Inst)
                 //SCPID
@@ -1105,7 +1155,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             when(Load_Micro_Inst_Wait_A_Finish && io.AML_MicroTask_Config.MicroTaskEndValid)
             {
                 Load_Micro_Inst_Wait_A_Finish := false.B
-                if(YJPDebugEnable)
+                if(ZZHDebugEnable)
                 {
                     printf("[TaskController<%d>]:Load MicroInst A Finish! \n",io.DebugTimeStampe)
                 }
@@ -1113,7 +1163,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             when(Load_Micro_Inst_Wait_B_Finish && io.BML_MicroTask_Config.MicroTaskEndValid)
             {
                 Load_Micro_Inst_Wait_B_Finish := false.B
-                if(YJPDebugEnable)
+                if(ZZHDebugEnable)
                 {
                     printf("[TaskController<%d>]:Load MicroInst B Finish! \n",io.DebugTimeStampe)
                 }
@@ -1161,7 +1211,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     {
         Load_MicroInst_FIFO_Tail := WrapInc(Load_MicroInst_FIFO_Tail, 4)
         Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FIFO_Tail) := false.B
-        if (YJPDebugEnable)
+        if (ZZHDebugEnable)
         {
             printf("[TaskController<%d>]:Load MicroInst Commit!  Load_MicroInst_FIFO_Head = %d, Load_MicroInst_FIFO_Tail = %d\n",io.DebugTimeStampe, Load_MicroInst_FIFO_Head, Load_MicroInst_FIFO_Tail)
         }
@@ -1280,7 +1330,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
             Load_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_Resource_Info.Load_Micro_Inst_FIFO_Index) := true.B//标记这条Load指令已经可以被提交了
             
-            if (YJPDebugEnable)
+            if (ZZHDebugEnable)
             {
                 printf("[TaskController<%d>]:Compute MicroInst Issue! \n",io.DebugTimeStampe)
                 //SCPID
@@ -1297,7 +1347,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             when(Compute_Micro_Inst_Wait_A_Finish && io.ADC_MicroTask_Config.MicroTaskEndValid)
             {
                 Compute_Micro_Inst_Wait_A_Finish := false.B
-                if(YJPDebugEnable)
+                if(ZZHDebugEnable)
                 {
                     printf("[TaskController<%d>]:Compute MicroInst A Finish! \n",io.DebugTimeStampe)
                 }
@@ -1306,7 +1356,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             when(Compute_Micro_Inst_Wait_B_Finish && io.BDC_MicroTask_Config.MicroTaskEndValid)
             {
                 Compute_Micro_Inst_Wait_B_Finish := false.B
-                if(YJPDebugEnable)
+                if(ZZHDebugEnable)
                 {
                     printf("[TaskController<%d>]:Compute MicroInst B Finish! \n",io.DebugTimeStampe)
                 }
@@ -1331,7 +1381,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             when(Compute_Micro_Inst_Wait_C_Finish && io.CDC_MicroTask_Config.MicroTaskEndValid)
             {
                 Compute_Micro_Inst_Wait_C_Finish := false.B
-                if(YJPDebugEnable)
+                if(ZZHDebugEnable)
                 {
                     printf("[TaskController<%d>]:Compute MicroInst C Finish! \n",io.DebugTimeStampe)
                 }
@@ -1362,7 +1412,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                     }
                 }
 
-                if (YJPDebugEnable)
+                if (ZZHDebugEnable)
                 {
                     printf("[TaskController<%d>]:Compute MicroInst Finish!  Compute_MicroInst_FIFO_Head = %d, Compute_MicroInst_FIFO_Tail = %d\n",io.DebugTimeStampe, Compute_MicroInst_FIFO_Head, Compute_MicroInst_FIFO_Tail)
                 }
@@ -1422,7 +1472,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             Store_Micro_Inst_Wait_C_Finish := true.B
             Store_Micro_Inst_Issue_State_Reg := issue_state_issue
             Compute_MicroInst_FINISH_Ready_Commit(Store_MicroInst_Resource_Info.Compute_Micro_Inst_FIFO_Index) := true.B//标记这条Compute指令已经可以被提交了
-            if (YJPDebugEnable)
+            if (ZZHDebugEnable)
             {
                 printf("[TaskController<%d>]:Store MicroInst Issue! \n",io.DebugTimeStampe)
             }
@@ -1434,7 +1484,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             {
                 Store_Micro_Inst_Wait_C_Finish := false.B
                 C_SCP_Free(Store_MicroInst_Resource_Info.C_SCPID) := true.B
-                if(YJPDebugEnable)
+                if(ZZHDebugEnable)
                 {
                     printf("[TaskController<%d>]:Store MicroInst C Finish! \n",io.DebugTimeStampe)
                 }
@@ -1460,6 +1510,9 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
 
     }
+
+    // AME all_idle: all FIFOs empty AND all issue state machines idle (no in-flight operations)
+    io.ame_inject.all_fifo_empty := Load_MicroInst_FIFO_Empty && Compute_MicroInst_FIFO_Empty && Store_MicroInst_FIFO_Empty && Load_MicroInst_FINISH_All && Compute_MicroInst_FINISH_All && Load_Micro_Inst_Issue_State_Reg === issue_state_idle && Compute_Micro_Inst_Issue_State_Reg === issue_state_idle && Store_Micro_Inst_Issue_State_Reg === issue_state_idle
 
 
 }
