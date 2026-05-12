@@ -305,6 +305,23 @@ class 自身的默认值接管。
 
 ### 步骤 3: 生成chipyard的config文件
 
+Chipyard 侧 `CuteConfig.scala` 由 `configs/chipyard_configs/*.yaml`
+生成，不再手写维护：
+
+```bash
+python3 tools/runner/cute-update-chipyard-configs.py \
+  --output chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
+```
+
+如果生成内容没有变化，脚本会输出 `[SKIP]` 并保持文件不变。检查当前
+`CuteConfig.scala` 是否与 YAML 一致：
+
+```bash
+python3 tools/runner/cute-update-chipyard-configs.py \
+  --output chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala \
+  --check
+```
+
 ### 步骤 4: 生成 C 头文件和 ISA JSON
 
 ```bash
@@ -335,8 +352,6 @@ chipyard_configs/<id>.yaml
   ├── cute.isa.version  -> cute_isa_versions/<isa_id>.yaml
   └── soc.vector.version -> vector_versions/<vector_id>.yaml
 ```
-
-
 
 ### 步骤 5: 生成仿真目标文件
 

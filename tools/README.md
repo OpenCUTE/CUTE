@@ -10,6 +10,7 @@ tools/
 │   ├── cute-check-config.py             # Config schema / 引用检查
 │   ├── cute-gen-config.py               # C 头文件和 ISA JSON 生成
 │   ├── cute-gen-scala-config.py         # Scala 配置生成 / 更新 / 漂移检查
+│   ├── cute-update-chipyard-configs.py  # Chipyard CuteConfig.scala 生成
 │   ├── cute-build.py                    # HWConfig → genfiles / simulator
 │   └── cute-run.py                      # HWConfig → simulator run
 └── trace/                               # Trace 工具链
@@ -116,6 +117,26 @@ python3 tools/runner/cute-gen-scala-config.py \
   --check
 ```
 
+### `runner/cute-update-chipyard-configs.py`
+
+从 `configs/chipyard_configs/*.yaml` 生成 Chipyard 侧的
+`CuteConfig.scala`。生成文件把 `HardwareConfig.<cute_config>` 作为 CUTE
+参数源，使 Chipyard Config class 跟随 YAML 更新。
+
+```bash
+# 预览到 stdout
+python3 tools/runner/cute-update-chipyard-configs.py
+
+# 更新 Chipyard CuteConfig.scala，内容不变时跳过写入
+python3 tools/runner/cute-update-chipyard-configs.py \
+  --output chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
+
+# CI / 本地漂移检查
+python3 tools/runner/cute-update-chipyard-configs.py \
+  --output chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala \
+  --check
+```
+
 ### `runner/cute-build.py`
 
 从 `configs/hwconfigs/<name>.yaml` 出发，统一执行构建步骤：
@@ -151,6 +172,12 @@ build/chipyard_configs/<chipyard_config_id>/simulator-verilator
 python3 tools/runner/cute-run.py \
   --hwconfig cute4tops_scp128_dramsim48 \
   --test <test_binary>
+
+# 只保留 simulator stdout，隐藏 runner 自己的 [CMD]/[OK] 等状态行
+python3 tools/runner/cute-run.py \
+  --quiet \
+  --hwconfig cute4tops_scp128_dramsim48 \
+  --test <test_binary>
 ```
 
 默认输出：
@@ -161,6 +188,13 @@ build/chipyard_runs/<hwconfig_name>/<test_name>/
 ├── run.log
 └── run.out
 ```
+
+输出流约定：
+
+- simulator `stdout` 会实时打印到终端，并写入 `run.log`。
+- simulator `stderr` 会单独写入 `run.out`。
+- `--quiet` 只隐藏 runner 自己的状态行，例如 `[HWCONFIG]`、`[SIM]`、`[CMD]`、
+  `[LOG]`、`[OUT]`、`[OK]` / `[FAIL]`；不会隐藏 simulator `stdout`。
 
 `cute-run.py` 不会自动调用 trace 解码；需要解码时手动运行
 `tools/trace/decode_cute_trace.py`。
