@@ -116,7 +116,6 @@ class AMemoryLoader(implicit p: Parameters) extends CuteModule{
     //访存状态机，用来配合流水线刷新
     val s_load_idle :: s_load_init :: s_load_working :: s_load_end :: Nil = Enum(4)
     val memoryload_state = RegInit(s_load_idle)
-    val MemoryOrder_LoadConfig = RegInit(MemoryOrderType.OrderType_Mb_Kb)
 
     val IH_Stride = RegInit(0.U((MMUAddrWidth).W))
     val IW_Stride = RegInit(0.U((MMUAddrWidth).W))

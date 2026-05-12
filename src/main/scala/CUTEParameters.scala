@@ -360,509 +360,10 @@ case class CuteFPEParams(
     val FP4P0AddNum :Int = 2,
 )
 
-/**
- * 指令配置寄存器字段定义
- * @param name 字段名称
- * @param bitHigh 高位（包含）
- * @param bitLow 低位（包含）
- * @param description 字段描述
- */
-/**
- * 指令配置寄存器字段定义
- * @param name 字段名称
- * @param bitHigh 高位（包含）
- * @param bitLow 低位（包含）
- * @param maxValue 字段允许的最大值（None表示无约束，用于地址等全范围字段）
- * @param description 字段描述
- */
-case class InstField(
-  name: String,
-  bitHigh: Int,
-  bitLow: Int,
-  maxValue: Option[Long],
-  description: String
-) {
-  def width: Int = bitHigh - bitLow + 1
-  def mask: Long = ((1L << width) - 1) << bitLow
-
-  /**
-   * 存储maxValue需要的最小位宽
-   * 例如：maxValue=65536 → requiredWidth=17 (因为2^16=65536 < 65536 <= 2^17)
-   */
-  def requiredWidth: Int = maxValue match {
-    case Some(v) => log2Ceil(v + 1)  // +1因为范围是[0, maxValue]
-    case None => width
-  }
-
-  /**
-   * 验证InstField的位宽是否足够存储maxValue
-   */
-  require(width >= requiredWidth || maxValue.isEmpty,
-    s"InstField $name: width=$width < requiredWidth=$requiredWidth " +
-    s"(maxValue=$maxValue, bits [$bitHigh:$bitLow]), " +
-    s"field cannot store the maximum value!")
-}
-
-/**
- * InstField伴生对象：提供便捷构造函数
- */
-object InstField {
-  /**
-   * 创建有最大值约束的字段（用于维度、大小等）
-   */
-  def apply(name: String, bitHigh: Int, bitLow: Int, maxValue: Long, description: String): InstField =
-    new InstField(name, bitHigh, bitLow, Some(maxValue), description)
-
-  /**
-   * 创建无约束字段（用于地址、指针等全范围字段）
-   */
-  def apply(name: String, bitHigh: Int, bitLow: Int, description: String): InstField =
-    new InstField(name, bitHigh, bitLow, None, description)
-}
-
-/**
- * 指令配置基类
- * 每个指令是一个单例对象，继承此类
- */
-sealed abstract class CuteInstConfig {
-  /**
-   * funct值
-   */
-  def funct: Int
-
-  /**
-   * 指令名称（用于生成C宏名称）
-   */
-  def name: String
-
-  /**
-   * cfgData1字段定义（None表示不使用cfgData1）
-   */
-  def cfgData1Fields: Option[Seq[InstField]]
-
-  /**
-   * cfgData2字段定义（None表示不使用cfgData2）
-   */
-  def cfgData2Fields: Option[Seq[InstField]]
-
-  /**
-   * 指令描述
-   */
-  def description: String
-
-  /**
-   * 是否为YGJK/RoCC接口指令（funct < 64）
-   * YGK指令直接使用原值，CUTE内部控制指令需要加64
-   */
-  def isYGJKInst: Boolean
-
-  /**
-   * 返回值描述（RD寄存器中的值的含义）
-   */
-  def returnDescription: String
-
-  /**
-   * 是否使用cfgData1
-   */
-  def usesCfgData1: Boolean = cfgData1Fields.isDefined
-
-  /**
-   * 是否使用cfgData2
-   */
-  def usesCfgData2: Boolean = cfgData2Fields.isDefined
-
-  /**
-   * 按名称查找字段（在cfgData1和cfgData2中查找）
-   *
-   * @param fieldName 字段名称
-   * @return InstField定义
-   * @throws NoSuchElementException 如果字段不存在
-   */
-  def field(fieldName: String): InstField = {
-    val allFields = cfgData1Fields.toSeq.flatten ++ cfgData2Fields.toSeq.flatten
-    allFields.find(_.name == fieldName).getOrElse(
-      throw new NoSuchElementException(
-        s"Field '$fieldName' not found in ${this.name}. " +
-        s"Available fields: ${allFields.map(_.name).mkString(", ")}"))
-  }
-}
-
-/**
- * CUTE 内部控制指令集定义
- *
- * 这些指令在 CUTE 加速器核心内部使用
- * 在 RoCC 接口层通过 funct >= 64 访问（bit 6 = 1）
- * 实际传递给核心的 funct 值为 0-18（去掉高位）
- *
- * 指令分类：
- * - funct 0-63: YGK/RoCC 接口指令（见 YGKInstConfigs）
- * - funct >= 64: CUTE 内部控制指令（本对象定义）
- */
-object CuteInstConfigs {
-
-  /**
-   * funct === 0 (RoCC funct === 64): 发送宏指令
-   */
-  case object SendMacroInst extends CuteInstConfig {
-    def funct = 0
-    def name = "SEND_MACRO_INST"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "发送已配置的宏指令到指令FIFO"
-    def isYGJKInst = false
-    def returnDescription = "返回指令在FIFO中的编号"
-  }
-
-  /**
-   * funct === 1 (RoCC funct === 65): 配置A张量
-   */
-  case object ConfigTensorA extends CuteInstConfig {
-    def funct = 1
-    def name = "CONFIG_TENSOR_A"
-    def cfgData1Fields = Some(Seq(
-      InstField("ApplicationTensor_A_BaseVaddr", 63, 0, "A张量的基地址")
-    ))
-    def cfgData2Fields = Some(Seq(
-      InstField("ApplicationTensor_A_Stride", 63, 0, "A张量的步长")
-    ))
-    def description = "配置A张量的基地址和步长"
-    def isYGJKInst = false
-    def returnDescription = "未使用"
-  }
-
-  /**
-   * funct === 2 (RoCC funct === 66): 配置B张量
-   */
-  case object ConfigTensorB extends CuteInstConfig {
-    def funct = 2
-    def name = "CONFIG_TENSOR_B"
-    def cfgData1Fields = Some(Seq(
-      InstField("ApplicationTensor_B_BaseVaddr", 63, 0, "B张量的基地址")
-    ))
-    def cfgData2Fields = Some(Seq(
-      InstField("ApplicationTensor_B_Stride", 63, 0, "B张量的步长")
-    ))
-    def description = "配置B张量的基地址和步长"
-    def isYGJKInst = false
-    def returnDescription = "未使用"
-  }
-
-  /**
-   * funct === 3 (RoCC funct === 67): 配置C张量
-   */
-  case object ConfigTensorC extends CuteInstConfig {
-    def funct = 3
-    def name = "CONFIG_TENSOR_C"
-    def cfgData1Fields = Some(Seq(
-      InstField("ApplicationTensor_C_BaseVaddr", 63, 0, "C张量的基地址")
-    ))
-    def cfgData2Fields = Some(Seq(
-      InstField("ApplicationTensor_C_Stride", 63, 0, "C张量的步长")
-    ))
-    def description = "配置C张量的基地址和步长"
-    def isYGJKInst = false
-    def returnDescription = "未使用"
-  }
-
-  /**
-   * funct === 4 (RoCC funct === 68): 配置D张量
-   */
-  case object ConfigTensorD extends CuteInstConfig {
-    def funct = 4
-    def name = "CONFIG_TENSOR_D"
-    def cfgData1Fields = Some(Seq(
-      InstField("ApplicationTensor_D_BaseVaddr", 63, 0, "D张量的基地址")
-    ))
-    def cfgData2Fields = Some(Seq(
-      InstField("ApplicationTensor_D_Stride", 63, 0, "D张量的步长")
-    ))
-    def description = "配置D张量的基地址和步长"
-    def isYGJKInst = false
-    def returnDescription = "未使用"
-  }
-
-  /**
-   * funct === 5 (RoCC funct === 69): 配置张量维度
-   * maxValue = ApplicationMaxTensorSize = 65536
-   */
-  case object ConfigTensorDim extends CuteInstConfig {
-    def funct = 5
-    def name = "CONFIG_TENSOR_DIM"
-    def cfgData1Fields = Some(Seq(
-      InstField("Application_M", 19, 0, 65535, "张量M维度 (max=65536)"),
-      InstField("Application_N", 39, 20, 65535, "张量N维度 (max=65536)"),
-      InstField("Application_K", 59, 40, 65535, "张量K维度 (max=65536)")
-    ))
-    def cfgData2Fields = Some(Seq(
-      InstField("kernel_stride", 63, 0, "卷积核步长（矩阵乘时为0），64位地址无约束")
-    ))
-    def description = "配置张量维度(M,N,K)，对于卷积则是(ohow,oc,ic)"
-    def isYGJKInst = false
-    def returnDescription = "未使用"
-  }
-
-  /**
-   * funct === 6 (RoCC funct === 70): 配置卷积参数
-   */
-  case object ConfigConvParams extends CuteInstConfig {
-    def funct = 6
-    def name = "CONFIG_CONV_PARAMS"
-    def cfgData1Fields = Some(Seq(
-      InstField("element_type", 7, 0, 15, "元素数据类型 (8位枚举，max=15)"),
-      InstField("bias_type", 15, 8, 3, "偏置数据类型 (8位枚举，max=4)"),
-      InstField("transpose_result", 23, 16, 1, "是否转置结果 (Bool, max=1)"),
-      InstField("conv_stride", 31, 24, 3, "卷积步长 (max=4)"),
-      InstField("conv_oh_max", 47, 32, 16383, "卷积输出高度最大值 (max=16384)"),
-      InstField("conv_ow_max", 63, 48, 16383, "卷积输出宽度最大值 (max=16384)")
-    ))
-    def cfgData2Fields = Some(Seq(
-      InstField("kernel_size", 7, 0, 15, "卷积核大小 (max=16)"),
-      InstField("conv_oh_per_add", 25, 16, 1023, "卷积输出高度每次增加量 (max=16384)"),
-      InstField("conv_ow_per_add", 35, 26, 1023, "卷积输出宽度每次增加量 (max=16384)"),
-      InstField("conv_oh_index", 45, 36, 1023, "卷积输出的高起始值"),
-	  InstField("conv_ow_index", 55, 46, 1023, "卷积输出的宽起始值")
-    ))
-    def description = "配置卷积相关参数（element_type, bias_type, kernel_size等）"
-    def isYGJKInst = false
-    def returnDescription = "未使用"
-  }
-
-  /**
-   * funct === 7 (RoCC funct === 71): 配置A Scale
-   */
-  case object ConfigScaleA extends CuteInstConfig {
-    def funct = 7
-    def name = "CONFIG_SCALE_A"
-    def cfgData1Fields = Some(Seq(
-      InstField("ApplicationScale_A_BaseVaddr", 63, 0, "A Scale的基地址")
-    ))
-    def cfgData2Fields = None
-    def description = "配置A Scale（量化参数）的基地址"
-    def isYGJKInst = false
-    def returnDescription = "未使用"
-  }
-
-  /**
-   * funct === 8 (RoCC funct === 72): 配置B Scale
-   */
-  case object ConfigScaleB extends CuteInstConfig {
-    def funct = 8
-    def name = "CONFIG_SCALE_B"
-    def cfgData1Fields = Some(Seq(
-      InstField("ApplicationScale_B_BaseVaddr", 63, 0, "B Scale的基地址")
-    ))
-    def cfgData2Fields = None
-    def description = "配置B Scale（量化参数）的基地址"
-    def isYGJKInst = false
-    def returnDescription = "未使用"
-  }
-
-  /**
-   * funct === 16 (RoCC funct === 80): 清除指令
-   */
-  case object ClearInst extends CuteInstConfig {
-    def funct = 16
-    def name = "CLEAR_INST"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "清除队尾的宏指令"
-    def isYGJKInst = false
-    def returnDescription = "未使用"
-  }
-
-  /**
-   * funct === 17 (RoCC funct === 81): 查询指令
-   */
-  case object QueryInst extends CuteInstConfig {
-    def funct = 17
-    def name = "QUERY_INST"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "查询当前完成宏指令的尾编号位置"
-    def isYGJKInst = false
-    def returnDescription = "返回已完成宏指令的尾编号位置"
-  }
-
-  /**
-   * funct === 18 (RoCC funct === 82): 保留
-   */
-  case object ReservedInst extends CuteInstConfig {
-    def funct = 18
-    def name = "RESERVED"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "保留指令（空操作）"
-    def isYGJKInst = false
-    def returnDescription = "未使用"
-  }
-
-  /**
-   * 所有指令列表（按funct值排序）
-   */
-  val allInsts: Seq[CuteInstConfig] = Seq(
-    SendMacroInst,
-    ConfigTensorA,
-    ConfigTensorB,
-    ConfigTensorC,
-    ConfigTensorD,
-    ConfigTensorDim,
-    ConfigConvParams,
-    ConfigScaleA,
-    ConfigScaleB,
-    ClearInst,
-    QueryInst,
-    ReservedInst
-  ).sortBy(_.funct)
-
-  /**
-   * 根据funct值查找指令
-   */
-  def getInstByFunct(funct: Int): Option[CuteInstConfig] = {
-    allInsts.find(_.funct == funct)
-  }
-}
-
-/**
- * YGK/RoCC 接口指令定义
- *
- * 这些指令在 RoCC 接口层使用，funct 值范围为 0-63
- * 与 CUTE 内部控制指令（funct >= 64）区分：
- * - funct 0-63: YGK 接口指令（查询/控制类，直接在 CUTE2YGJK 中处理）
- * - funct >= 64: CUTE 内部控制指令（配置类，转发到 CUTE 核心处理）
- */
-object YGJKInstConfigs {
-
-  /**
-   * funct === 1: 查询加速器运行状态
-   */
-  case object QueryAcceleratorBusy extends CuteInstConfig {
-    def funct = 1
-    def name = "QUERY_ACCELERATOR_BUSY"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "查询加速器是否正在运行"
-    def isYGJKInst = true
-    def returnDescription = "返回加速器是否忙碌 (1=忙碌, 0=空闲)"
-  }
-
-  /**
-   * funct === 2: 查询运行时间
-   */
-  case object QueryRuntime extends CuteInstConfig {
-    def funct = 2
-    def name = "QUERY_RUNTIME"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "查询加速器运行时间（时钟周期数）"
-    def isYGJKInst = true
-    def returnDescription = "返回加速器运行时间（时钟周期数）"
-  }
-
-  /**
-   * funct === 3: 查询访存读次数
-   */
-  case object QueryMemReadCount extends CuteInstConfig {
-    def funct = 3
-    def name = "QUERY_MEM_READ_COUNT"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "查询加速器对外访存读次数"
-    def isYGJKInst = true
-    def returnDescription = "返回对外访存读次数"
-  }
-
-  /**
-   * funct === 4: 查询访存写次数
-   */
-  case object QueryMemWriteCount extends CuteInstConfig {
-    def funct = 4
-    def name = "QUERY_MEM_WRITE_COUNT"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "查询加速器对外访存写次数"
-    def isYGJKInst = true
-    def returnDescription = "返回对外访存写次数"
-  }
-
-  /**
-   * funct === 5: 查询计算时间
-   */
-  case object QueryComputeTime extends CuteInstConfig {
-    def funct = 5
-    def name = "QUERY_COMPUTE_TIME"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "查询加速器计算时间"
-    def isYGJKInst = true
-    def returnDescription = "返回计算时间（时钟周期数）"
-  }
-
-  /**
-   * funct === 6: 查询宏指令完成情况
-   */
-  case object QueryMacroInstFinish extends CuteInstConfig {
-    def funct = 6
-    def name = "QUERY_MACRO_INST_FINISH"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "查询 CUTE 宏指令的完成情况"
-    def isYGJKInst = true
-    def returnDescription = "返回宏指令队列中的完成情况 (0010 = id为1的指令已完成)"
-  }
-
-  /**
-   * funct === 7: 查询宏指令队列是否已满
-   */
-  case object QueryMacroInstFIFOFull extends CuteInstConfig {
-    def funct = 7
-    def name = "QUERY_MACRO_INST_FIFO_FULL"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "查询 CUTE 宏指令队列是否已满"
-    def isYGJKInst = true
-    def returnDescription = "返回FIFO是否已满 (1=满, 0=未满)"
-  }
-
-  /**
-   * funct === 8: 查询宏指令队列当前指令数
-   */
-  case object QueryMacroInstFIFOInfo extends CuteInstConfig {
-    def funct = 8
-    def name = "QUERY_MACRO_INST_FIFO_INFO"
-    def cfgData1Fields = None
-    def cfgData2Fields = None
-    def description = "查询 CUTE 宏指令队列目前有多少指令"
-    def isYGJKInst = true
-    def returnDescription = "返回FIFO中当前指令状态 (0010 = id为1的位置已有指令)"
-  }
-
-  /**
-   * 所有 YGK 接口指令列表（按funct值排序）
-   */
-  val allInsts: Seq[CuteInstConfig] = Seq(
-    QueryAcceleratorBusy,
-    QueryRuntime,
-    QueryMemReadCount,
-    QueryMemWriteCount,
-    QueryComputeTime,
-    QueryMacroInstFinish,
-    QueryMacroInstFIFOFull,
-    QueryMacroInstFIFOInfo
-  ).sortBy(_.funct)
-
-  /**
-   * 根据funct值查找YGK指令
-   */
-  def getInstByFunct(funct: Int): Option[CuteInstConfig] = {
-    allInsts.find(_.funct == funct)
-  }
-}
 
 case class CuteParams(
     val outsideDataWidth :Int = 512, //cute对外访存的带宽
     val MemoryDataWidth :Int = 64,   //TODO:DRAM的访存通道的数据位宽
-
-    val VectorWidth :Int = 256,      //向量流水线的宽度
 
     val ConvolutionApplicationConfigDataWidth :Int = 32, //卷积相关的配置信息的宽度
     val ConvolutionDIM_Max :Int = 65535, //卷积相关的配置信息的宽度
@@ -917,7 +418,6 @@ case class CuteParams(
     require(outsideDataWidth >= ReduceWidthByte * 8, "outsideDataWidth must be larger than or equal to ReduceWidthByte")
     require((outsideDataWidth & (outsideDataWidth - 1)) == 0, "outsideDataWidth must be power of 2")
     require((MemoryDataWidth & (MemoryDataWidth - 1)) == 0, "MemoryDataWidth must be power of 2")
-    require((VectorWidth & (VectorWidth - 1)) == 0, "VectorWidth must be power of 2")
     require((LLCSourceMaxNum & (LLCSourceMaxNum - 1)) == 0, "LLCSourceMaxNum must be power of 2")
     require((MemorysourceMaxNum & (MemorysourceMaxNum - 1)) == 0, "MemorysourceMaxNum must be power of 2")
     require((Tensor_M & (Tensor_M - 1)) == 0, "Tensor_M must be power of 2")
@@ -1067,7 +567,6 @@ trait CUTEImplParameters{
     val ABMLNeedSCPFillTable = cuteParams.ABMLNeedSCPFillTable
     val ResultWidthByte = cuteParams.ResultWidthByte
     val ResultWidth = cuteParams.ResultWidth
-    val VectorWidth = cuteParams.VectorWidth
     val ApplicationMaxTensorSize = cuteParams.ApplicationMaxTensorSize
     val ApplicationMaxTensorSizeBitSize = cuteParams.ApplicationMaxTensorSizeBitSize
     val MMUAddrWidth = cuteParams.MMUAddrWidth
@@ -1326,12 +825,8 @@ class ComputeMicroInst()(implicit p: Parameters) extends CuteBundle{
     val DataType_D                          = UInt(ElementDataType.DataTypeBitWidth.W) //矩阵D的数据类型
     val DataType                            = UInt(ElementDataType.DataTypeBitWidth.W)
 
-    val Have_Aops                         = Bool()      //是否有AfterOps
     val Is_AfterOps_Tile = Bool()            //是否是AfterOps的Tile
     val Is_Transpose = Bool()                //是否是Transpose的Tile
-    val Is_Reorder_Only_Ops = Bool()         //是否是Reorder的Tile
-    val Is_EasyScale_Only_Ops = Bool()       //是否是EasyScale的Tile
-    val Is_VecFIFO_Ops = Bool()              //是否是VecOps的Tile
 
     val ScaratchpadTensor_M                 = (UInt(ScaratchpadMaxTensorDimBitSize.W))
     val ScaratchpadTensor_N                 = (UInt(ScaratchpadMaxTensorDimBitSize.W))
@@ -1363,96 +858,6 @@ class StoreMicroInst_Resource_Info()(implicit p: Parameters) extends CuteBundle{
     val Marco_Inst_FIFO_Index = UInt(4.W)//代表Marco的指令在队列中的位置
 }
 
-class AfterOpsInterface()(implicit p: Parameters) extends CuteBundle{
-
-    //每拍可接受一个来自CDC的与SCP和TE等宽的数据，并在自己模块内完成数据的拆分、重排、缩放、转置以及其他复杂向量任务
-    val CDCDataToInterface     = DecoupledIO(UInt((ResultWidth*Matrix_M*Matrix_N).W))
-    val InterfaceToCDCData     = Flipped(DecoupledIO(UInt((ResultWidth*Matrix_M*Matrix_N).W)))
-    // val CDCStoreAddr                        = Input(UInt(log2Ceil(CScratchpadBankNEntrys).W))
-
-    val VecInstQueueID = UInt(1.W)
-}
-
-class VPUInterface_Input()(implicit p: Parameters) extends CuteBundle{
-    val inst_uop = Output(UInt(32.W))
-    val inst_src0 = Output(UInt(VectorWidth.W))
-    val inst_src1 = Output(UInt(VectorWidth.W))
-    val inst_src0_type = Output(UInt(2.W))//从寄存器还是来自输入
-    val inst_src1_type = Output(UInt(2.W))//从寄存器还是来自输入
-    val inst_dest_type = Output(UInt(2.W))//写回寄存器还是写回输出
-    val stream_id = Output(UInt(log2Ceil(Matrix_M*Matrix_N+10).W))//stream data的id
-}
-
-class VPUInterface_Output()(implicit p: Parameters) extends CuteBundle{
-    val stream_id = Output(UInt(log2Ceil(Matrix_M*Matrix_N+10).W))//stream data的id
-    val stream_data = Output(UInt(VectorWidth.W))//stream data还能存一些额外的信息，这些信息也会返回，后续可以用于配置VPU的部分隐式寄存器，或者留存在VPU的的隐式寄存器中，这些寄存器是uop可见的，如下一次的scale，下一次的bias等。
-}
-
-class VPUInterfaceIO()(implicit p: Parameters) extends CuteBundle{
-    val VPU_Input = (DecoupledIO(new VPUInterface_Input))
-    val VPU_Output = Flipped(DecoupledIO(new VPUInterface_Output))
-}
-
-
-class VectorInterfaceIO()(implicit p: Parameters) extends CuteBundle{
-
-    //每拍可接受一个来自AfterOpsInterface的与VectorWidth等宽的数据
-    val VecTask = DecoupledIO(UInt(log2Ceil(VecTaskInstBufferSize).W))
-    val VectorDataIn     = DecoupledIO(UInt((VectorWidth).W))
-    val VectorDataOut     = Flipped(DecoupledIO(UInt((VectorWidth).W)))
-}
-
-
-case object StreamStateType extends Field[UInt]{
-    val StreamStateTypeBitWidth = 4
-    val NoReorder = 0.U(StreamStateTypeBitWidth.W)
-    val Reorder_DIM_N_First = 1.U(StreamStateTypeBitWidth.W)
-    val Reorder_DIM_M_First = 2.U(StreamStateTypeBitWidth.W)
-}
-
-//描述计算时，数据流的访问顺序，transpose的时候就是N_M，不transpose的时候就是M_N
-case object CaculateStreamStateType extends Field[UInt]{
-    val CaculateStreamStateTypeBitWidth = 4
-
-    val M_N = 0.U(CaculateStreamStateTypeBitWidth.W)
-    val N_M = 1.U(CaculateStreamStateTypeBitWidth.W)
-}
-
-class CUTE_uop()(implicit p: Parameters) extends CuteBundle{
-    val Stream_state = UInt((StreamStateType.StreamStateTypeBitWidth).W)
-    val Stream_uop = UInt(32.W)
-    val Element_uop = UInt(32.W)
-    val Vector_uop = UInt(32.W)
-
-
-}
-
-class AfterOpsMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
-    val ApplicationTensor_C = (new Bundle{
-        val dataType                        = (UInt(ElementDataType.DataTypeBitWidth.W))
-    })
-
-    val ApplicationTensor_D = (new Bundle{
-        val dataType                        = (UInt(ElementDataType.DataTypeBitWidth.W))
-    })
-
-    val ScaratchpadTensor_M                 = (UInt(ScaratchpadMaxTensorDimBitSize.W))
-    val ScaratchpadTensor_K                 = (UInt(ScaratchpadMaxTensorDimBitSize.W))
-    val ScaratchpadTensor_N                 = (UInt(ScaratchpadMaxTensorDimBitSize.W))
-
-    //接受后操作的任务，有可能是重排序，有可能是缩放，有可能是转置，有可能是其他复杂后操作任务
-    val Is_Transpose                        = (Bool())      //是否需要转置
-    val Is_Reorder_Only_Ops                 = (Bool())      //是否只是重排，不需要计算
-    val Is_EasyScale_Only_Ops               = (Bool())      //是否只是简单的缩放，不需要额外的后操作计算
-    val Is_VecFIFO_Ops                      = (Bool())      //是否真的需要通用VecFIFO的参与
-
-    val MicroTaskReady                      = Flipped(Bool())//可配置下一个任务
-    val MicroTaskValid                      = (Bool())       //当前任务的配置信息有效
-    val MicroTaskEndValid                   = Flipped(Bool())//已完成当前任务
-    val MicroTaskEndReady                   = (Bool())       //已知晓当前任务完成
-
-    val CUTEuop                         = (new CUTE_uop)
-}
 
 class ADCMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
     val ApplicationTensor_A = (new Bundle{
@@ -1494,14 +899,10 @@ class BDCMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
 
 class CDCMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
     val ApplicationTensor_C = (new Bundle{
-        // val ApplicationTensor_C_BaseVaddr   = (UInt(MMUAddrWidth.W))
-        // val BlockTensor_C_BaseVaddr         = (UInt(MMUAddrWidth.W))
         val dataType                        = (UInt(ElementDataType.DataTypeBitWidth.W))
     })
 
     val ApplicationTensor_D = (new Bundle{
-        // val ApplicationTensor_D_BaseVaddr   = (UInt(MMUAddrWidth.W))
-        // val BlockTensor_D_BaseVaddr         = (UInt(MMUAddrWidth.W))
         val dataType                        = (UInt(ElementDataType.DataTypeBitWidth.W))
     })
 
@@ -1512,9 +913,6 @@ class CDCMicroTaskConfigIO()(implicit p: Parameters) extends CuteBundle{
     val Is_Transpose                        = (Bool())      //是否需要转置
     val Is_AfterOps_Tile                    = (Bool())      //是否是需要执行后操作的Tile，包括转置等
 
-    val Is_Reorder_Only_Ops                 = (Bool())      //是否只是重排，不需要计算
-    val Is_EasyScale_Only_Ops               = (Bool())      //是否只是简单的缩放，不需要额外的后操作计算
-    val Is_VecFIFO_Ops                      = (Bool())      //是否真的需要通用VecFIFO的参与
 
 
 
@@ -1692,152 +1090,57 @@ class SCPControlInfo()(implicit p: Parameters) extends CuteBundle{
 }
 
 
-
-// _____________UNUSED_____________
-// class ConfigInfoIO()(implicit p: Parameters) extends CuteBundle{
-
-//     val MMUConfig = Flipped(new MMUConfigIO)
-//     val ApplicationTensor_A = (new Bundle{
-//         val ApplicationTensor_A_BaseVaddr = (UInt(MMUAddrWidth.W))
-//         val BlockTensor_A_BaseVaddr       = (UInt(MMUAddrWidth.W))
-//         val MemoryOrder                   = (UInt(MemoryOrderType.MemoryOrderTypeBitWidth.W))
-//         val Conherent                     = (Bool())
-//     })
-
-//     val ApplicationTensor_B = (new Bundle{
-//         val ApplicationTensor_B_BaseVaddr = (UInt(MMUAddrWidth.W))
-//         val BlockTensor_B_BaseVaddr       = (UInt(MMUAddrWidth.W))
-//         val MemoryOrder                   = (UInt(MemoryOrderType.MemoryOrderTypeBitWidth.W))
-//         val Conherent                     = (Bool())
-//     })
-    
-//     val ApplicationTensor_C = (new Bundle{
-//         val ApplicationTensor_C_BaseVaddr = (UInt(MMUAddrWidth.W))
-//         val BlockTensor_C_BaseVaddr       = (UInt(MMUAddrWidth.W))
-//         val MemoryOrder                   = (UInt(MemoryOrderType.MemoryOrderTypeBitWidth.W))
-//         val Conherent                     = (Bool())
-//     })
-//     val ApplicationTensor_D = (new Bundle{
-//         val ApplicationTensor_D_BaseVaddr = (UInt(MMUAddrWidth.W))
-//         val BlockTensor_D_BaseVaddr       = (UInt(MMUAddrWidth.W))
-//         val MemoryOrder                   = (UInt(MemoryOrderType.MemoryOrderTypeBitWidth.W))
-//         val Conherent                     = (Bool())
-//     })
-//     val ApplicationTensor_M = (UInt(ApplicationMaxTensorSizeBitSize.W))
-//     val ApplicationTensor_N = (UInt(ApplicationMaxTensorSizeBitSize.W))
-//     val ApplicationTensor_K = (UInt(ApplicationMaxTensorSizeBitSize.W))
-
-//     val ScaratchpadTensor_M = (UInt(ScaratchpadMaxTensorDimBitSize.W)) //Scaratchpad当前处理的矩阵乘的M
-//     val ScaratchpadTensor_N = (UInt(ScaratchpadMaxTensorDimBitSize.W)) //Scaratchpad当前处理的矩阵乘的N
-//     val ScaratchpadTensor_K = (UInt(ScaratchpadMaxTensorDimBitSize.W)) //Scaratchpad当前处理的矩阵乘的K
-
-//     val ComputeGo = (Bool())
-
-
-//     val dataType = (UInt(ElementDataType.DataTypeBitWidth.W)) //0-矩阵乘，1-卷积
-//     val taskType = (UInt(CUTETaskType.CUTETaskBitWidth.W)) //1-32位，2-16位， 4-32位
-//     // val ExternalReduceSize = (UInt(ScaratchpadMaxTensorDimBitSize.W))
-//     val CMemoryLoaderConfig = (new Bundle{
-//         val MemoryOrder = (UInt(MemoryOrderType.MemoryOrderTypeBitWidth.W))
-//         val TaskType = (UInt(CMemoryLoaderTaskType.TypeBitWidth.W))
-//     })
-
-// }
-
-//从Scaratchpad中取数，要明确是从哪个bank里，取第几行的数据，然后完成数据拼接返回
-//从哪个bank里取数据，取第几行的数据，是由datacontrol模块算出来的
-//怎么在bank里编排数据，是由MemoryLoader模块填进去的
-//MemoryLoader模块和datacontrol模块都有窗口期，可以完成数据额外的一些编排如量化、反稀疏、反量化、量化重排等等
-//将MemoryLoader模块和datacontrol模块分开，是为了使用窗口期，让单读写口的ScarchPad可以独立运行
-//有没有能同时读写的SRAM啊？我能保证不写同一块数据,还是先doublebuffer吧....
-//我们考虑到回数的延迟，所以DataControl与Scarachpad之间也是有fifo的。考虑到后续的SRAM是一个简单模块，fifo要加在DataControl里，让Scarachpad尽可能简单。
 class ADataControlScaratchpadIO(implicit p: Parameters) extends CuteBundle{
-    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val BankAddr = Flipped(DecoupledIO(Vec(AScratchpadNBanks, (UInt(log2Ceil(AScratchpadBankNEntrys).W)))))
-    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
     val Data = Valid(Vec(AScratchpadNBanks, UInt(AScratchpadEntryBitSize.W)))
-    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
-    // val Chosen = Input(Bool())
 }
 
 class AScaleControlScaratchpadIO(implicit p: Parameters) extends CuteBundle{
-    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val BankAddr = Flipped(DecoupledIO(UInt(log2Ceil(AScaleBankNEntrys).W)))
-    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
     val Data = Valid(Vec(AScaleNSlices, UInt((ScaleWidth * ReduceGroupSize).W)))
-    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
-    // val Chosen = Input(Bool())
 }
 
 class AMemoryLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
-    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val BankId = Flipped(Valid(UInt(log2Ceil(AScratchpadNBanks).W)))
     val BankAddr = Flipped(Vec(AScratchpadNBanks, Valid(UInt(log2Ceil(AScratchpadBankNEntrys).W))))
-    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
     val Data = Flipped(Vec(AScratchpadNBanks, Valid(UInt(AScratchpadEntryBitSize.W))))
     //zerofill用于指示是否填零
     val ZeroFill = Input(Vec(AScratchpadNBanks, Valid(UInt(log2Ceil(AScratchpadBankNEntrys).W))))
-    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
-    // val Chosen = Input(Bool())
 }
 
 class AScaleLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
-    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val BankAddr = Flipped(Valid(UInt(log2Ceil(AScaleBankNEntrys).W)))
-    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
     val Data = Flipped(Valid(Vec(AScaleNSlices, UInt((ScaleWidth * ReduceGroupSize).W))))
-    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
-    // val Chosen = Input(Bool())
 }
 
 class BDataControlScaratchpadIO(implicit p: Parameters) extends CuteBundle{
-    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val BankAddr = Flipped(DecoupledIO(Vec(BScratchpadNBanks, (UInt(log2Ceil(BScratchpadBankNEntrys).W)))))
-    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
     val Data = Valid(Vec(BScratchpadNBanks, UInt(BScratchpadEntryBitSize.W)))
-    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
-    // val Chosen = Input(Bool())
 }
 
 class BScaleControlScaratchpadIO(implicit p: Parameters) extends CuteBundle{
-    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val BankAddr = Flipped(DecoupledIO(UInt(log2Ceil(BScaleBankNEntrys).W)))
-    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
     val Data = Valid(Vec(BScaleNSlices, UInt((ScaleWidth * ReduceGroupSize).W)))
-    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
-    // val Chosen = Input(Bool())
 }
 
 class BMemoryLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
-    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val BankId = Flipped(Valid(UInt(log2Ceil(BScratchpadNBanks).W)))
     val BankAddr = Flipped(Vec(BScratchpadNBanks, Valid(UInt(log2Ceil(BScratchpadBankNEntrys).W))))
-    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
     val Data = Flipped(Vec(BScratchpadNBanks, Valid(UInt(BScratchpadEntryBitSize.W))))
-    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
-    // val Chosen = Input(Bool())
 }
 
 class BScaleLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
-    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val BankAddr = Flipped(Valid(UInt(log2Ceil(BScaleBankNEntrys).W)))
-    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是ReduceWidthByte*8
     val Data = Flipped(Valid(Vec(BScaleNSlices, UInt((ScaleWidth * ReduceGroupSize).W))))
-    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
-    // val Chosen = Input(Bool())
 }
 
 class CDataControlScaratchpadIO(implicit p: Parameters) extends CuteBundle{
-    //bankaddr是对nbanks个bank，各自bank的行选信号,是一个vec，有nbanks个元素，每个元素是一个UInt，UInt的宽度是log2Ceil(AScratchpadBankNLines)，是输入的需要握手的数据
     val ReadBankAddr = Flipped((Vec(CScratchpadNBanks, Valid(UInt(log2Ceil(CScratchpadBankNEntrys).W)))))
     val WriteBankAddr = Flipped((Vec(CScratchpadNBanks, Valid(UInt(log2Ceil(CScratchpadBankNEntrys).W)))))
-    //bankdata是对nbanks个bank，各自bank的行数据，是一个vec，有nbanks个元素，每个元素是一个UInt
     val ReadResponseData = (Vec(CScratchpadNBanks, Valid(UInt(CScratchpadEntryBitSize.W))))
     val WriteRequestData = Flipped((Vec(CScratchpadNBanks, Valid(UInt(CScratchpadEntryBitSize.W)))))
-    //chosen是选择该ScarchPad的信号，是一个bool，我们做doublebuffer，选择其一供数，选择其一加载数据
     val ReadWriteRequest = Input(UInt((ScaratchpadTaskType.TaskTypeBitWidth).W))
     val ReadWriteResponse = Output(UInt((ScaratchpadTaskType.TaskTypeBitWidth).W))
-    // val Chosen = Input(Bool())
 }
 
 class CMemoryLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
@@ -1852,7 +1155,6 @@ class CMemoryLoaderScaratchpadIO(implicit p: Parameters) extends CuteBundle{
 
     val ReadWriteRequest = Input(UInt((ScaratchpadTaskType.TaskTypeBitWidth).W))
     val ReadWriteResponse = Output(UInt((ScaratchpadTaskType.TaskTypeBitWidth).W))
-    // val Chosen = Input(Bool())
 }
 
 //LocalMMU的接口
@@ -2056,29 +1358,6 @@ class FReducePEDataType {
 
 }
 
-//数据类型的样板类
-case object  ElementDataType extends Field[UInt]{
-    val DataTypeBitWidth = 4
-    val DataTypeUndef   = 0.U(DataTypeBitWidth.W)
-    val DataTypeWidth32 = 4.U(DataTypeBitWidth.W)
-    val DataTypeWidth16 = 2.U(DataTypeBitWidth.W)
-    val DataTypeWidth8  = 1.U(DataTypeBitWidth.W)
-
-    val DataTypeI8I8I32     = 0.U(DataTypeBitWidth.W)     //I8 * I8 * I32
-    val DataTypeF16F16F32   = 1.U(DataTypeBitWidth.W)     //FP16 * FP16 * FP32
-    val DataTypeBF16BF16F32 = 2.U(DataTypeBitWidth.W)     //BF16 * BF16 * FP32
-    val DataTypeTF32TF32F32 = 3.U(DataTypeBitWidth.W)     //TF32 * TF32 * FP32
-    val DataTypeI8U8I32     = 4.U(DataTypeBitWidth.W)     //I8 * UI8 * I32
-    val DataTypeU8I8I32     = 5.U(DataTypeBitWidth.W)     //U8 * I8 * I32
-    val DataTypeU8U8I32     = 6.U(DataTypeBitWidth.W)     //U8 * U8 * I32
-    val DataTypeMxfp8e4m3F32     = 7.U(DataTypeBitWidth.W)     //Mxfp8e4m3 * Mxfp8e4m3 * FP32
-    val DataTypeMxfp8e5m2F32     = 8.U(DataTypeBitWidth.W)     //Mxfp8e5m2 * Mxfp8e5m2 * FP32
-    val DataTypenvfp4F32    = 9.U(DataTypeBitWidth.W)     //NVFP4 * NVFP4 * FP32
-    val DataTypemxfp4F32    = 10.U(DataTypeBitWidth.W)    //MXFP4 * MXFP4 * FP32
-    val DataTypefp8e4m3F32  = 11.U(DataTypeBitWidth.W)   //FP8E4M3 * FP8E4M3 * FP32
-    val DataTypefp8e5m2F32  = 12.U(DataTypeBitWidth.W)   //FP8E5M2 * FP8E5M2 * FP32
-}
-
 //工作任务的样板类
 case object  CUTETaskType extends Field[UInt]{
     val CUTETaskBitWidth = 8
@@ -2087,24 +1366,7 @@ case object  CUTETaskType extends Field[UInt]{
     val TaskTypeConv = 2.U(CUTETaskBitWidth.W)
 }
 
-case object  CMemoryLoaderTaskType extends Field[UInt]{
-    val TypeBitWidth = 4
-    val TaskTypeUndef = 0.U(TypeBitWidth.W)
-    val TaskTypeTensorZeroLoad = 1.U(TypeBitWidth.W) //直接将数据填充为0，实际上是什么也没做，默认可以写入SRAM，无视以前SRAM里面的数据即可
-    val TaskTypeTensorRepeatRowLoad = 2.U(TypeBitWidth.W) //重复加载一行数据，实际上是什么也没做，默认可以写入SRAM，无视以前SRAM里面的数据即可
-    val TaskTypeTensorLoad = 3.U(TypeBitWidth.W) //完整的加载所有数据
-}
-case object  MemoryOrderType extends Field[UInt]{
-    val MemoryOrderTypeBitWidth = 8
-    val OrderTypeUndef      = 0.U(MemoryOrderTypeBitWidth.W)
-    val OrderType_Mb_Kb     = 1.U(MemoryOrderTypeBitWidth.W) //在地址空间中顺序摆放的顺序, Mb在前，Kb在后
-    val OrderType_Mb_Nb     = 1.U(MemoryOrderTypeBitWidth.W) //在地址空间中顺序摆放的顺序, Mb在前，Nb在后
-    val OrderType_Nb_Kb     = 1.U(MemoryOrderTypeBitWidth.W) //在地址空间中顺序摆放的顺序, Nb在前，Kb在后
-    val OrderType_Nb_Mb     = 2.U(MemoryOrderTypeBitWidth.W) //在地址空间中顺序摆放的顺序, Nb在前，Mb在后
-    val OrderType_Kb_Mb     = 2.U(MemoryOrderTypeBitWidth.W) //在地址空间中顺序摆放的顺序, Kb在前，Mb在后
-    val OrderType_Kb_Nb     = 2.U(MemoryOrderTypeBitWidth.W) //在地址空间中顺序摆放的顺序, Kb在前，Nb在后
 
-}
 
 
 class ScaratchpadTaskDecode(ScaratchpadTask: UInt) extends Field[UInt]{

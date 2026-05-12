@@ -27,7 +27,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         val BSL_MicroTask_Config = (new BSLMicroTaskConfigIO)
         val CML_MicroTask_Config = (new CMLMicroTaskConfigIO)
         val MTE_MicroTask_Config = (new MTEMicroTaskConfigIO)
-        val AOP_MicroTask_Config = (new AfterOpsMicroTaskConfigIO)
         val SCP_CtrlInfo               = (new SCPControlInfo)
         val DebugTimeStampe = Input(UInt(32.W))
         val ctrlCounter = Output(new CTRLCounter)
@@ -101,9 +100,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.CDC_MicroTask_Config.ScaratchpadTensor_M := 0.U
     io.CDC_MicroTask_Config.Is_Transpose := false.B
     io.CDC_MicroTask_Config.Is_AfterOps_Tile := false.B
-    io.CDC_MicroTask_Config.Is_Reorder_Only_Ops := false.B
-    io.CDC_MicroTask_Config.Is_EasyScale_Only_Ops := false.B
-    io.CDC_MicroTask_Config.Is_VecFIFO_Ops := false.B
     io.CDC_MicroTask_Config.MicroTaskValid := false.B
     io.CDC_MicroTask_Config.MicroTaskEndReady := false.B
     io.CDC_MicroTask_Config.MicroTask_TEComputeEndReady := false.B
@@ -170,19 +166,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.MTE_MicroTask_Config.MicroTaskValid := false.B
     io.MTE_MicroTask_Config.dataType := ElementDataType.DataTypeUndef
 
-    //AOP_MicroTask_Config 的 默认配置
-    io.AOP_MicroTask_Config.ApplicationTensor_C.dataType := ElementDataType.DataTypeUndef
-    io.AOP_MicroTask_Config.ApplicationTensor_D.dataType := ElementDataType.DataTypeUndef
-    io.AOP_MicroTask_Config.ScaratchpadTensor_M := 0.U
-    io.AOP_MicroTask_Config.ScaratchpadTensor_N := 0.U
-    io.AOP_MicroTask_Config.ScaratchpadTensor_K := 0.U
-    io.AOP_MicroTask_Config.Is_Transpose := false.B
-    io.AOP_MicroTask_Config.Is_Reorder_Only_Ops := false.B
-    io.AOP_MicroTask_Config.Is_EasyScale_Only_Ops := false.B
-    io.AOP_MicroTask_Config.Is_VecFIFO_Ops := false.B
-    io.AOP_MicroTask_Config.MicroTaskValid := false.B
-    io.AOP_MicroTask_Config.MicroTaskEndReady := false.B
-    io.AOP_MicroTask_Config.CUTEuop := 0.U.asTypeOf(io.AOP_MicroTask_Config.CUTEuop)
 
     io.ygjkctrl.acc_running := false.B
     io.ygjkctrl.cute_return_val := 0xdeadbeefL.U
@@ -817,14 +800,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             Compute_MicroInst.DataType_C := PEDataType.CdataByteWidth(Decoding_MacroInst.element_type) 
             Compute_MicroInst.DataType_D := PEDataType.DdataByteWidth(Decoding_MacroInst.element_type) 
 
-            val Have_After_Ops = WireInit(false.B)
-            Have_After_Ops := Have_Store_Micro_Inst
-            Compute_MicroInst.Is_AfterOps_Tile := Have_After_Ops
-            Compute_MicroInst.Have_Aops := Have_After_Ops
+            Compute_MicroInst.Is_AfterOps_Tile := Have_Store_Micro_Inst
             Compute_MicroInst.Is_Transpose := Decoding_MacroInst.transpose_result
-            Compute_MicroInst.Is_Reorder_Only_Ops := true.B
-            Compute_MicroInst.Is_EasyScale_Only_Ops := false.B
-            Compute_MicroInst.Is_VecFIFO_Ops := false.B
 
 
             val Compute_Resource_Info = Wire(new ComputeMicroInst_Resource_Info)
@@ -1098,12 +1075,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     val Compute_Micro_Inst_Wait_A_Scale_Finish = RegInit(false.B)
     val Compute_Micro_Inst_Wait_B_Scale_Finish = RegInit(false.B)
     val Compute_Micro_Inst_Wait_C_Finish = RegInit(false.B)
-    val Compute_Micro_Inst_Wait_Aop_Finish = RegInit(false.B)
-
-    if (EnablePerfCounter)
-    {io.ctrlCounter.AOPBusy := Compute_Micro_Inst_Wait_Aop_Finish
-    io.ctrlCounter.computeInstQueueEmpty := Compute_MicroInst_FINISH_All 
-    io.ctrlCounter.computeInstCanIssue := false.B}
 
     when(!Compute_MicroInst_FINISH_All)
     {
@@ -1119,9 +1090,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         val Can_Issue_ASC_Micro_Inst = io.ASC_MicroTask_Config.MicroTaskReady
         val Can_Issue_BSC_Micro_Inst = io.BSC_MicroTask_Config.MicroTaskReady
         val Can_Issue_CDC_Micro_Inst = io.CDC_MicroTask_Config.MicroTaskReady //缺少CSCP的空闲状态,保证同时任务被发射
-        val Can_Issue_AOP_Micro_Inst = true.B
 
-        val Can_Issue_Compute_Micro_Inst = Can_Issue_ADC_Micro_Inst && Can_Issue_BDC_Micro_Inst && (!Is_Block_Scale || (Can_Issue_BSC_Micro_Inst && Can_Issue_ASC_Micro_Inst)) && Can_Issue_CDC_Micro_Inst && Dependent_Load_Finish_Ready_Go && Can_Issue_AOP_Micro_Inst
+        val Can_Issue_Compute_Micro_Inst = Can_Issue_ADC_Micro_Inst && Can_Issue_BDC_Micro_Inst && (!Is_Block_Scale || (Can_Issue_BSC_Micro_Inst && Can_Issue_ASC_Micro_Inst)) && Can_Issue_CDC_Micro_Inst && Dependent_Load_Finish_Ready_Go
 
         if (EnablePerfCounter)
         {io.ctrlCounter.computeInstCanIssue := Can_Issue_Compute_Micro_Inst && Compute_Micro_Inst_Issue_State_Reg === issue_state_idle}
@@ -1163,9 +1133,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             io.CDC_MicroTask_Config.ApplicationTensor_D.dataType := Compute_MicroInst.DataType_D //TODO:需要修改
             io.CDC_MicroTask_Config.Is_AfterOps_Tile := Compute_MicroInst.Is_AfterOps_Tile
             io.CDC_MicroTask_Config.Is_Transpose := Compute_MicroInst.Is_Transpose
-            io.CDC_MicroTask_Config.Is_Reorder_Only_Ops := Compute_MicroInst.Is_Reorder_Only_Ops
-            io.CDC_MicroTask_Config.Is_EasyScale_Only_Ops := false.B        //TODO:需要修改
-            io.CDC_MicroTask_Config.Is_VecFIFO_Ops := false.B               //TODO:需要修改
 
             io.MTE_MicroTask_Config.dataType := Compute_MicroInst.DataType
             io.MTE_MicroTask_Config.MicroTaskValid := true.B
@@ -1175,8 +1142,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             io.ASC_MicroTask_Config.MicroTaskValid := Is_Block_Scale
             io.BSC_MicroTask_Config.MicroTaskValid := Is_Block_Scale
             io.CDC_MicroTask_Config.MicroTaskValid := true.B
-            // io.MTE_MicroTask_Config.valid := true.B
-            // io.AOP_MicroTask_Config.MicroTaskValid := Compute_MicroInst.Have_Aops
 
             Current_ADC_SCP_ID := Compute_MicroInst_Resource_Info.A_SCPID
             Current_BDC_SCP_ID := Compute_MicroInst_Resource_Info.B_SCPID
@@ -1189,7 +1154,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             Compute_Micro_Inst_Wait_B_Scale_Finish := Is_Block_Scale
 
             Compute_Micro_Inst_Wait_C_Finish := true.B
-            Compute_Micro_Inst_Wait_Aop_Finish := Compute_MicroInst.Have_Aops
 
             Load_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_Resource_Info.Load_Micro_Inst_FIFO_Index) := true.B//标记这条Load指令已经可以被提交了
             
@@ -1206,7 +1170,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             io.ASC_MicroTask_Config.MicroTaskEndReady := Compute_Micro_Inst_Wait_A_Scale_Finish
             io.BSC_MicroTask_Config.MicroTaskEndReady := Compute_Micro_Inst_Wait_B_Scale_Finish
             io.CDC_MicroTask_Config.MicroTaskEndReady := Compute_Micro_Inst_Wait_C_Finish
-            io.AOP_MicroTask_Config.MicroTaskEndReady := Compute_Micro_Inst_Wait_Aop_Finish
             when(Compute_Micro_Inst_Wait_A_Finish && io.ADC_MicroTask_Config.MicroTaskEndValid)
             {
                 Compute_Micro_Inst_Wait_A_Finish := false.B
@@ -1247,14 +1210,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                 if(YJPDebugEnable)
                 {
                     printf("[TaskController<%d>]:Compute MicroInst C Finish! \n",io.DebugTimeStampe)
-                }
-            }
-            when(Compute_Micro_Inst_Wait_Aop_Finish && io.AOP_MicroTask_Config.MicroTaskEndValid)
-            {
-                Compute_Micro_Inst_Wait_Aop_Finish := false.B
-                if(YJPDebugEnable)
-                {
-                    printf("[TaskController<%d>]:Compute MicroInst Aop Finish! \n",io.DebugTimeStampe)
                 }
             }
             when(!Compute_Micro_Inst_Wait_A_Finish && !Compute_Micro_Inst_Wait_B_Finish && !Compute_Micro_Inst_Wait_C_Finish && !Compute_Micro_Inst_Wait_B_Scale_Finish && !Compute_Micro_Inst_Wait_A_Scale_Finish)

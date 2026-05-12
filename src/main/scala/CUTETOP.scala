@@ -40,9 +40,6 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     val CDC = Module(new CDataController)
     val CML = Module(new CMemoryLoader)
 
-    val AOp = Module(new AfterOpsModule)
-    val VecSIf = Module(new VectorStreamInterface)
-
     val TaskCtrl = Module(new TaskController)
     
     val MTE = Module(new MatrixTE)
@@ -108,7 +105,6 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     CDC.io.FromScarchPadIO.ReadWriteResponse := 0.U.asTypeOf(CDC.io.FromScarchPadIO.ReadWriteResponse)
     CDC.io.ConfigInfo <> TaskCtrl.io.CDC_MicroTask_Config
     CDC.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
-    CDC.io.AfterOpsInterface<>AOp.io.AfterOpsInterface
 
     //CML的默认输入
     CML.io.ConfigInfo <> TaskCtrl.io.CML_MicroTask_Config
@@ -117,16 +113,6 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     CML.io.ToScarchPadIO.ReadWriteResponse := 0.U
     CML.io.ToScarchPadIO.ReadRequestToScarchPad.ReadResponseData := 0.U.asTypeOf(CML.io.ToScarchPadIO.ReadRequestToScarchPad.ReadResponseData)
 
-    //AOP的默认输入
-    //AOp的要连接到vpu,目前先空接
-    AOp.io.ConfigInfo <> TaskCtrl.io.AOP_MicroTask_Config
-    AOp.io.DebugInfo.DebugTimeStampe := DebugTimeStampe
-    AOp.io.VectorInterface <> VecSIf.io.VectorInterface
-
-
-    //VecSIF应该把VPU的输出输出接出去，但现在先空接
-    val VPUIO = Module(new FakeVPU).io
-    VPUIO.VPUInterface <> VecSIf.io.VPUInterface
 
 
     MTE.io.VectorA <> ADC.io.VectorA
@@ -272,24 +258,17 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
 
     if (EnablePerfCounter) {
         val cutecounter = Wire(new CUTECounter)
-
-        printf("[CUTE perf %d] %x %x %x %x %x %x %x %x %x %x %x %x %x \n", time_stamp, cutecounter.ALoad, cutecounter.BLoad, cutecounter.CLoad, cutecounter.DStore, 
-            cutecounter.InstQueueEmpty, cutecounter.getConfigured, cutecounter.AOPBusy, cutecounter.computeBusy, cutecounter.computeInstQueueEmpty, cutecounter.computeInstCanIssue, cutecounter.InstCanDecode,
-            cutecounter.mmu_req_valid, cutecounter.mmu_req_ready)
-
         cutecounter.ALoad := TaskCtrl.io.ctrlCounter.ALoad
         cutecounter.BLoad := TaskCtrl.io.ctrlCounter.BLoad
         cutecounter.CLoad := TaskCtrl.io.ctrlCounter.CLoad
         cutecounter.DStore := TaskCtrl.io.ctrlCounter.DStore
         cutecounter.InstQueueEmpty := TaskCtrl.io.ctrlCounter.InstQueueEmpty
         cutecounter.getConfigured := TaskCtrl.io.ctrlCounter.getConfigured
-        cutecounter.AOPBusy := TaskCtrl.io.ctrlCounter.AOPBusy
         cutecounter.computeInstQueueEmpty := TaskCtrl.io.ctrlCounter.computeInstQueueEmpty
         cutecounter.computeInstCanIssue := TaskCtrl.io.ctrlCounter.computeInstCanIssue
         cutecounter.InstCanDecode := TaskCtrl.io.ctrlCounter.InstCanDecode
         cutecounter.mmu_req_valid := io.mmu2llc.Request.valid
         cutecounter.mmu_req_ready := io.mmu2llc.Request.ready
-        cutecounter.AOPBusy := !AOp.io.ConfigInfo.MicroTaskReady
         cutecounter.computeBusy := MTE.io.VectorA.valid
     }
 }

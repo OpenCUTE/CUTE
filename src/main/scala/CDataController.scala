@@ -19,7 +19,6 @@ class CDataController(implicit p: Parameters) extends CuteModule{
         val ConfigInfo = Flipped(new CDCMicroTaskConfigIO)
         val Matrix_C = DecoupledIO(UInt((ResultWidth*Matrix_M*Matrix_N).W))
         val ResultMatrix_D = Flipped(DecoupledIO(UInt((ResultWidth*Matrix_M*Matrix_N).W)))
-        val AfterOpsInterface = (new AfterOpsInterface)
         val ComputeGo = Input(Bool())//由TE发出的计算同步锁步信号，指可以接收新的数据了
         val DebugInfo = Input(new DebugInfoIO)
     })
@@ -32,11 +31,6 @@ class CDataController(implicit p: Parameters) extends CuteModule{
     io.ConfigInfo.MicroTaskEndValid := false.B
     io.ConfigInfo.MicroTaskReady := false.B
     io.ConfigInfo.MicroTask_TEComputeEndValid := false.B
-
-    io.AfterOpsInterface.CDCDataToInterface.valid := false.B
-    io.AfterOpsInterface.CDCDataToInterface.bits := 0.U.asTypeOf(io.AfterOpsInterface.CDCDataToInterface.bits)
-    io.AfterOpsInterface.InterfaceToCDCData.ready := false.B
-    io.AfterOpsInterface.VecInstQueueID := 0.U
 
     
 
@@ -63,9 +57,6 @@ class CDataController(implicit p: Parameters) extends CuteModule{
 
     val Is_Transpose                        = RegInit(false.B)      //是否需要转置
     val Is_AfterOps_Tile                    = RegInit(false.B)      //是否是需要执行后操作的Tile，包括转置等
-    val Is_Reorder_Only_Ops                 = RegInit(false.B)      //是否只是重排，不需要计算
-    val Is_EasyScale_Only_Ops               = RegInit(false.B)      //是否只是简单的缩放，不需要额外的后操作计算
-    val Is_VecFIFO_Ops                      = RegInit(false.B)      //是否真的需要同有VecFIFO的参与
     val D_Datatype                          = RegInit(0.U(ElementDataType.DataTypeBitWidth.W))     //数据类型，0是int8，1是int16，2是int32，3是fp16
 
 
@@ -75,12 +66,7 @@ class CDataController(implicit p: Parameters) extends CuteModule{
         ConfigInfo.MicroTaskReady := true.B
         when(ConfigInfo.MicroTaskReady && ConfigInfo.MicroTaskValid){
             //当前配置的指令有效
-            if (YJPCDCDebugEnable)
-            {
-                //debug信息
-                printf("[CDataController<%d>]CDataController: ConfigInfo is valid! ScaratchpadWorkingTensor_M = %d,ScaratchpadWorkingTensor_N = %d,ScaratchpadWorkingTensor_K = %d\n",io.DebugInfo.DebugTimeStampe, ConfigInfo.ScaratchpadTensor_M, ConfigInfo.ScaratchpadTensor_N, ConfigInfo.ScaratchpadTensor_K)
-                printf("[CDataController<%d>]CDataController: Is_Transpose = %d,Is_AfterOps_Tile = %d,Is_Reorder_Only_Ops = %d,Is_EasyScale_Only_Ops = %d,Is_VecFIFO_Ops = %d,D_Datatype = %d\n",io.DebugInfo.DebugTimeStampe, ConfigInfo.Is_Transpose, ConfigInfo.Is_AfterOps_Tile, ConfigInfo.Is_Reorder_Only_Ops, ConfigInfo.Is_EasyScale_Only_Ops, ConfigInfo.Is_VecFIFO_Ops, ConfigInfo.ApplicationTensor_D.dataType)
-            }
+
             state := s_mm_task  //切换到矩阵乘状态
             ScaratchpadWorkingTensor_M := ConfigInfo.ScaratchpadTensor_M / Matrix_M.U * Matrix_M.U + (ConfigInfo.ScaratchpadTensor_M % Matrix_M.U =/= 0.U) * Matrix_M.U    //当前执行的矩阵乘任务的M, 取4的整数
 
@@ -90,9 +76,6 @@ class CDataController(implicit p: Parameters) extends CuteModule{
 
             Is_Transpose                := ConfigInfo.Is_Transpose          //是否需要转置
             Is_AfterOps_Tile            := ConfigInfo.Is_AfterOps_Tile      //是否是需要执行后操作的Tile，包括转置等
-            Is_Reorder_Only_Ops         := ConfigInfo.Is_Reorder_Only_Ops   //是否只是重排，不需要计算
-            Is_EasyScale_Only_Ops       := ConfigInfo.Is_EasyScale_Only_Ops //是否只是简单的缩放，不需要额外的后操作计算
-            Is_VecFIFO_Ops              := ConfigInfo.Is_VecFIFO_Ops        //是否真的需要同有VecFIFO的参与
 
             D_Datatype                  := ConfigInfo.ApplicationTensor_D.dataType //数据类型，0是int8，1是int16，2是int32，3是fp16
             //阶段0，让计算状态机开始初始化，开始计算状态机开始工作

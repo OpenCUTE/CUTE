@@ -49,7 +49,6 @@ object HeaderGenerator {
     println(s"  Matrix_N: ${cuteParams.Matrix_N}")
     println(s"  ReduceWidthByte: ${cuteParams.ReduceWidthByte}")
     println(s"  OutsideDataWidth: ${cuteParams.outsideDataWidth}")
-    println(s"  VectorWidth: ${cuteParams.VectorWidth}")
     println(s"  MMU: vpn=${cuteParams.MMUParams.vpnBits}, ppn=${cuteParams.MMUParams.ppnBits}")
 
     cuteParams
@@ -158,7 +157,6 @@ object HeaderGenerator {
     writer.println("// Hardware Parameters (from CuteParams)")
     writer.println(s"#define CUTE_OUTSIDE_DATA_WIDTH ${params.outsideDataWidth}")
     writer.println(s"#define CUTE_MEMORY_DATA_WIDTH ${params.MemoryDataWidth}")
-    writer.println(s"#define CUTE_VECTOR_WIDTH ${params.VectorWidth}")
     writer.println(s"#define CUTE_MMU_ADDR_WIDTH ${params.MMUAddrWidth}")
     writer.println()
 

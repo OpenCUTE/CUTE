@@ -75,7 +75,6 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
     //访存读状态机，用来配合流水线刷新
     val s_load_idle :: s_load_init :: s_load_working :: s_load_end :: Nil = Enum(4)
     val memoryload_state = RegInit(s_load_idle)
-    val MemoryOrder_LoadConfig = RegInit(MemoryOrderType.OrderTypeUndef)
 
     //访存写状态机，用来配合流水线刷新
     val s_store_idle :: s_store_init :: s_store_working :: s_store_end :: Nil = Enum(4)
@@ -251,40 +250,7 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
         Repeat_Fill_Request_Infight := 0.U
         Repeat_Fill_Is_Working := false.B
     }.elsewhen(memoryload_state === s_load_working){
-        //根据不同的MemoryOrder，执行不同的访存模式
-        //只要Request是ready，我们发出的访存请求就会被MMU送往总线，我们可以发出下一个访存请求
-        //担心乘法电路延迟，可以提前几个周期将乘法结果算好
-        //TODO:注意这里的分块逻辑/地址拼接的逻辑，我们在设计MemoryOrderType分块的逻辑时，要考虑到这里的求地址的电路逻辑，是可以减少这部分的乘法电路的逻辑的
-        //注意ScaratchPad内的存数的状态
 
-        //数据在CScarachpad中的编排
-        //数据会先排N，再排M,这里每个都是4byte的数据，是一个全精度的数据，是一个element，和AML、BML里的不是一个概念
-        //   N 0 1 2 3 4 5 6 7     CScaratchpadData里的排布
-        // M                               {bank  [0] [1]     [2] [3] }
-        // 0   0 1 2 3 4 5 6 7   |addr    0 |    0123 89ab   ghij opgr 
-        // 1   8 9 a b c d e f   |        1 |    4567 cdef   klmn stuv 
-        // 2   g h i j k l m n   |        2 |    wxyz !...   @... #... 
-        // 3   o p g r s t u v   |        3 |    .... ....   .... ....
-        // 4   w x y z .......   |        4 |    .... ....   .... .... 
-        // 5   !..............   |        5 |    .... ....   .... ....
-        // 6   @..............   |        6 |    .... ....   .... ....
-        // 7   #..............   |        7 |    .... ....   .... .... 
-        // 8   $..............   | ....................................
-
-        //向量的访存顺序
-        //01,89,gh,op,23,ab,ij,gr,45,cd,kl,st,67,ef,mn,uv,打散bank去填数据
-        //   N 0 1 2 3 4 5 6 7     CScaratchpadData里的排布
-        // M                               {bank  [0] [1]     [2] [3] }
-        // 0   0 1 2 3 4 5 6 7   |addr    0 |      0   8       g   o 
-        // 1   8 9 a b c d e f   |        1 |      1   9       h   p 
-        // 2   g h i j k l m n   |        2 |      2   a       i   q
-        // 3   o p g r s t u v   |        3 |    ...沙莉花园. ....   .... ....
-        // 4   w x y z .......   |        4 |    .... ....   .... .... 
-        // 5   !..............   |        5 |    .... ....   .... ....
-        // 6   @..............   |        6 |    .... ....   .... ....
-        // 7   #..............   |        7 |    .... ....   .... .... 
-        // 8   $..............   | ....................................
-        //
 
         when(Is_FullLoad)
         {
@@ -803,13 +769,6 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
                 Fill_LLC_Iter := 0.U
                 Reorder_ToLLC_Reg_Valid(Reorder_ToLLC_Reg_Get_Index) := true.B
                 Reorder_ToLLC_Reg_Get_Index := WrapInc(Reorder_ToLLC_Reg_Get_Index, 2)
-
-                //完成一组数据，4*4数据的填充输出这一组数据
-                // if (YJPAfterOpsDebugEnable)
-                // {
-                //     val Groups_Iter = GetCount / (Matrix_M.U)
-                //     printf("[AfterOps<%d>]AfterOps: Fill data to Reorder_ToVector_Reg, GetCount is %d(Groups %d),Fill_Reg_data is %x\n",io.DebugInfo.DebugTimeStampe, GetCount,Groups_Iter,Reorder_ToVector_Reg(Reorder_ToVector_Reg_Get_Index).asUInt)
-                // }
             }
         }
         val Reorder_ToLLC_Reg_Ready_Send= Reorder_ToLLC_Reg_Valid.reduce(_||_)//只要有一个是Valid就是ture，表示可以发往后操作执行
@@ -838,10 +797,6 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
             //只有fire了才能继续
             when(WriteRequest.fire && io.LocalMMUIO.ConherentRequsetSourceID.valid){
                 Send_LLC_Iter := WrapInc(Send_LLC_Iter, Send_LLC_Max_Iter)
-                // if (YJPAfterOpsDebugEnable)
-                // {
-                //     printf("[AfterOps<%d>]AfterOps: Send data to Vector, Send_Vector_Iter is %d,Send_Vector_Data is %x\n",io.DebugInfo.DebugTimeStampe, Send_Vector_Iter,io.VectorInterface.VectorDataIn.bits)
-                // }
                 when(Is_Transpose) {
                     when(Send_LLC_Iter === (Send_LLC_Max_Iter - 1).U) {
                         Send_LLC_Iter := 0.U
@@ -854,7 +809,6 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
                         Send_LLC_Iter := 0.U
                         Reorder_ToLLC_Reg_Valid(Reorder_ToLLC_Reg_Send_Index) := false.B
                         Reorder_ToLLC_Reg_Send_Index := WrapInc(Reorder_ToLLC_Reg_Send_Index, 2)
-                        // printf("[AfterOps<%d>]AfterOps: Send Reorder Group finish, Send_Vector_Iter is %d\n",io.DebugInfo.DebugTimeStampe, Send_Vector_Iter)
                     }
                 }
 
