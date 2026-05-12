@@ -27,14 +27,7 @@ fpe:
   scale_element_width: 8
   comp_tree_layers: 4
   fp8_comp_tree_layers: 4
-wip:
-  vector_width: 256
-  memory_data_width: 64
-  vec_task_inst_buffer_depth: 32
-  vec_task_inst_buffer_size: 8
-  vec_task_data_buffer_depth: 4
-  enable_perf_counter: false
-  memory_source_max_num: 64
+
 tensor_task:
   application_max_tensor_size: 65535
   conv_input_max: 16383
