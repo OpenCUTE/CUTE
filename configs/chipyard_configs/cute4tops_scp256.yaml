@@ -1,0 +1,36 @@
+version: 1
+id: cute4tops_scp256
+
+cute:
+  config: CUTE_4Tops_256SCP
+  instances: [0]
+  isa:
+    version: cute_isa_v1
+
+soc:
+  core:
+    kind: shuttle
+    count: 1
+    shuttle_tile_beat_bytes: 64
+  bus:
+    system_bits: 512
+    memory_bits: 512
+  cache:
+    inclusive_kb: 512
+    outer_latency_cycles: 40
+    banks: 4
+    cache_hash: true
+    tl_monitors: false
+  vector:
+    version: none
+
+capability:
+  tensor_ops: [matmul, conv]
+  layer_ops: []
+  fused_ops: []
+
+trace_capability:
+  structured_trace: false
+  d_store_data: false
+  mem_req_rsp: false
+  perf_counter_snapshot: true

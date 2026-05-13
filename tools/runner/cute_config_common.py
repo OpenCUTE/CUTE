@@ -6,7 +6,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import yaml
@@ -168,12 +168,30 @@ def _scala_config_classes(text: str) -> List[tuple[str, str]]:
     return classes
 
 
+def chipyard_cute_config_path(root: Path) -> Path:
+    return root / "chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala"
+
+
+def locate_chipyard_config_class(root: Path, class_name: str) -> Tuple[Path, Optional[int]]:
+    config_path = chipyard_cute_config_path(root).resolve()
+    if not config_path.exists():
+        return config_path, None
+
+    pattern = re.compile(
+        r"^class\s+%s\s+extends\s+Config\(" % re.escape(class_name)
+    )
+    for line_no, line in enumerate(config_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if pattern.match(line):
+            return config_path, line_no
+    return config_path, None
+
+
 def resolve_chipyard_config_class(root: Path, chipyard: Dict[str, Any]) -> str:
     cid = cute_config_id(chipyard)
     chipyard_id = str(chipyard.get("id") or "")
     expected = derive_chipyard_config_class(chipyard_id or cid)
     cute_expected = derive_chipyard_config_class(cid)
-    config_path = root / "chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala"
+    config_path = chipyard_cute_config_path(root)
     if not config_path.exists():
         return expected
 

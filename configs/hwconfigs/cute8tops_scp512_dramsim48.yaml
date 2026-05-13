@@ -1,0 +1,14 @@
+version: 1
+name: cute8tops_scp512_dramsim48
+tags: [cute_tensor_v1, shuttle]
+
+chipyard_config: cute8tops_scp512
+
+memory:
+  model: dramsim2
+  config: dramsim2_ini_48GB_per_s
+
+simulator:
+  backend: verilator
+  binary: auto
+  max_cycles: 800000000

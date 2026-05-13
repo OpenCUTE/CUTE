@@ -9,11 +9,12 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence, Set
 
 from cute_config_common import (
     ConfigError,
     find_cute_root,
+    locate_chipyard_config_class,
     resolve_chipyard_config_class,
     resolve_hwconfig,
 )
@@ -36,6 +37,26 @@ class CuteBuilder:
 
     def resolve(self, hwconfig_value: str):
         return resolve_hwconfig(self.root, self.cwd, hwconfig_value)
+
+    def hwconfig_ids(self) -> List[str]:
+        hwconfig_dir = self.root / "configs/hwconfigs"
+        if not hwconfig_dir.is_dir():
+            raise ConfigError("missing HWConfig directory: %s" % hwconfig_dir)
+
+        ids: List[str] = []
+        seen: Set[str] = set()
+        paths = sorted(
+            list(hwconfig_dir.glob("*.yaml")) + list(hwconfig_dir.glob("*.yml")),
+            key=lambda path: path.name,
+        )
+        for path in paths:
+            if path.stem in seen:
+                continue
+            seen.add(path.stem)
+            ids.append(path.stem)
+        if not ids:
+            raise ConfigError("no HWConfig YAML files found under %s" % hwconfig_dir)
+        return ids
 
     def build_genfiles(self, resolved, force: bool) -> Path:
         output_dir = self.root / "build" / "chipyard_configs" / resolved.chipyard_id / "generated"
@@ -89,10 +110,14 @@ class CuteBuilder:
             print("[OK] simulator copied to %s" % simulator_out)
 
         print("[OK] simulator config class: %s" % config_class)
+        config_path, line_no = locate_chipyard_config_class(self.root, config_class)
+        if line_no is None:
+            print("     CuteConfig.scala: %s" % config_path)
+        else:
+            print("     CuteConfig.scala: %s:%d" % (config_path, line_no))
         return simulator_out
 
-    def run(self, hwconfig_value: str, step: str, jobs: int, force: bool) -> int:
-        resolved = self.resolve(hwconfig_value)
+    def run_resolved(self, resolved, step: str, jobs: int, force: bool) -> int:
         print("[HWCONFIG] %s -> %s" % (resolved.hwconfig_id, resolved.hwconfig_path))
         print("[CHIPYARD] %s -> %s" % (resolved.chipyard_id, resolved.chipyard_path))
         sys.stdout.flush()
@@ -103,6 +128,37 @@ class CuteBuilder:
             self.build_simulator(resolved, jobs=jobs, force_copy=force)
 
         print("[OK] cute-build step=%s hwconfig=%s" % (step, resolved.hwconfig_id))
+        print("     HWConfig YAML: %s" % resolved.hwconfig_path.resolve())
+        return 0
+
+    def run(self, hwconfig_value: str, step: str, jobs: int, force: bool) -> int:
+        resolved = self.resolve(hwconfig_value)
+        return self.run_resolved(resolved, step, jobs, force)
+
+    def run_all(self, step: str, jobs: int, force: bool) -> int:
+        hwconfig_ids = self.hwconfig_ids()
+        built_chipyard_ids: Set[str] = set()
+        skipped = 0
+
+        print("[ALL] found %d HWConfig file(s)" % len(hwconfig_ids))
+        for index, hwconfig_id in enumerate(hwconfig_ids, start=1):
+            resolved = self.resolve(hwconfig_id)
+            if resolved.chipyard_id in built_chipyard_ids:
+                skipped += 1
+                print(
+                    "[SKIP] %d/%d hwconfig=%s shares chipyard_config=%s"
+                    % (index, len(hwconfig_ids), resolved.hwconfig_id, resolved.chipyard_id)
+                )
+                continue
+
+            built_chipyard_ids.add(resolved.chipyard_id)
+            print("[ALL] %d/%d hwconfig=%s" % (index, len(hwconfig_ids), resolved.hwconfig_id))
+            self.run_resolved(resolved, step, jobs, force)
+
+        print(
+            "[OK] cute-build --all step=%s built=%d skipped=%d"
+            % (step, len(built_chipyard_ids), skipped)
+        )
         return 0
 
 
@@ -121,7 +177,13 @@ def normalize_step(value: str) -> str:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build CUTE generated files and simulator from HWConfig")
     parser.add_argument("--root", help="CUTE root directory (default: auto-detect)")
-    parser.add_argument("--hwconfig", required=True, help="HWConfig id or path")
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--hwconfig", help="HWConfig id or path")
+    target.add_argument(
+        "--all",
+        action="store_true",
+        help="Build every HWConfig YAML under configs/hwconfigs (deduplicated by chipyard_config)",
+    )
     parser.add_argument(
         "--step",
         type=normalize_step,
@@ -139,6 +201,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         root = Path(args.root).resolve() if args.root else find_cute_root()
         builder = CuteBuilder(root, verbose=args.verbose)
+        if args.all:
+            return builder.run_all(args.step, args.jobs, args.force)
         return builder.run(args.hwconfig, args.step, args.jobs, args.force)
     except subprocess.CalledProcessError as exc:
         print("ERROR: command failed with exit code %d" % exc.returncode, file=sys.stderr)

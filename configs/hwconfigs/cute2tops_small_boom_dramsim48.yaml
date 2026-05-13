@@ -1,0 +1,14 @@
+version: 1
+name: cute2tops_small_boom_dramsim48
+tags: [cute_tensor_v1, boom]
+
+chipyard_config: cute2tops_small_boom
+
+memory:
+  model: dramsim2
+  config: dramsim2_ini_48GB_per_s
+
+simulator:
+  backend: verilator
+  binary: auto
+  max_cycles: 800000000

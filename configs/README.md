@@ -377,6 +377,14 @@ python3 tools/runner/cute-build.py \
   --step all
 ```
 
+批量模式会扫描 `configs/hwconfigs/*.yaml`，并按 `chipyard_config` 去重执行构建：
+
+```bash
+python3 tools/runner/cute-build.py \
+  --all \
+  --step genfiles
+```
+
 ### 步骤 6: 运行测试
 
 ```bash
@@ -413,6 +421,10 @@ python3 tools/runner/cute-build.py \
 python3 tools/runner/cute-build.py \
   --hwconfig cute4tops_scp128_dramsim48 \
   --step simulator
+
+python3 tools/runner/cute-build.py \
+  --all \
+  --step genfiles
 
 python3 tools/runner/cute-run.py \
   --hwconfig cute4tops_scp128_dramsim48 \

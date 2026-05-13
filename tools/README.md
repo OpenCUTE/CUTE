@@ -156,9 +156,17 @@ python3 tools/runner/cute-build.py \
 python3 tools/runner/cute-build.py \
   --hwconfig cute4tops_scp128_dramsim48 \
   --step all
+
+# 遍历所有 HWConfig，生成每个唯一 chipyard_config 的文件
+python3 tools/runner/cute-build.py \
+  --all \
+  --step genfiles
 ```
 
-`--step config` 是 `--step genfiles` 的兼容别名。Simulator 输出位置：
+`--hwconfig` 和 `--all` 二选一使用。`--all` 会扫描
+`configs/hwconfigs/*.yaml`，并按 `chipyard_config` 去重执行构建，避免同一个
+Chipyard 配置重复生成或重复编译。`--step config` 是 `--step genfiles` 的兼容别名。
+Simulator 输出位置：
 
 ```text
 build/chipyard_configs/<chipyard_config_id>/simulator-verilator

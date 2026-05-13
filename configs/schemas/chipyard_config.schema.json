@@ -124,6 +124,40 @@
             "version": {
               "$ref": "#/definitions/vector_version_id",
               "description": "引用 configs/vector_versions/<version>.yaml"
+            },
+            "vLen": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Saturn vector register bit width"
+            },
+            "dLen": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Saturn vector datapath bit width"
+            },
+            "mLen": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Saturn vector mask bit width"
+            },
+            "tcm": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Shuttle TCM options used with Saturn vector configs",
+              "properties": {
+                "address": {
+                  "type": "string",
+                  "pattern": "^0x[0-9A-Fa-f]+$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "banks": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
             }
           }
         }
