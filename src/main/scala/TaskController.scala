@@ -1196,6 +1196,8 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             {
                 Load_MicroInst_FINISH_Head := WrapInc(Load_MicroInst_FINISH_Head, 4)
                 Load_MicroInst_FINISH_Ready_GO(Load_MicroInst_FINISH_Head) := true.B
+                // AME mode: auto-commit Load on completion (original path relies on Compute to commit)
+                Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FINISH_Head) := true.B
                 Load_Micro_Inst_Issue_State_Reg := issue_state_idle
                 if (YJPDebugEnable)
                 {
@@ -1328,7 +1330,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             Compute_Micro_Inst_Wait_C_Finish := true.B
             Compute_Micro_Inst_Wait_Aop_Finish := Compute_MicroInst.Have_Aops
 
-            Load_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_Resource_Info.Load_Micro_Inst_FIFO_Index) := true.B//标记这条Load指令已经可以被提交了
+            //Load_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_Resource_Info.Load_Micro_Inst_FIFO_Index) := true.B//标记这条Load指令已经可以被提交了
             
             if (ZZHDebugEnable)
             {
@@ -1398,13 +1400,15 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             {
                 Compute_MicroInst_FINISH_HEAD := WrapInc(Compute_MicroInst_FINISH_HEAD, 4)
                 Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FINISH_HEAD) := true.B
+                // AME mode: auto-commit Compute on completion
+                Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FINISH_HEAD) := true.B
                 Compute_Micro_Inst_Issue_State_Reg := issue_state_idle
 
                 //Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FINISH_HEAD) := true.B
             
                 when(Compute_MicroInst.Have_Store_Micro_Inst === false.B)
                 {
-                    Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FINISH_HEAD) := true.B
+                    //Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FINISH_HEAD) := true.B
                     // Compute_Micro_Inst_Issue_State_Reg := issue_state_idle
                     if (YJPDebugEnable)
                     {
@@ -1471,7 +1475,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             io.CML_MicroTask_Config.MicroTaskValid := true.B
             Store_Micro_Inst_Wait_C_Finish := true.B
             Store_Micro_Inst_Issue_State_Reg := issue_state_issue
-            Compute_MicroInst_FINISH_Ready_Commit(Store_MicroInst_Resource_Info.Compute_Micro_Inst_FIFO_Index) := true.B//标记这条Compute指令已经可以被提交了
+            //Compute_MicroInst_FINISH_Ready_Commit(Store_MicroInst_Resource_Info.Compute_Micro_Inst_FIFO_Index) := true.B//标记这条Compute指令已经可以被提交了
             if (ZZHDebugEnable)
             {
                 printf("[TaskController<%d>]:Store MicroInst Issue! \n",io.DebugTimeStampe)
@@ -1513,6 +1517,19 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
     // AME all_idle: all FIFOs empty AND all issue state machines idle (no in-flight operations)
     io.ame_inject.all_fifo_empty := Load_MicroInst_FIFO_Empty && Compute_MicroInst_FIFO_Empty && Store_MicroInst_FIFO_Empty && Load_MicroInst_FINISH_All && Compute_MicroInst_FINISH_All && Load_Micro_Inst_Issue_State_Reg === issue_state_idle && Compute_Micro_Inst_Issue_State_Reg === issue_state_idle && Store_Micro_Inst_Issue_State_Reg === issue_state_idle
-
+    if(ZZHDebugEnable){
+        when(!io.ame_inject.all_fifo_empty) {
+            printf("[AME-TC<%d>] NOT IDLE: LdEmpty=%d CmpEmpty=%d StEmpty=%d LdFinAll=%d CmpFinAll=%d LdIdle=%d CmpIdle=%d StIdle=%d | LdH=%d LdT=%d LdFH=%d CmpH=%d CmpT=%d CmpFH=%d StH=%d StT=%d\n",
+                io.DebugTimeStampe,
+                Load_MicroInst_FIFO_Empty, Compute_MicroInst_FIFO_Empty, Store_MicroInst_FIFO_Empty,
+                Load_MicroInst_FINISH_All, Compute_MicroInst_FINISH_All,
+                Load_Micro_Inst_Issue_State_Reg === issue_state_idle,
+                Compute_Micro_Inst_Issue_State_Reg === issue_state_idle,
+                Store_Micro_Inst_Issue_State_Reg === issue_state_idle,
+                Load_MicroInst_FIFO_Head, Load_MicroInst_FIFO_Tail, Load_MicroInst_FINISH_Head,
+                Compute_MicroInst_FIFO_Head, Compute_MicroInst_FIFO_Tail, Compute_MicroInst_FINISH_HEAD,
+                Store_MicroInst_FIFO_Head, Store_MicroInst_FIFO_Tail)
+        }
+    }
 
 }

@@ -106,10 +106,10 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   // Stall must NOT depend on cmd_valid to avoid combinational cycle.
   // Uses inst fields (pure data path from io.cmd.bits) and FIFO status.
   // fence.m stall is handled at CUTE2YGJK level.
-  val would_load    = inst_uop === 1.U && !inst_ls  // load
-  val would_mzero   = inst_uop === 3.U && inst_func4 === 0.U  // mzero
-  val would_compute = inst_uop === 2.U  // matmul
-  val would_store   = inst_uop === 1.U && inst_ls  // store
+  val would_load    = cmd_valid && inst_uop === 1.U && !inst_ls  // load
+  val would_mzero   = cmd_valid && inst_uop === 3.U && inst_func4 === 0.U  // mzero
+  val would_compute = cmd_valid && inst_uop === 2.U  // matmul
+  val would_store   = cmd_valid && inst_uop === 1.U && inst_ls  // store
 
   val load_stall    = (would_load || would_mzero) && io.load_fifo_full
   val compute_stall = would_compute && io.compute_fifo_full

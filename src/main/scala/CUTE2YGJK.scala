@@ -230,24 +230,20 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
 
     //一拍的时间接受指令，下一拍的时间返回结果
     //后面可以设置成一个指令fifo
-    // ame_stall only applies to normal AME instructions (not fence/mstatus which are handled locally)
-    val is_fence_or_status_bits = io.cmd.bits.inst.opcode === "h2B".U &&
-      (io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_FENCE_M || io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_MSTATUS)
-    val ame_normal_stall = !is_fence_or_status_bits && acc.io.ame_stall
-    io.cmd.ready := !canResp && !ame_normal_stall && !ame_fence_stall
+    io.cmd.ready := !canResp
     when(io.cmd.fire && io.cmd.bits.inst.xd === true.B){
       canResp := true.B
     }.elsewhen(io.resp.fire){
       canResp := false.B
     }
-    // if (YJPDebugEnable)
-    // {
-    //     //输出io.cmd的信息和io.resp的信息
-    //     printf("[CUTE2YGJK.top]io.cmd.fire: %x, io.cmd.bits.inst: %x, io.cmd.bits.rs1: %x, io.cmd.bits.rs2: %x, io.cmd.bits.inst.rd: %x, io.cmd.bits.inst.funct: %x\n", io.cmd.fire, io.cmd.bits.inst.asUInt, io.cmd.bits.rs1, io.cmd.bits.rs2, io.cmd.bits.inst.rd, io.cmd.bits.inst.funct)
-    //     //输出valid和ready信息
-    //     printf("[CUTE2YGJK.top]io.cmd.valid: %x, io.cmd.ready: %x, io.resp.valid: %x, io.resp.ready: %x\n", io.cmd.valid, io.cmd.ready, io.resp.valid, io.resp.ready)
-    // }
-
+     if (ZZHDebugEnable)
+     {
+         //输出io.cmd的信息和io.resp的信息
+         printf("[CUTE2YGJK.top]io.cmd.fire: %x, io.cmd.bits.inst: %x, io.cmd.bits.rs1: %x, io.cmd.bits.rs2: %x, io.cmd.bits.inst.rd: %x, io.cmd.bits.inst.funct: %x\n", io.cmd.fire, io.cmd.bits.inst.asUInt, io.cmd.bits.rs1, io.cmd.bits.rs2, io.cmd.bits.inst.rd, io.cmd.bits.inst.funct)
+         //输出valid和ready信息
+         printf("[CUTE2YGJK.top]io.cmd.valid: %x, io.cmd.ready: %x, io.resp.valid: %x, io.resp.ready: %x\n", io.cmd.valid, io.cmd.ready, io.resp.valid, io.resp.ready)
+     }
+  
     rd := io.cmd.bits.inst.rd    //下一拍一定会返回
     io.resp.bits.rd := rd
     io.resp.bits.data := rd_data
@@ -264,7 +260,9 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryComputeTime.funct.U){ //查询加速器计算时间
       rd_data := compute
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryMacroInstFinish.funct.U){ //查询CUTE宏指令的完成情况
-      rd_data := acc.io.ctrl2top.InstFIFO_Finish
+      val ame_idle = acc.io.ame_all_idle
+      rd_data := ame_idle
+      //rd_data := acc.io.ctrl2top.InstFIFO_Finish
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryMacroInstFIFOFull.funct.U){ //查询CUTE宏指令队列是否已满
       rd_data := acc.io.ctrl2top.InstFIFO_Full
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryMacroInstFIFOInfo.funct.U){ //查询CUTE宏指令队列目前有多少指令
@@ -272,15 +270,20 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct >= 64.U){
       rd_data := acc.io.ctrl2top.cute_return_val
     }.elsewhen(io.cmd.fire && is_ame_status){
-      // mstatus: return AME pipeline status directly
-      // bit[0]: busy (not idle), bit[4]: all_idle
       val ame_idle = acc.io.ame_all_idle
-      rd_data := Cat(0.U(59.W), ame_idle, !ame_idle, 0.U(3.W))
+      rd_data := ame_idle
       if(ZZHDebugEnable){
         printf("[AME-ROCC] mstatus query: all_idle=%d\n", ame_idle)
+        printf("[CUTE2YGJK.top-test1]io.cmd.valid: %x, io.cmd.ready: %x, io.resp.valid: %x, io.resp.ready: %x\n", io.cmd.valid, io.cmd.ready, io.resp.valid, io.resp.ready)
       }
     }
-
+    /*when(io.resp.valid){
+      val ame_idle = acc.io.ame_all_idle
+      if(ZZHDebugEnable){
+        printf("[AME-ROCC] mstatus query: all_idle=%d\n", ame_idle)
+        printf("[CUTE2YGJK.top-test2]io.cmd.valid: %x, io.cmd.ready: %x, io.resp.valid: %x, io.resp.ready: %x\n", io.cmd.valid, io.cmd.ready, io.resp.valid, io.resp.ready)
+      }
+    }*/
     when(acc.io.mmu2llc.Request.fire){
         when(acc.io.mmu2llc.Request.bits.RequestType_isWrite === 0.U){
             memNum_r := memNum_r + 1.U
