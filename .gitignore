@@ -15,3 +15,5 @@ build/generated-scala/
 .metals
 .vscode
 __pycache__
+/build
+/project
