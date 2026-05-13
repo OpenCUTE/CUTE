@@ -52,6 +52,16 @@ def _is_single_fullwidth(fields: Optional[List[Dict[str, Any]]]) -> bool:
     return f["hi"] == 63 and f["lo"] == 0
 
 
+def _c_macro_name(value: str) -> str:
+    out = []
+    for ch in value:
+        if ch.isalnum():
+            out.append(ch.upper())
+        else:
+            out.append("_")
+    return "".join(out)
+
+
 class ConfigGenerator:
     def __init__(self, root: Path, verbose: bool = False):
         self.root = root.resolve()
@@ -145,6 +155,44 @@ class ConfigGenerator:
         lines.append("// YGJK group:  funct offset 0 (RoCC funct field direct)")
         lines.append("// CUTE group:  funct offset %s (RoCC funct field + %s)" % (cute_offset, cute_offset))
         lines.append("")
+
+        # Software ABI / data layout requirements
+        software = isa.get("software", {})
+        data_layout = software.get("data_layout", {}) if isinstance(software, dict) else {}
+        if isinstance(data_layout, dict) and data_layout:
+            requirements = data_layout.get("requirements", [])
+            if not isinstance(requirements, list):
+                requirements = []
+            default_align = data_layout.get("alignment_bytes")
+            default_padding = data_layout.get("padding", "")
+            lines.append("// ========================================")
+            lines.append("// Software Data Layout Requirements")
+            lines.append("// ========================================")
+            if default_align is not None:
+                lines.append("#define CUTE_SOFTWARE_DATA_ALIGNMENT_BYTES %sUL" % default_align)
+            if default_padding == "zero":
+                lines.append("#define CUTE_SOFTWARE_DATA_PADDING_ZERO 1")
+            for req in requirements:
+                if not isinstance(req, dict):
+                    continue
+                req_name = str(req.get("name", "requirement"))
+                macro_prefix = "CUTE_SOFTWARE_%s" % _c_macro_name(req_name)
+                align = req.get("alignment_bytes", default_align)
+                padding = req.get("padding", default_padding)
+                applies_to = req.get("applies_to", [])
+                if not isinstance(applies_to, list):
+                    applies_to = []
+                desc = str(req.get("description", ""))
+                if align is not None:
+                    lines.append("#define %s_ALIGNMENT_BYTES %sUL" % (macro_prefix, align))
+                if padding == "zero":
+                    lines.append("#define %s_PADDING_ZERO 1" % macro_prefix)
+                lines.append("// %s" % req_name)
+                if applies_to:
+                    lines.append("// Applies to: %s" % ", ".join(str(value) for value in applies_to))
+                if desc:
+                    lines.append("// %s" % desc)
+            lines.append("")
 
         # Inline YGJK primitives (only the subset used by wrapper functions)
         lines.append("// ========================================")

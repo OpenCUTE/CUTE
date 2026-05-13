@@ -177,6 +177,8 @@ simulator:
 - 指令 funct / rocc_funct
 - cfgData 字段布局
 - enum，例如 `ElementDataType` 和 `CMemoryLoaderTaskType`
+- software ABI / 数据布局约束，例如 BlockScale scale 和 A/B/C/D tensor
+  数据必须由软件按 64 Byte 对齐，并对末尾不足 64 Byte 的部分补零
 
 `ElementDataType` 是当前 datatype 的唯一数据源。C 侧 `cute_fpe.h`
 和 Scala `ElementDataType` 都应从这里生成。

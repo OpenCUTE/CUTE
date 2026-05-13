@@ -61,6 +61,14 @@
         }
       }
     },
+    "software": {
+      "type": "object",
+      "description": "软件侧 ABI / 数据布局约束。codegen 会把这些约束写入 generated header，供 C 软件开发参考。",
+      "additionalProperties": false,
+      "properties": {
+        "data_layout": { "$ref": "#/definitions/software_data_layout" }
+      }
+    },
     "groups": {
       "type": "object",
       "required": ["ygjk", "cute"],
@@ -142,6 +150,62 @@
               "description": "cfgData2 (rs2) 中的字段列表，按 lo 从小到大排列。"
             }
           }
+        }
+      }
+    },
+    "software_data_layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "alignment_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "默认软件数据对齐粒度，单位 Byte。"
+        },
+        "padding": {
+          "type": "string",
+          "enum": ["zero"],
+          "description": "默认 padding 策略。zero 表示软件必须把 padding 区域清零。"
+        },
+        "requirements": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/software_data_requirement" },
+          "description": "按数据类别列出的软件布局约束。"
+        }
+      }
+    },
+    "software_data_requirement": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "约束名称，用于生成 C 宏名。"
+        },
+        "description": {
+          "type": "string",
+          "description": "软件侧约束说明。"
+        },
+        "applies_to": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "uniqueItems": true,
+          "description": "该约束关联的 instruction 名称。"
+        },
+        "alignment_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "该数据类别的软件对齐粒度，单位 Byte。"
+        },
+        "padding": {
+          "type": "string",
+          "enum": ["zero"],
+          "description": "该数据类别的 padding 策略。"
         }
       }
     },

@@ -9,6 +9,7 @@ tools/
 ├── runner/                              # Config runner / 代码生成
 │   ├── cute-check-config.py             # Config schema / 引用检查
 │   ├── cute-gen-config.py               # C 头文件和 ISA JSON 生成
+│   ├── cute-gen-cuteisa.py              # cute-sdk/cuteisa ISA artifacts 生成
 │   ├── cute-gen-scala-config.py         # Scala 配置生成 / 更新 / 漂移检查
 │   ├── cute-update-chipyard-configs.py  # Chipyard CuteConfig.scala 生成
 │   ├── cute-build.py                    # HWConfig → genfiles / simulator
@@ -76,6 +77,34 @@ python3 tools/runner/cute-gen-config.py \
   --chipyard-config cute4tops_scp128 \
   --output /tmp/cute-generated
 ```
+
+### `runner/cute-gen-cuteisa.py`
+
+从 `configs/cute_isa_versions/*.yaml` 生成 SDK 侧共享 ISA artifacts：
+
+```text
+cute-sdk/cuteisa/<isa_version>/
+├── instruction.h
+├── isa.json
+├── cute_fpe.h
+└── isa_summary.md
+```
+
+默认扫描全部 ISA version：
+
+```bash
+python3 tools/runner/cute-gen-cuteisa.py --verbose
+```
+
+只生成指定版本：
+
+```bash
+python3 tools/runner/cute-gen-cuteisa.py \
+  --isa-version cute_isa_v1
+```
+
+该脚本不依赖 ChipyardConfig；`configs/cute_isa_versions/<isa>.yaml` 是
+`cuteisa` 产物的唯一真相源。
 
 ### `runner/cute-gen-scala-config.py`
 

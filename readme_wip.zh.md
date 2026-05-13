@@ -141,13 +141,13 @@ CUTE 有两条面向 Scala 的 config 路径：
 
 ```text
 configs/cute_configs/*.yaml
-  └─→ src/main/scala/HardwareConfig.scala
+  └─ src/main/scala/HardwareConfig.scala
 
 configs/cute_isa_versions/*.yaml
-  └─→ src/main/scala/InstConfig.scala
+  └─ src/main/scala/InstConfig.scala
 
 configs/chipyard_configs/*.yaml
-  └─→ chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
+  └─ chipyard/generators/chipyard/src/main/scala/config/CuteConfig.scala
 ```
 
 检查生成出的 Scala 文件是否和 YAML 真相源一致：
@@ -274,7 +274,7 @@ python3 tools/trace/decode_cute_trace.py \
 
 ```text
 configs/cute_isa_versions/*.yaml
-  └─→ cute-sdk/cuteisa/<isa_version>/
+  └─ cute-sdk/cuteisa/<isa_version>/
         ├── instruction.h
         └── isa.json
 

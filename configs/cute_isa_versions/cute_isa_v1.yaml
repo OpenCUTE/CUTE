@@ -12,6 +12,22 @@ rocc:
   opcode: "0x0B"
   cute_internal_offset: 64
 
+software:
+  data_layout:
+    alignment_bytes: 64
+    padding: zero
+    requirements:
+      - name: blockscale_scale
+        applies_to: [CONFIG_SCALE_A, CONFIG_SCALE_B]
+        alignment_bytes: 64
+        padding: zero
+        description: BlockScale 的 A/B scale 数据由软件负责按 64 Byte 对齐；有效 scale 数据不足 64 Byte 粒度的末尾部分必须补零。
+      - name: tensor_abcd_data
+        applies_to: [CONFIG_TENSOR_A, CONFIG_TENSOR_B, CONFIG_TENSOR_C, CONFIG_TENSOR_D]
+        alignment_bytes: 64
+        padding: zero
+        description: A/B/C/D tensor 数据由软件负责按 64 Byte 对齐；有效数据不足 64 Byte 粒度的末尾部分必须补零。
+
 enums:
   ElementDataType:
     description: 矩阵元素数据类型。软件通过 CONFIG_CONV_PARAMS.element_type 字段填入。同时也是 datatype.h 的唯一数据源。
