@@ -85,6 +85,7 @@ def find_cute_root() -> Path:
 CUTE_ROOT = find_cute_root()
 SDK_ROOT = CUTE_ROOT / "cute-sdk"
 RUNTIMES_DIR = SDK_ROOT / "tests" / "runtime"
+TENSOR_DIR = SDK_ROOT / "tests" / "tensor"
 BUILD_DIR = SDK_ROOT / "build"
 CUTE_BUILD = CUTE_ROOT / "tools" / "runner" / "cute-build.py"
 CUTE_RUN = CUTE_ROOT / "tools" / "runner" / "cute-run.py"
@@ -139,11 +140,10 @@ def resolve_symbol(elf_path: Path, symbol_name: str) -> int | None:
 def validate_case(case_id: str) -> list[str]:
     """Validate case.json format. Returns list of error strings (empty = OK)."""
     errors: list[str] = []
-    case_dir = RUNTIMES_DIR / case_id
+    case_dir = _find_case_dir(case_id)
+    if case_dir is None:
+        return [f"case.json not found for {case_id}"]
     case_json = case_dir / "case.json"
-
-    if not case_json.is_file():
-        return [f"case.json not found: {case_json}"]
 
     try:
         with open(case_json) as f:
@@ -282,11 +282,19 @@ def resolve_all_symbols(cases: list[str]) -> dict[str, int | None]:
     print("[RELOC] resolving symbols...")
     addr_map: dict[str, int | None] = {}
     for cid in cases:
-        case_json = RUNTIMES_DIR / cid / "case.json"
-        binary = BUILD_DIR / "runtime" / f"{cid}.riscv"
-        with open(case_json) as f:
+        case_dir = _find_case_dir(cid)
+        binary = _find_binary(cid)
+        if case_dir is None or binary is None:
+            addr_map[cid] = None
+            continue
+        with open(case_dir / "case.json") as f:
             case = json.load(f)
-        symbol_name = case.get("verify", {}).get("symbol", "")
+        verify_info = case.get("verify", {})
+        if verify_info.get("mode", "bit_exact") == "return_code":
+            addr_map[cid] = None
+            print(f"  [{cid}] return_code")
+            continue
+        symbol_name = verify_info.get("symbol", "")
         if not symbol_name or not binary.exists():
             addr_map[cid] = None
             continue
@@ -304,19 +312,37 @@ def resolve_all_symbols(cases: list[str]) -> dict[str, int | None]:
 # Run + Verify a single case
 # ---------------------------------------------------------------------------
 
+def _find_case_dir(case_id: str) -> Path | None:
+    """Find case directory under tests/runtime/ or tests/tensor/."""
+    for base in (RUNTIMES_DIR, TENSOR_DIR):
+        d = base / case_id
+        if (d / "case.json").is_file():
+            return d
+    return None
+
+
+def _find_binary(case_id: str) -> Path | None:
+    """Find built binary under build/runtime/ or build/tensor/."""
+    for subdir in ("runtime", "tensor"):
+        b = BUILD_DIR / subdir / f"{case_id}.riscv"
+        if b.exists():
+            return b
+    return None
+
+
 def run_case(case_id: str, hwconfig: str, verify_config: dict,
              base_addr: int | None = None) -> CaseResult:
-    case_dir = RUNTIMES_DIR / case_id
-    case_json = case_dir / "case.json"
-    if not case_json.exists():
-        return CaseResult(case_id, False, f"case.json not found: {case_json}")
+    case_dir = _find_case_dir(case_id)
+    if case_dir is None:
+        return CaseResult(case_id, False, f"case.json not found for {case_id}")
 
+    case_json = case_dir / "case.json"
     with open(case_json) as f:
         case = json.load(f)
 
-    binary = BUILD_DIR / "runtime" / f"{case_id}.riscv"
-    if not binary.exists():
-        return CaseResult(case_id, False, f"binary not found: {binary}")
+    binary = _find_binary(case_id)
+    if binary is None:
+        return CaseResult(case_id, False, f"binary not found for {case_id}")
 
     # --- simulate ---
     r = subprocess.run(
@@ -344,6 +370,10 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
     # --- verify ---
     golden_ref = case.get("golden", "")
     verify_info = case.get("verify", {})
+    verify_mode = verify_info.get("mode", "bit_exact")
+    if verify_mode == "return_code":
+        return CaseResult(case_id, True, "return code OK")
+
     tensor_name = verify_config.get("tensor", verify_info.get("tensor", "D"))
 
     if not golden_ref:
