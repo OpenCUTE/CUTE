@@ -88,6 +88,7 @@ RUNTIMES_DIR = SDK_ROOT / "tests" / "runtime"
 BUILD_DIR = SDK_ROOT / "build"
 CUTE_BUILD = CUTE_ROOT / "tools" / "runner" / "cute-build.py"
 CUTE_RUN = CUTE_ROOT / "tools" / "runner" / "cute-run.py"
+READELF = CUTE_ROOT / "tool" / "riscv" / "bin" / "riscv64-unknown-elf-readelf"
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +100,112 @@ class CaseResult:
     case_id: str
     passed: bool
     detail: str  # memverify output or error message
+
+
+# ---------------------------------------------------------------------------
+# ELF symbol resolution
+# ---------------------------------------------------------------------------
+
+def resolve_symbol(elf_path: Path, symbol_name: str) -> int | None:
+    """Resolve a symbol name to its virtual address from an ELF binary.
+
+    Uses readelf -s and finds OBJECT entries matching symbol_name.
+    Returns the address (int) or None if not found.
+    """
+    if not READELF.exists():
+        return None
+    r = subprocess.run(
+        [str(READELF), "-s", str(elf_path)],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return None
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        # readelf -sW format: NUM: ADDR SIZE TYPE BIND VIS NDX NAME
+        # parts[3] = TYPE (OBJECT), parts[-1] = NAME
+        if len(parts) >= 8 and parts[3] == "OBJECT" and parts[-1] == symbol_name:
+            try:
+                return int(parts[1], 16)
+            except ValueError:
+                continue
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Case validation
+# ---------------------------------------------------------------------------
+
+def validate_case(case_id: str) -> list[str]:
+    """Validate case.json format. Returns list of error strings (empty = OK)."""
+    errors: list[str] = []
+    case_dir = RUNTIMES_DIR / case_id
+    case_json = case_dir / "case.json"
+
+    if not case_json.is_file():
+        return [f"case.json not found: {case_json}"]
+
+    try:
+        with open(case_json) as f:
+            case = json.load(f)
+    except json.JSONDecodeError as e:
+        return [f"case.json parse error: {e}"]
+
+    # --- required top-level fields ---
+    for key in ("id", "build", "run", "golden", "verify"):
+        if key not in case:
+            errors.append(f"missing required field: '{key}'")
+
+    if errors:
+        return errors  # stop here if structural fields missing
+
+    # --- id should match directory name ---
+    if case["id"] != case_id:
+        errors.append(f"id mismatch: json says '{case['id']}', directory is '{case_id}'")
+
+    # --- build section ---
+    build = case.get("build", {})
+    if not isinstance(build, dict):
+        errors.append("'build' must be an object")
+    else:
+        source = build.get("source", "")
+        if not source:
+            errors.append("build.source is required")
+        elif not (case_dir / source).is_file():
+            errors.append(f"build.source not found: {case_dir / source}")
+
+    # --- run section ---
+    run = case.get("run", {})
+    if not isinstance(run, dict):
+        errors.append("'run' must be an object")
+    else:
+        if "hwconfig" not in run and "trace_source" not in run:
+            errors.append("run.hwconfig or run.trace_source is required")
+
+    # --- golden section ---
+    golden_ref = case.get("golden", "")
+    if not golden_ref:
+        errors.append("'golden' is required (path to manifest.json relative to cute-sdk/)")
+    else:
+        manifest = SDK_ROOT / golden_ref
+        if manifest.is_dir():
+            errors.append(f"'golden' resolves to a directory, not a file: {manifest}")
+        elif not manifest.is_file():
+            errors.append(f"golden manifest not found: {manifest}")
+
+    # --- verify section ---
+    verify = case.get("verify", {})
+    if not isinstance(verify, dict):
+        errors.append("'verify' must be an object")
+    else:
+        mode = verify.get("mode", "")
+        if mode not in ("bit_exact", "return_code"):
+            errors.append(f"verify.mode must be 'bit_exact' or 'return_code', got '{mode}'")
+        symbol = verify.get("symbol", "")
+        if not symbol:
+            errors.append("verify.symbol is required (ELF symbol name for output tensor)")
+
+    return errors
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +243,7 @@ def build_hwconfig(hwconfig: str) -> bool:
 def cmake_build() -> bool:
     if not (BUILD_DIR / "Makefile").exists():
         BUILD_DIR.mkdir(parents=True, exist_ok=True)
+        print("[CMAKE] configuring...")
         r = subprocess.run(
             ["cmake", "..", "-DCMAKE_TOOLCHAIN_FILE=../cmake/riscv-toolchain.cmake"],
             cwd=str(BUILD_DIR), capture_output=True, text=True,
@@ -143,6 +251,11 @@ def cmake_build() -> bool:
         if r.returncode != 0:
             print(f"[CMAKE] configure FAILED\n{r.stderr[-500:]}")
             return False
+        print("[CMAKE] configure OK")
+    else:
+        print("[CMAKE] already configured (Makefile exists)")
+
+    print("[CMAKE] building...")
     r = subprocess.run(
         ["make", "-j"],
         cwd=str(BUILD_DIR), capture_output=True, text=True,
@@ -150,14 +263,49 @@ def cmake_build() -> bool:
     if r.returncode != 0:
         print(f"[CMAKE] build FAILED\n{r.stderr[-500:]}")
         return False
+
+    # Show make summary: count built targets
+    built = [l for l in r.stdout.splitlines() if l.startswith("[")]
+    if built:
+        print(f"[CMAKE] built {len(built)} target(s)")
+    else:
+        print("[CMAKE] up to date")
     return True
+
+
+# ---------------------------------------------------------------------------
+# Symbol pre-resolution
+# ---------------------------------------------------------------------------
+
+def resolve_all_symbols(cases: list[str]) -> dict[str, int | None]:
+    """Resolve ELF symbols for all cases, print summary, return mapping."""
+    print("[RELOC] resolving symbols...")
+    addr_map: dict[str, int | None] = {}
+    for cid in cases:
+        case_json = RUNTIMES_DIR / cid / "case.json"
+        binary = BUILD_DIR / "runtime" / f"{cid}.riscv"
+        with open(case_json) as f:
+            case = json.load(f)
+        symbol_name = case.get("verify", {}).get("symbol", "")
+        if not symbol_name or not binary.exists():
+            addr_map[cid] = None
+            continue
+        addr = resolve_symbol(binary, symbol_name)
+        addr_map[cid] = addr
+        if addr is not None:
+            print(f"  [{cid}] {symbol_name} -> 0x{addr:x}")
+        else:
+            print(f"  [{cid}] {symbol_name} -> NOT FOUND")
+    print()
+    return addr_map
 
 
 # ---------------------------------------------------------------------------
 # Run + Verify a single case
 # ---------------------------------------------------------------------------
 
-def run_case(case_id: str, hwconfig: str, verify_config: dict) -> CaseResult:
+def run_case(case_id: str, hwconfig: str, verify_config: dict,
+             base_addr: int | None = None) -> CaseResult:
     case_dir = RUNTIMES_DIR / case_id
     case_json = case_dir / "case.json"
     if not case_json.exists():
@@ -184,23 +332,38 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict) -> CaseResult:
     trace_path = run_dir / "run.out"
 
     if r.returncode != 0:
-        return CaseResult(case_id, False, f"simulation failed (rc={r.returncode})")
+        parts = [f"simulation failed (rc={r.returncode})"]
+        if r.stdout:
+            parts.append(r.stdout.strip())
+        if r.stderr:
+            parts.append(r.stderr.strip())
+        return CaseResult(case_id, False, "\n".join(parts))
     if not trace_path.exists():
         return CaseResult(case_id, False, f"run.out not found: {trace_path}")
 
     # --- verify ---
     golden_ref = case.get("golden", "")
-    tensor_name = verify_config.get("tensor", case.get("verify", {}).get("tensor", "D"))
+    verify_info = case.get("verify", {})
+    tensor_name = verify_config.get("tensor", verify_info.get("tensor", "D"))
+
+    if not golden_ref:
+        return CaseResult(case_id, False, "no golden reference in case.json")
     manifest = SDK_ROOT / golden_ref
 
-    if not manifest.exists():
+    if not manifest.is_file():
         return CaseResult(case_id, False, f"golden manifest not found: {manifest}")
 
+    memverify_cmd = [
+        sys.executable, "-m", "memverify.cute_memverify",
+        "--manifest", str(manifest),
+        "--trace", str(trace_path),
+        "--tensor", tensor_name,
+    ]
+    if base_addr is not None:
+        memverify_cmd += ["--base-addr", f"0x{base_addr:x}"]
+
     r = subprocess.run(
-        [sys.executable, "-m", "memverify.cute_memverify",
-         "--manifest", str(manifest),
-         "--trace", str(trace_path),
-         "--tensor", tensor_name],
+        memverify_cmd,
         capture_output=True, text=True,
         cwd=str(SDK_ROOT),
     )
@@ -243,6 +406,19 @@ def main() -> int:
     print(f"  parallel: {parallel}")
     print()
 
+    # --- validate case.json for all cases ---
+    all_valid = True
+    for cid in cases:
+        errs = validate_case(cid)
+        if errs:
+            all_valid = False
+            print(f"[{cid}] INVALID case.json:")
+            for e in errs:
+                print(f"  - {e}")
+    if not all_valid:
+        return 1
+    print("[CHECK] all case.json valid\n")
+
     # --- build ---
     if not args.skip_build:
         if do_build or not hwconfig_built(hwconfig):
@@ -255,15 +431,20 @@ def main() -> int:
     else:
         print("[BUILD] skipped (use --skip-build=false to rebuild hwconfig + cmake)")
 
+    # --- resolve symbols ---
+    addr_map = resolve_all_symbols(cases)
+
     # --- run + verify ---
     results: list[CaseResult] = []
     if parallel <= 1:
         for cid in cases:
             print(f"[{cid}] running...", flush=True)
-            results.append(run_case(cid, hwconfig, verify_config))
+            results.append(run_case(cid, hwconfig, verify_config,
+                                   base_addr=addr_map.get(cid)))
     else:
         with ThreadPoolExecutor(max_workers=parallel) as pool:
-            futures = {pool.submit(run_case, cid, hwconfig, verify_config): cid
+            futures = {pool.submit(run_case, cid, hwconfig, verify_config,
+                                   base_addr=addr_map.get(cid)): cid
                        for cid in cases}
             for fut in as_completed(futures):
                 cid = futures[fut]
@@ -283,7 +464,7 @@ def main() -> int:
     passed = sum(1 for r in results if r.passed)
     for r in results:
         tag = "PASS" if r.passed else "FAIL"
-        detail = f"  {r.detail}" if r.passed else f"  {r.detail[:80]}"
+        detail = f"  {r.detail}" if r.passed else f"  {r.detail}"
         print(f"  [{tag}] {r.case_id}{detail}")
 
     print(f"\n{passed}/{len(results)} passed")
