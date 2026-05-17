@@ -135,6 +135,7 @@ def normalize_verify_targets(verify_info: dict) -> list[dict]:
         return [{
             "tensor": verify_info.get("tensor", "D"),
             "symbol": verify_info.get("symbol", ""),
+            "float_tolerance_percent": verify_info.get("float_tolerance_percent"),
         }]
     if not isinstance(targets, list):
         raise ValueError("verify.tensors must be a list")
@@ -148,8 +149,22 @@ def normalize_verify_targets(verify_info: dict) -> list[dict]:
             "symbol": target.get("symbol", verify_info.get("symbol", "")),
             "layout": target.get("layout"),
             "tile_shape": target.get("tile_shape"),
+            "float_tolerance_percent": target.get(
+                "float_tolerance_percent",
+                verify_info.get("float_tolerance_percent"),
+            ),
         })
     return normalized
+
+
+def validate_float_tolerance(value, field: str) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return f"{field} must be a number"
+    if value < 0:
+        return f"{field} must be non-negative"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +267,12 @@ def validate_case(case_id: str) -> list[str]:
             errors.append(
                 f"verify.mode must be one of {VERIFY_MODES}, got '{mode}'"
             )
+        tolerance_error = validate_float_tolerance(
+            verify.get("float_tolerance_percent"),
+            "verify.float_tolerance_percent",
+        )
+        if tolerance_error:
+            errors.append(tolerance_error)
         if needs_bit_exact(mode):
             try:
                 targets = normalize_verify_targets(verify)
@@ -268,6 +289,12 @@ def validate_case(case_id: str) -> list[str]:
                         "verify.symbol or verify.tensors[%d].symbol is required "
                         "(ELF symbol name for output tensor)" % i
                     )
+                tolerance_error = validate_float_tolerance(
+                    target.get("float_tolerance_percent"),
+                    f"verify.tensors[{i}].float_tolerance_percent",
+                )
+                if tolerance_error:
+                    errors.append(tolerance_error)
 
     return errors
 
@@ -492,6 +519,13 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
             tile_shape = "64x64"
         if tile_shape:
             memverify_cmd += ["--tile-shape", tile_shape]
+
+        float_tolerance_percent = target.get("float_tolerance_percent")
+        if float_tolerance_percent is not None:
+            memverify_cmd += [
+                "--float-tolerance-percent",
+                str(float_tolerance_percent),
+            ]
 
         r = subprocess.run(
             memverify_cmd,
