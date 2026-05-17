@@ -40,7 +40,7 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
         params = CUTETraceParams(
             enable = true,
             printMode = CUTETracePrintMode.Compact,
-            enabledCategories = Set(CUTETraceIds.Category.cute_task)
+            enabledCategories = Set(CUTETraceIds.Category.cute_task, CUTETraceIds.Category.cute_loadstore)
         )
     )
     val loadTaskCount = RegInit(0.U(16.W))
@@ -796,6 +796,12 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
             WriteRequest.valid := true.B
             //只有fire了才能继续
             when(WriteRequest.fire && io.LocalMMUIO.ConherentRequsetSourceID.valid){
+                CUTETrace.CMLStore.storeData(
+                    cond = true.B,
+                    task_count = storeTaskCount - 1.U,
+                    vaddr = WriteRequest.bits.RequestVirtualAddr,
+                    data = WriteRequest.bits.RequestData
+                )
                 Send_LLC_Iter := WrapInc(Send_LLC_Iter, Send_LLC_Max_Iter)
                 when(Is_Transpose) {
                     when(Send_LLC_Iter === (Send_LLC_Max_Iter - 1).U) {

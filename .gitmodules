@@ -25,3 +25,9 @@
 [submodule "cute-sdk"]
 	path = cute-sdk
 	url = git@github.com:OpenCUTE/cute-sdk.git
+[submodule "Vector/saturn"]
+	path = Vector/saturn
+	url = git@github.com:OpenCUTE/saturn-vectors.git
+[submodule "Vector/titan-I"]
+	path = Vector/titan-I
+	url = git@github.com:aayejinpeng/t1.git

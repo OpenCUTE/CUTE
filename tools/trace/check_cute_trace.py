@@ -105,12 +105,14 @@ def check_filters(path: Path, catalog: Any) -> int:
         if isinstance(name, str) and name != file_path.stem:
             errors.append(f"{file_path}: name {name!r} does not match file stem {file_path.stem!r}")
 
-        include = data.get("include")
-        if include is not None:
-            if not isinstance(include, Mapping):
-                errors.append(f"{file_path}: include must be a mapping")
+        for section_name in ("include", "exclude"):
+            section = data.get(section_name)
+            if section is None:
+                continue
+            if not isinstance(section, Mapping):
+                errors.append(f"{file_path}: {section_name} must be a mapping")
             else:
-                errors.extend(_check_filter_refs(file_path, include, catalog))
+                errors.extend(_check_filter_refs(file_path, section_name, section, catalog))
 
     if errors:
         raise CatalogValidationError(path, errors)
@@ -125,7 +127,12 @@ def _filter_files(path: Path) -> list[Path]:
     raise CatalogError(f"filter path does not exist: {path}")
 
 
-def _check_filter_refs(path: Path, include: Mapping[str, Any], catalog: Any) -> list[str]:
+def _check_filter_refs(
+    path: Path,
+    section_name: str,
+    section: Mapping[str, Any],
+    catalog: Any,
+) -> list[str]:
     errors: list[str] = []
     ref_sets = {
         "categories": catalog.categories_by_name,
@@ -134,15 +141,15 @@ def _check_filter_refs(path: Path, include: Mapping[str, Any], catalog: Any) -> 
         "events": catalog.events_by_name,
     }
     for key, known in ref_sets.items():
-        values = include.get(key, [])
+        values = section.get(key, [])
         if values is None:
             continue
         if not isinstance(values, list):
-            errors.append(f"{path}: include.{key} must be a list")
+            errors.append(f"{path}: {section_name}.{key} must be a list")
             continue
         for value in values:
             if value not in known:
-                errors.append(f"{path}: include.{key} references missing item: {value!r}")
+                errors.append(f"{path}: {section_name}.{key} references missing item: {value!r}")
     return errors
 
 

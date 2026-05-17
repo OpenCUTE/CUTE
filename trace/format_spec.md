@@ -41,6 +41,8 @@ trace/catalogs/cute_trace.json
 ```scala
 CUTETrace.AMLLoad.taskStart(...)
 CUTETrace.TaskControllerTrace.microTaskIssue(...)
+CUTETrace.CMLStore.storeData(...)
+CUTETrace.VectorStore.storeData(...)
 CUTETrace.MTECompute.taskEnd(...)
 ```
 
@@ -173,6 +175,7 @@ trace/
       parser.py
       decoder.py
       render.py
+      rebuilder.py
       generated/
         cute_trace_catalog.py
     status/
@@ -205,6 +208,7 @@ trace/cutetrace/src/main/scala/trace/
 | `trace/python/cutetrace/parser.py` | 解析 compact `CT,...` 行，得到 raw trace record。 |
 | `trace/python/cutetrace/decoder.py` | 结合 catalog 把 raw record 解码成带名字和字段的事件。 |
 | `trace/python/cutetrace/render.py` | 把 decoded event 渲染成可读文本、JSONL 或检查器输入。 |
+| `trace/python/cutetrace/rebuilder.py` | 从 `CMLStore.storeData` / `VectorStore.storeData` 重建 memory image。 |
 | `trace/python/cutetrace/generated/cute_trace_catalog.py` | 生成的 Python catalog 常量和静态索引。 |
 | `configs/schemas/cute_trace_catalog.schema.json` | catalog JSON Schema。 |
 | `tools/trace/gen_cute_trace.py` | catalog 到 Scala/Python 生成产物的代码生成入口。 |

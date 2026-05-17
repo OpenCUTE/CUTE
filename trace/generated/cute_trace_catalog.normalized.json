@@ -1,7 +1,7 @@
 {
   "version": 1,
   "catalog_id": "cute_trace_v1",
-  "description": "CUTETrace 的种子 catalog。Phase 0.6 从 cute_inst 和 cute_task trace 事件开始，并为 cute_loadstore、cute_compute、vector_loadstore 类别预留扩展位。",
+  "description": "CUTETrace 的种子 catalog。Phase 0.6 从 cute_inst 和 cute_task trace 事件开始，并补齐 CML/Vector store trace 的外围事件。",
   "categories": [
     {
       "name": "cute_inst",
@@ -59,6 +59,11 @@
       "name": "LocalMMU",
       "id": 6,
       "description": "CUTE 本地 MMU 与内存请求路由模块。"
+    },
+    {
+      "name": "Vector",
+      "id": 7,
+      "description": "Vector 单元与 CUTE 配合时的访存观测模块。"
     }
   ],
   "tasks": [
@@ -103,6 +108,13 @@
       "module": "MTE",
       "method_group": "MTECompute",
       "description": "MTE 计算任务 trace 组。"
+    },
+    {
+      "name": "VectorStore",
+      "id": 7,
+      "module": "Vector",
+      "method_group": "VectorStore",
+      "description": "Vector store 任务 trace 组。"
     }
   ],
   "events": [
@@ -390,6 +402,58 @@
         }
       ],
       "render": "task_count={task_count}"
+    },
+    {
+      "name": "CMLStore.storeData",
+      "method": "storeData",
+      "id": 16,
+      "task": "CMLStore",
+      "category": "cute_loadstore",
+      "description": "CML 向外部存储写回一笔 D tensor 数据。",
+      "fields": [
+        {
+          "name": "task_count",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "vaddr",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "data",
+          "type": "uint",
+          "fmt": "hex"
+        }
+      ],
+      "render": "task_count={task_count} vaddr=0x{vaddr:x} data=0x{data:x}"
+    },
+    {
+      "name": "VectorStore.storeData",
+      "method": "storeData",
+      "id": 17,
+      "task": "VectorStore",
+      "category": "vector_loadstore",
+      "description": "Vector 单元向外部存储写回一笔数据。",
+      "fields": [
+        {
+          "name": "task_count",
+          "type": "uint",
+          "fmt": "dec"
+        },
+        {
+          "name": "vaddr",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "data",
+          "type": "uint",
+          "fmt": "hex"
+        }
+      ],
+      "render": "task_count={task_count} vaddr=0x{vaddr:x} data=0x{data:x}"
     }
   ],
   "metadata": {

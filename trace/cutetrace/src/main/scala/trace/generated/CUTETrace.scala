@@ -380,6 +380,38 @@ object CUTETrace {
         }
       )
     }
+    def storeData(
+      cond: Bool,
+      task_count: UInt,
+      vaddr: UInt,
+      data: UInt
+    )(implicit ctx: CUTETraceContext): Unit = {
+      CUTETracePrintf.emit(
+        cond = cond,
+        categoryId = CUTETraceIds.Category.cute_loadstore
+      )(
+        compact = {
+          printf(
+            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            ctx.cycle,
+            CUTETraceIds.Task.CMLStore.U,
+            CUTETraceIds.Event.CMLStore_storeData.U,
+            task_count,
+            vaddr,
+            data
+          )
+        },
+        human = {
+          printf(
+            "CTH c=%d task=CMLStore event=storeData task_count=%d vaddr=0x%x data=0x%x\n",
+            ctx.cycle,
+            task_count,
+            vaddr,
+            data
+          )
+        }
+      )
+    }
   }
   object MTECompute {
     def taskStart(
@@ -430,6 +462,40 @@ object CUTETrace {
             "CTH c=%d task=MTECompute event=taskEnd task_count=%d\n",
             ctx.cycle,
             task_count
+          )
+        }
+      )
+    }
+  }
+  object VectorStore {
+    def storeData(
+      cond: Bool,
+      task_count: UInt,
+      vaddr: UInt,
+      data: UInt
+    )(implicit ctx: CUTETraceContext): Unit = {
+      CUTETracePrintf.emit(
+        cond = cond,
+        categoryId = CUTETraceIds.Category.vector_loadstore
+      )(
+        compact = {
+          printf(
+            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            ctx.cycle,
+            CUTETraceIds.Task.VectorStore.U,
+            CUTETraceIds.Event.VectorStore_storeData.U,
+            task_count,
+            vaddr,
+            data
+          )
+        },
+        human = {
+          printf(
+            "CTH c=%d task=VectorStore event=storeData task_count=%d vaddr=0x%x data=0x%x\n",
+            ctx.cycle,
+            task_count,
+            vaddr,
+            data
           )
         }
       )

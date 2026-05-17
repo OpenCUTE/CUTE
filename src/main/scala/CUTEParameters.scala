@@ -541,13 +541,13 @@ trait CUTEImplParameters{
     val YJPDebugEnable      = DebugParams.YJPDebugEnable
     val YJPADCDebugEnable   = DebugParams.YJPADCDebugEnable
     val YJPBDCDebugEnable   = DebugParams.YJPBDCDebugEnable
-    val YJPCDCDebugEnable   = true
-    val YJPAMLDebugEnable   = true
-    val YJPBMLDebugEnable   = true
-    val YJPCMLDebugEnable   = true
+    val YJPCDCDebugEnable   = DebugParams.YJPCDCDebugEnable
+    val YJPAMLDebugEnable   = DebugParams.YJPAMLDebugEnable
+    val YJPBMLDebugEnable   = DebugParams.YJPBMLDebugEnable
+    val YJPCMLDebugEnable   = DebugParams.YJPCMLDebugEnable
     val YJPTASKDebugEnable        = DebugParams.YJPTASKDebugEnable
     val YJPVECDebugEnable         = DebugParams.YJPVECDebugEnable
-    val YJPMACDebugEnable         = true
+    val YJPMACDebugEnable         = DebugParams.YJPMACDebugEnable
     val YJPPEDebugEnable          = DebugParams.YJPPEDebugEnable
     val YJPAfterOpsDebugEnable    = DebugParams.YJPAfterOpsDebugEnable
 

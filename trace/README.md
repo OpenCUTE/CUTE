@@ -23,6 +23,7 @@ trace/
 │   ├── parser.py                        # CT 行解析 → RawTraceLine
 │   ├── decoder.py                       # RawTraceLine → DecodedEvent（typed fields）
 │   ├── render.py                        # DecodedEvent → text / jsonl
+│   ├── rebuilder.py                     # storeData trace → memory image
 │   └── generated/                       # 代码生成产物（勿手改）
 │       └── cute_trace_catalog.py        # Python catalog 索引 + EVENTS_BY_ID
 │

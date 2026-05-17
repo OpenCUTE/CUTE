@@ -17,7 +17,7 @@ python3 tools/trace/check_cute_trace.py
 输出：
 
 ```text
-TRACE_CATALOG_OK catalog=trace/catalogs/cute_trace.json categories=5 modules=6 tasks=6 events=15
+TRACE_CATALOG_OK catalog=trace/catalogs/cute_trace.json categories=5 modules=7 tasks=7 events=17
 ```
 
 ### 2. 生成 Scala / Python 产物

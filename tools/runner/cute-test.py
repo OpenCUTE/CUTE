@@ -86,6 +86,7 @@ CUTE_ROOT = find_cute_root()
 SDK_ROOT = CUTE_ROOT / "cute-sdk"
 RUNTIMES_DIR = SDK_ROOT / "tests" / "runtime"
 TENSOR_DIR = SDK_ROOT / "tests" / "tensor"
+PRIMITIVE_DIR = SDK_ROOT / "tests" / "primitive"
 BUILD_DIR = SDK_ROOT / "build"
 CUTE_BUILD = CUTE_ROOT / "tools" / "runner" / "cute-build.py"
 CUTE_RUN = CUTE_ROOT / "tools" / "runner" / "cute-run.py"
@@ -101,6 +102,54 @@ class CaseResult:
     case_id: str
     passed: bool
     detail: str  # memverify output or error message
+
+
+VERIFY_MODE_BIT_EXACT = "bit_exact"
+VERIFY_MODE_RETURN_CODE = "return_code"
+VERIFY_MODE_RETURN_CODE_AND_BIT_EXACT = "return_code_and_bit_exact"
+VERIFY_MODES = (
+    VERIFY_MODE_BIT_EXACT,
+    VERIFY_MODE_RETURN_CODE,
+    VERIFY_MODE_RETURN_CODE_AND_BIT_EXACT,
+)
+SIM_TIMEOUT_SECONDS = 20 * 60
+BIT_EXACT_MODES = {
+    VERIFY_MODE_BIT_EXACT,
+    VERIFY_MODE_RETURN_CODE_AND_BIT_EXACT,
+}
+
+
+def short_run_artifacts(run_dir: Path) -> str:
+    """Return compact pointers to detailed simulation artifacts."""
+    return f"logs: {run_dir / 'run.log'}, {run_dir / 'run.out'}"
+
+
+def needs_bit_exact(mode: str) -> bool:
+    return mode in BIT_EXACT_MODES
+
+
+def normalize_verify_targets(verify_info: dict) -> list[dict]:
+    """Return tensor/symbol pairs to verify with memverify."""
+    targets = verify_info.get("tensors")
+    if targets is None:
+        return [{
+            "tensor": verify_info.get("tensor", "D"),
+            "symbol": verify_info.get("symbol", ""),
+        }]
+    if not isinstance(targets, list):
+        raise ValueError("verify.tensors must be a list")
+
+    normalized: list[dict] = []
+    for index, target in enumerate(targets):
+        if not isinstance(target, dict):
+            raise ValueError(f"verify.tensors[{index}] must be an object")
+        normalized.append({
+            "tensor": target.get("tensor", verify_info.get("tensor", "D")),
+            "symbol": target.get("symbol", verify_info.get("symbol", "")),
+            "layout": target.get("layout"),
+            "tile_shape": target.get("tile_shape"),
+        })
+    return normalized
 
 
 # ---------------------------------------------------------------------------
@@ -199,11 +248,26 @@ def validate_case(case_id: str) -> list[str]:
         errors.append("'verify' must be an object")
     else:
         mode = verify.get("mode", "")
-        if mode not in ("bit_exact", "return_code"):
-            errors.append(f"verify.mode must be 'bit_exact' or 'return_code', got '{mode}'")
-        symbol = verify.get("symbol", "")
-        if not symbol:
-            errors.append("verify.symbol is required (ELF symbol name for output tensor)")
+        if mode not in VERIFY_MODES:
+            errors.append(
+                f"verify.mode must be one of {VERIFY_MODES}, got '{mode}'"
+            )
+        if needs_bit_exact(mode):
+            try:
+                targets = normalize_verify_targets(verify)
+            except ValueError as e:
+                errors.append(str(e))
+                targets = []
+            if not targets:
+                errors.append("verify.tensors must not be empty")
+            for i, target in enumerate(targets):
+                if not target.get("tensor"):
+                    errors.append(f"verify.tensors[{i}].tensor is required")
+                if not target.get("symbol"):
+                    errors.append(
+                        "verify.symbol or verify.tensors[%d].symbol is required "
+                        "(ELF symbol name for output tensor)" % i
+                    )
 
     return errors
 
@@ -277,33 +341,35 @@ def cmake_build() -> bool:
 # Symbol pre-resolution
 # ---------------------------------------------------------------------------
 
-def resolve_all_symbols(cases: list[str]) -> dict[str, int | None]:
+def resolve_all_symbols(cases: list[str]) -> dict[str, list[int | None]]:
     """Resolve ELF symbols for all cases, print summary, return mapping."""
     print("[RELOC] resolving symbols...")
-    addr_map: dict[str, int | None] = {}
+    addr_map: dict[str, list[int | None]] = {}
     for cid in cases:
         case_dir = _find_case_dir(cid)
         binary = _find_binary(cid)
         if case_dir is None or binary is None:
-            addr_map[cid] = None
+            addr_map[cid] = []
             continue
         with open(case_dir / "case.json") as f:
             case = json.load(f)
         verify_info = case.get("verify", {})
-        if verify_info.get("mode", "bit_exact") == "return_code":
-            addr_map[cid] = None
+        verify_mode = verify_info.get("mode", VERIFY_MODE_BIT_EXACT)
+        if not needs_bit_exact(verify_mode):
+            addr_map[cid] = []
             print(f"  [{cid}] return_code")
             continue
-        symbol_name = verify_info.get("symbol", "")
-        if not symbol_name or not binary.exists():
-            addr_map[cid] = None
-            continue
-        addr = resolve_symbol(binary, symbol_name)
-        addr_map[cid] = addr
-        if addr is not None:
-            print(f"  [{cid}] {symbol_name} -> 0x{addr:x}")
-        else:
-            print(f"  [{cid}] {symbol_name} -> NOT FOUND")
+        addrs: list[int | None] = []
+        for target in normalize_verify_targets(verify_info):
+            symbol_name = target.get("symbol", "")
+            tensor_name = target.get("tensor", "")
+            addr = resolve_symbol(binary, symbol_name) if symbol_name else None
+            addrs.append(addr)
+            if addr is not None:
+                print(f"  [{cid}] {tensor_name}:{symbol_name} -> 0x{addr:x}")
+            else:
+                print(f"  [{cid}] {tensor_name}:{symbol_name} -> NOT FOUND")
+        addr_map[cid] = addrs
     print()
     return addr_map
 
@@ -313,8 +379,8 @@ def resolve_all_symbols(cases: list[str]) -> dict[str, int | None]:
 # ---------------------------------------------------------------------------
 
 def _find_case_dir(case_id: str) -> Path | None:
-    """Find case directory under tests/runtime/ or tests/tensor/."""
-    for base in (RUNTIMES_DIR, TENSOR_DIR):
+    """Find case directory under tests/runtime/, tests/tensor/, or tests/primitive/."""
+    for base in (RUNTIMES_DIR, TENSOR_DIR, PRIMITIVE_DIR):
         d = base / case_id
         if (d / "case.json").is_file():
             return d
@@ -322,8 +388,8 @@ def _find_case_dir(case_id: str) -> Path | None:
 
 
 def _find_binary(case_id: str) -> Path | None:
-    """Find built binary under build/runtime/ or build/tensor/."""
-    for subdir in ("runtime", "tensor"):
+    """Find built binary under build/runtime/, build/tensor/, or build/primitive/."""
+    for subdir in ("runtime", "tensor", "primitive"):
         b = BUILD_DIR / subdir / f"{case_id}.riscv"
         if b.exists():
             return b
@@ -331,7 +397,7 @@ def _find_binary(case_id: str) -> Path | None:
 
 
 def run_case(case_id: str, hwconfig: str, verify_config: dict,
-             base_addr: int | None = None) -> CaseResult:
+             base_addrs: list[int | None] | None = None) -> CaseResult:
     case_dir = _find_case_dir(case_id)
     if case_dir is None:
         return CaseResult(case_id, False, f"case.json not found for {case_id}")
@@ -345,36 +411,42 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
         return CaseResult(case_id, False, f"binary not found for {case_id}")
 
     # --- simulate ---
-    r = subprocess.run(
-        [sys.executable, str(CUTE_RUN),
-         "--hwconfig", hwconfig,
-         "--test", str(binary)],
-        capture_output=True, text=True,
-        timeout=600,
-    )
     # cute-run outputs to build/chipyard_runs/<hwconfig>/<test_name>/
     test_name = binary.stem  # without .riscv
     run_dir = CUTE_ROOT / "build" / "chipyard_runs" / hwconfig / test_name
     trace_path = run_dir / "run.out"
 
+    try:
+        r = subprocess.run(
+            [sys.executable, str(CUTE_RUN),
+             "--hwconfig", hwconfig,
+             "--test", str(binary)],
+            capture_output=True, text=True,
+            timeout=SIM_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as e:
+        return CaseResult(
+            case_id,
+            False,
+            f"simulation timed out after {int(e.timeout)}s ({short_run_artifacts(run_dir)})",
+        )
+
     if r.returncode != 0:
-        parts = [f"simulation failed (rc={r.returncode})"]
-        if r.stdout:
-            parts.append(r.stdout.strip())
-        if r.stderr:
-            parts.append(r.stderr.strip())
-        return CaseResult(case_id, False, "\n".join(parts))
+        return CaseResult(
+            case_id,
+            False,
+            f"simulation failed (rc={r.returncode}; {short_run_artifacts(run_dir)})",
+        )
     if not trace_path.exists():
         return CaseResult(case_id, False, f"run.out not found: {trace_path}")
 
     # --- verify ---
     golden_ref = case.get("golden", "")
-    verify_info = case.get("verify", {})
-    verify_mode = verify_info.get("mode", "bit_exact")
-    if verify_mode == "return_code":
+    verify_info = dict(verify_config)
+    verify_info.update(case.get("verify", {}))
+    verify_mode = verify_info.get("mode", VERIFY_MODE_BIT_EXACT)
+    if not needs_bit_exact(verify_mode):
         return CaseResult(case_id, True, "return code OK")
-
-    tensor_name = verify_config.get("tensor", verify_info.get("tensor", "D"))
 
     if not golden_ref:
         return CaseResult(case_id, False, "no golden reference in case.json")
@@ -383,25 +455,58 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
     if not manifest.is_file():
         return CaseResult(case_id, False, f"golden manifest not found: {manifest}")
 
-    memverify_cmd = [
-        sys.executable, "-m", "memverify.cute_memverify",
-        "--manifest", str(manifest),
-        "--trace", str(trace_path),
-        "--tensor", tensor_name,
-    ]
-    if base_addr is not None:
-        memverify_cmd += ["--base-addr", f"0x{base_addr:x}"]
+    targets = normalize_verify_targets(verify_info)
+    base_addrs = base_addrs or []
+    bindings = case.get("bindings", {})
+    details: list[str] = []
 
-    r = subprocess.run(
-        memverify_cmd,
-        capture_output=True, text=True,
-        cwd=str(SDK_ROOT),
-    )
-    output = r.stdout.strip()
-    if r.returncode == 0:
-        return CaseResult(case_id, True, output)
-    err = r.stderr.strip()
-    return CaseResult(case_id, False, output or err)
+    for index, target in enumerate(targets):
+        tensor_name = target.get("tensor", "D")
+        symbol_name = target.get("symbol", "")
+        base_addr = base_addrs[index] if index < len(base_addrs) else None
+        if base_addr is None and symbol_name:
+            base_addr = resolve_symbol(binary, symbol_name)
+        if base_addr is None:
+            return CaseResult(
+                case_id,
+                False,
+                f"symbol not found for tensor {tensor_name}: {symbol_name}",
+            )
+
+        memverify_cmd = [
+            sys.executable, "-m", "memverify.cute_memverify",
+            "--manifest", str(manifest),
+            "--trace", str(trace_path),
+            "--tensor", tensor_name,
+            "--base-addr", f"0x{base_addr:x}",
+        ]
+
+        layout = target.get("layout") or verify_info.get("layout")
+        if layout is None and bindings.get("post_op") == "cpu_memcpy":
+            layout = "tiled_cpu_memcpy"
+        if layout:
+            memverify_cmd += ["--layout", layout]
+
+        tile_shape = target.get("tile_shape") or verify_info.get("tile_shape")
+        if tile_shape is None and bindings.get("tiling", "").startswith("2x2 tiles of 64x64"):
+            tile_shape = "64x64"
+        if tile_shape:
+            memverify_cmd += ["--tile-shape", tile_shape]
+
+        r = subprocess.run(
+            memverify_cmd,
+            capture_output=True, text=True,
+            cwd=str(SDK_ROOT),
+        )
+        output = r.stdout.strip()
+        if r.returncode != 0:
+            err = r.stderr.strip()
+            detail = output or err
+            return CaseResult(case_id, False, f"{tensor_name}: {detail}")
+        details.append(f"{tensor_name}: {output.replace(chr(10), '; ')}")
+
+    prefix = "return code OK; " if verify_mode == VERIFY_MODE_RETURN_CODE_AND_BIT_EXACT else ""
+    return CaseResult(case_id, True, prefix + " | ".join(details))
 
 
 # ---------------------------------------------------------------------------
@@ -470,11 +575,11 @@ def main() -> int:
         for cid in cases:
             print(f"[{cid}] running...", flush=True)
             results.append(run_case(cid, hwconfig, verify_config,
-                                   base_addr=addr_map.get(cid)))
+                                   base_addrs=addr_map.get(cid)))
     else:
         with ThreadPoolExecutor(max_workers=parallel) as pool:
             futures = {pool.submit(run_case, cid, hwconfig, verify_config,
-                                   base_addr=addr_map.get(cid)): cid
+                                   base_addrs=addr_map.get(cid)): cid
                        for cid in cases}
             for fut in as_completed(futures):
                 cid = futures[fut]

@@ -17,6 +17,7 @@ object CUTETraceIds {
     val CML: Int = 4
     val MTE: Int = 5
     val LocalMMU: Int = 6
+    val Vector: Int = 7
   }
   object Task {
     val TaskControllerTrace: Int = 1
@@ -25,6 +26,7 @@ object CUTETraceIds {
     val CMLLoad: Int = 4
     val CMLStore: Int = 5
     val MTECompute: Int = 6
+    val VectorStore: Int = 7
   }
   object Event {
     val TaskControllerTrace_macroInstInsert: Int = 1
@@ -42,5 +44,7 @@ object CUTETraceIds {
     val CMLStore_taskEnd: Int = 13
     val MTECompute_taskStart: Int = 14
     val MTECompute_taskEnd: Int = 15
+    val CMLStore_storeData: Int = 16
+    val VectorStore_storeData: Int = 17
   }
 }

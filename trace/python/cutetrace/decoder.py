@@ -24,6 +24,18 @@ class DecodedEvent:
     render_template: str
     raw: RawTraceLine
 
+    @property
+    def event(self) -> str:
+        return self.event_name
+
+    @property
+    def task(self) -> str:
+        return self.task_name
+
+    @property
+    def category(self) -> str:
+        return self.category_name
+
 
 class Decoder:
     def __init__(self, catalog: TraceCatalog):
