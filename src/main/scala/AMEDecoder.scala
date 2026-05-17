@@ -190,10 +190,14 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   load_inst.ApplicationTensor_A.BlockTensor_A_BaseVaddr       := rs1_data(MMUAddrWidth-1, 0)
   load_inst.ApplicationTensor_A.ApplicationTensor_A_Stride_M  := rs2_data(MMUAddrWidth-1, 0)
   load_inst.ApplicationTensor_A.dataType                      := ls_datatype
-  load_inst.ApplicationTensor_A.Convolution_OH_DIM_Length     := 0.U
-  load_inst.ApplicationTensor_A.Convolution_OW_DIM_Length     := 0.U
-  load_inst.ApplicationTensor_A.Convolution_Stride_H          := 0.U
-  load_inst.ApplicationTensor_A.Convolution_Stride_W          := 0.U
+  // AML uses convolution coordinate system. For plain matrix A[M][K]:
+  // Map M rows to OW dimension: OW_DIM=mtilem, Stride_W=1 -> IW_DIM=mtilem (no out-of-bounds)
+  // IH fixed at 0: OH_DIM=1, Stride_H=1 -> IH_DIM=1, IH stays 0
+  // Address per row M: BaseVaddr + IW * Stride_M = BaseVaddr + M * Stride_M
+  load_inst.ApplicationTensor_A.Convolution_OH_DIM_Length     := 1.U
+  load_inst.ApplicationTensor_A.Convolution_OW_DIM_Length     := csr_mtilem
+  load_inst.ApplicationTensor_A.Convolution_Stride_H          := 1.U
+  load_inst.ApplicationTensor_A.Convolution_Stride_W          := 1.U
   load_inst.ApplicationTensor_A.Convolution_KH_DIM_Length     := 0.U
   load_inst.ApplicationTensor_A.Convolution_KW_DIM_Length     := 0.U
 
@@ -348,7 +352,14 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   store_inst.ApplicationTensor_D.ApplicationTensor_D_BaseVaddr := rs1_data(MMUAddrWidth-1, 0)
   store_inst.ApplicationTensor_D.BlockTensor_D_BaseVaddr       := rs1_data(MMUAddrWidth-1, 0)
   store_inst.ApplicationTensor_D.ApplicationTensor_D_Stride_M  := rs2_data(MMUAddrWidth-1, 0)
-  store_inst.ApplicationTensor_D.dataType                      := ls_datatype
+  // dataType for store is element byte width (not ElementDataType enum)
+  // d_size: 00=1byte(int8), 01=2bytes(fp16), 10=4bytes(int32/fp32), 11=8bytes(fp64)
+  store_inst.ApplicationTensor_D.dataType := MuxLookup(inst_d_size, 4.U)(Seq(
+    0.U -> 1.U,
+    1.U -> 2.U,
+    2.U -> 4.U,
+    3.U -> 8.U
+  ))
 
   store_inst.Conherent          := true.B
   store_inst.Is_Transpose       := is_transpose

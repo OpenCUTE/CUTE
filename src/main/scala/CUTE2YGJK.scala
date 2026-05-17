@@ -236,13 +236,13 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     }.elsewhen(io.resp.fire){
       canResp := false.B
     }
-     if (ZZHDebugEnable)
+     /*if (ZZHDebugEnable)
      {
          //输出io.cmd的信息和io.resp的信息
          printf("[CUTE2YGJK.top]io.cmd.fire: %x, io.cmd.bits.inst: %x, io.cmd.bits.rs1: %x, io.cmd.bits.rs2: %x, io.cmd.bits.inst.rd: %x, io.cmd.bits.inst.funct: %x\n", io.cmd.fire, io.cmd.bits.inst.asUInt, io.cmd.bits.rs1, io.cmd.bits.rs2, io.cmd.bits.inst.rd, io.cmd.bits.inst.funct)
          //输出valid和ready信息
          printf("[CUTE2YGJK.top]io.cmd.valid: %x, io.cmd.ready: %x, io.resp.valid: %x, io.resp.ready: %x\n", io.cmd.valid, io.cmd.ready, io.resp.valid, io.resp.ready)
-     }
+     }*/
   
     rd := io.cmd.bits.inst.rd    //下一拍一定会返回
     io.resp.bits.rd := rd
@@ -260,9 +260,7 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryComputeTime.funct.U){ //查询加速器计算时间
       rd_data := compute
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryMacroInstFinish.funct.U){ //查询CUTE宏指令的完成情况
-      val ame_idle = acc.io.ame_all_idle
-      rd_data := ame_idle
-      //rd_data := acc.io.ctrl2top.InstFIFO_Finish
+      rd_data := acc.io.ctrl2top.InstFIFO_Finish
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryMacroInstFIFOFull.funct.U){ //查询CUTE宏指令队列是否已满
       rd_data := acc.io.ctrl2top.InstFIFO_Full
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryMacroInstFIFOInfo.funct.U){ //查询CUTE宏指令队列目前有多少指令

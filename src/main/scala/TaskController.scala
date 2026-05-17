@@ -1027,15 +1027,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     io.SCP_CtrlInfo.BML_SCP_ID := Current_BML_SCP_ID
     io.SCP_CtrlInfo.CML_SCP_ID := Current_CML_SCP_ID
 
-    // AME SCP override (must be after Current_*_SCP_ID definitions)
-    when(io.ame_inject.scp_override_valid) {
-        Current_AML_SCP_ID := io.ame_inject.scp_override_bits.AML_SCP_ID
-        Current_BML_SCP_ID := io.ame_inject.scp_override_bits.BML_SCP_ID
-        Current_CML_SCP_ID := io.ame_inject.scp_override_bits.CML_SCP_ID
-        Current_ADC_SCP_ID := io.ame_inject.scp_override_bits.ADC_SCP_ID
-        Current_BDC_SCP_ID := io.ame_inject.scp_override_bits.BDC_SCP_ID
-        Current_CDC_SCP_ID := io.ame_inject.scp_override_bits.CDC_SCP_ID
-    }
 
     //看每个队列里面的微指令，如果有可以发射的微指令，就发射
     val Will_Issuse_CML_Load = WireInit(false.B)
@@ -1113,10 +1104,14 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             io.CML_MicroTask_Config.LoadTaskInfo := Load_MicroInst.CLoadTaskInfo
             io.CML_MicroTask_Config.Is_Transpose := Load_MicroInst.IsTranspose
 
-            A_SCP_Free(Load_MicroInst.A_SCPID)  := false.B
-            Current_AML_SCP_ID := Load_MicroInst.A_SCPID
-            B_SCP_Free(Load_MicroInst.B_SCPID)  := false.B
-            Current_BML_SCP_ID := Load_MicroInst.B_SCPID
+            when(Need_Issue_AML_Micro_Inst) {
+                A_SCP_Free(Load_MicroInst.A_SCPID) := false.B
+                Current_AML_SCP_ID := Load_MicroInst.A_SCPID
+            }
+            when(Need_Issue_BML_Micro_Inst) {
+                B_SCP_Free(Load_MicroInst.B_SCPID) := false.B
+                Current_BML_SCP_ID := Load_MicroInst.B_SCPID
+            }
             when(Will_Issuse_CML_Load)
             {
                 C_SCP_Free(Load_MicroInst.C_SCPID) := false.B
@@ -1140,8 +1135,9 @@ class TaskController(implicit p: Parameters) extends CuteModule{
 
             if (ZZHDebugEnable)
             {
-                printf("[TaskController<%d>]:Load MicroInst Issue! Issue AML_MicroTask = %d, Issue BML_MicroTask = %d, Issue CML_MicroTask = %d\n",io.DebugTimeStampe, Need_Issue_AML_Micro_Inst, Need_Issue_BML_Micro_Inst, Need_Issue_CML_Micro_Inst)
-                //SCPID
+                printf("[TaskController<%d>]:Load MicroInst Issue! Issue AML=%d BML=%d CML=%d IsZeroLoad=%d C_SCPID=%d C_SCP_Free=%d\n",
+                    io.DebugTimeStampe, Need_Issue_AML_Micro_Inst, Need_Issue_BML_Micro_Inst, Need_Issue_CML_Micro_Inst,
+                    Load_MicroInst.CLoadTaskInfo.Is_ZeroLoad, Load_MicroInst.C_SCPID, C_SCP_Free(Load_MicroInst.C_SCPID))
                 printf("[TaskController<%d>]:Load MicroInst Issue! AML_SCP_ID = %d, BML_SCP_ID = %d, CML_SCP_ID = %d\n",io.DebugTimeStampe, Current_AML_SCP_ID, Current_BML_SCP_ID, Current_CML_SCP_ID)
             }
         }.elsewhen(Load_Micro_Inst_Issue_State_Reg === issue_state_issue)
@@ -1187,7 +1183,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             when(Load_Micro_Inst_Wait_C_Finish && io.CML_MicroTask_Config.MicroTaskEndValid)
             {
                 Load_Micro_Inst_Wait_C_Finish := false.B
-                if(YJPDebugEnable)
+                if(ZZHDebugEnable)
                 {
                     printf("[TaskController<%d>]:Load MicroInst C Finish! \n",io.DebugTimeStampe)
                 }
