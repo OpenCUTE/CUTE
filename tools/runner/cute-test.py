@@ -87,6 +87,7 @@ SDK_ROOT = CUTE_ROOT / "cute-sdk"
 RUNTIMES_DIR = SDK_ROOT / "tests" / "runtime"
 TENSOR_DIR = SDK_ROOT / "tests" / "tensor"
 PRIMITIVE_DIR = SDK_ROOT / "tests" / "primitive"
+FUSION_DIR = SDK_ROOT / "tests" / "fusion"
 BUILD_DIR = SDK_ROOT / "build"
 CUTE_BUILD = CUTE_ROOT / "tools" / "runner" / "cute-build.py"
 CUTE_RUN = CUTE_ROOT / "tools" / "runner" / "cute-run.py"
@@ -167,6 +168,89 @@ def validate_float_tolerance(value, field: str) -> str | None:
     return None
 
 
+def split_case_variant(case_ref: str) -> tuple[str, str | None]:
+    if ":" not in case_ref:
+        return case_ref, None
+    case_id, variant = case_ref.split(":", 1)
+    return case_id, variant or None
+
+
+def get_build_variants(case: dict) -> list[dict]:
+    build = case.get("build", {})
+    variants = build.get("variants") if isinstance(build, dict) else None
+    return variants if isinstance(variants, list) else []
+
+
+def find_variant(case: dict, variant_name: str | None) -> dict | None:
+    if not variant_name:
+        return None
+    for variant in get_build_variants(case):
+        if isinstance(variant, dict) and variant.get("name") == variant_name:
+            return variant
+    return None
+
+
+def get_case_verify(case: dict, variant_name: str | None,
+                    verify_config: dict | None = None) -> dict:
+    verify_info = dict(verify_config or {})
+    verify_info.update(case.get("verify", {}))
+    variant = find_variant(case, variant_name)
+    if variant and isinstance(variant.get("verify"), dict):
+        verify_info.update(variant["verify"])
+    return verify_info
+
+
+def get_case_golden(case: dict, variant_name: str | None) -> str:
+    variant = find_variant(case, variant_name)
+    if variant and variant.get("golden"):
+        return variant["golden"]
+    return case.get("golden", "")
+
+
+def get_case_bindings(case: dict, variant_name: str | None) -> dict:
+    bindings = dict(case.get("bindings", {}))
+    variant = find_variant(case, variant_name)
+    if variant and isinstance(variant.get("bindings"), dict):
+        bindings.update(variant["bindings"])
+    return bindings
+
+
+def load_case_json(case_ref: str) -> tuple[Path | None, dict | None]:
+    case_id, _ = split_case_variant(case_ref)
+    case_dir = _find_case_dir(case_id)
+    if case_dir is None:
+        return None, None
+    with open(case_dir / "case.json") as f:
+        return case_dir, json.load(f)
+
+
+def expand_case_refs(case_refs: list[str]) -> list[str]:
+    expanded: list[str] = []
+    for case_ref in case_refs:
+        case_id, variant = split_case_variant(case_ref)
+        if variant:
+            expanded.append(case_ref)
+            continue
+
+        try:
+            _, case = load_case_json(case_id)
+        except Exception:
+            case = None
+
+        variants = get_build_variants(case or {})
+        if not variants:
+            expanded.append(case_id)
+            continue
+
+        for item in variants:
+            name = item.get("name") if isinstance(item, dict) else None
+            if name:
+                expanded.append(f"{case_id}:{name}")
+            else:
+                expanded.append(case_id)
+    return expanded
+
+
 # ---------------------------------------------------------------------------
 # ELF symbol resolution
 # ---------------------------------------------------------------------------
@@ -201,12 +285,13 @@ def resolve_symbol(elf_path: Path, symbol_name: str) -> int | None:
 # Case validation
 # ---------------------------------------------------------------------------
 
-def validate_case(case_id: str) -> list[str]:
+def validate_case(case_ref: str) -> list[str]:
     """Validate case.json format. Returns list of error strings (empty = OK)."""
     errors: list[str] = []
+    case_id, requested_variant = split_case_variant(case_ref)
     case_dir = _find_case_dir(case_id)
     if case_dir is None:
-        return [f"case.json not found for {case_id}"]
+        return [f"case.json not found for {case_ref}"]
     case_json = case_dir / "case.json"
 
     try:
@@ -233,10 +318,45 @@ def validate_case(case_id: str) -> list[str]:
         errors.append("'build' must be an object")
     else:
         source = build.get("source", "")
-        if not source:
-            errors.append("build.source is required")
-        elif not (case_dir / source).is_file():
-            errors.append(f"build.source not found: {case_dir / source}")
+        variants = build.get("variants")
+        if source and variants is not None:
+            errors.append("build.source and build.variants are mutually exclusive")
+        elif variants is not None:
+            if not isinstance(variants, list) or not variants:
+                errors.append("build.variants must be a non-empty list")
+            else:
+                names: set[str] = set()
+                for index, variant in enumerate(variants):
+                    if not isinstance(variant, dict):
+                        errors.append(f"build.variants[{index}] must be an object")
+                        continue
+                    name = variant.get("name", "")
+                    if not name:
+                        errors.append(f"build.variants[{index}].name is required")
+                    elif name in names:
+                        errors.append(f"duplicate build variant name: {name}")
+                    else:
+                        names.add(name)
+                    variant_source = variant.get("source", "")
+                    if not variant_source:
+                        errors.append(f"build.variants[{index}].source is required")
+                    elif not (case_dir / variant_source).is_file():
+                        errors.append(
+                            f"build.variants[{index}].source not found: "
+                            f"{case_dir / variant_source}"
+                        )
+                    target = variant.get("target")
+                    if target is not None and not isinstance(target, str):
+                        errors.append(f"build.variants[{index}].target must be a string")
+                if requested_variant and requested_variant not in names:
+                    errors.append(f"unknown build variant: {requested_variant}")
+        else:
+            if requested_variant:
+                errors.append(f"{case_id} has no build.variants")
+            if not source:
+                errors.append("build.source is required")
+            elif not (case_dir / source).is_file():
+                errors.append(f"build.source not found: {case_dir / source}")
 
     # --- run section ---
     run = case.get("run", {})
@@ -247,7 +367,7 @@ def validate_case(case_id: str) -> list[str]:
             errors.append("run.hwconfig or run.trace_source is required")
 
     # --- golden section ---
-    golden_ref = case.get("golden", "")
+    golden_ref = get_case_golden(case, requested_variant)
     if not golden_ref:
         errors.append("'golden' is required (path to manifest.json relative to cute-sdk/)")
     else:
@@ -258,7 +378,7 @@ def validate_case(case_id: str) -> list[str]:
             errors.append(f"golden manifest not found: {manifest}")
 
     # --- verify section ---
-    verify = case.get("verify", {})
+    verify = get_case_verify(case, requested_variant)
     if not isinstance(verify, dict):
         errors.append("'verify' must be an object")
     else:
@@ -373,6 +493,7 @@ def resolve_all_symbols(cases: list[str]) -> dict[str, list[int | None]]:
     print("[RELOC] resolving symbols...")
     addr_map: dict[str, list[int | None]] = {}
     for cid in cases:
+        _, variant_name = split_case_variant(cid)
         case_dir = _find_case_dir(cid)
         binary = _find_binary(cid)
         if case_dir is None or binary is None:
@@ -380,7 +501,7 @@ def resolve_all_symbols(cases: list[str]) -> dict[str, list[int | None]]:
             continue
         with open(case_dir / "case.json") as f:
             case = json.load(f)
-        verify_info = case.get("verify", {})
+        verify_info = get_case_verify(case, variant_name)
         verify_mode = verify_info.get("mode", VERIFY_MODE_BIT_EXACT)
         if not needs_bit_exact(verify_mode):
             addr_map[cid] = []
@@ -405,18 +526,36 @@ def resolve_all_symbols(cases: list[str]) -> dict[str, list[int | None]]:
 # Run + Verify a single case
 # ---------------------------------------------------------------------------
 
-def _find_case_dir(case_id: str) -> Path | None:
-    """Find case directory under tests/runtime/, tests/tensor/, or tests/primitive/."""
-    for base in (RUNTIMES_DIR, TENSOR_DIR, PRIMITIVE_DIR):
+def _find_case_dir(case_ref: str) -> Path | None:
+    """Find case directory under tests/runtime/, tests/tensor/, tests/primitive/, or tests/fusion/."""
+    case_id, _ = split_case_variant(case_ref)
+    for base in (RUNTIMES_DIR, TENSOR_DIR, PRIMITIVE_DIR, FUSION_DIR):
         d = base / case_id
         if (d / "case.json").is_file():
             return d
     return None
 
 
-def _find_binary(case_id: str) -> Path | None:
-    """Find built binary under build/runtime/, build/tensor/, or build/primitive/."""
-    for subdir in ("runtime", "tensor", "primitive"):
+def _find_binary(case_ref: str) -> Path | None:
+    """Find built binary under build/runtime/, build/tensor/, build/primitive/, or build/fusion/."""
+    case_id, variant_name = split_case_variant(case_ref)
+    if variant_name:
+        try:
+            _, case = load_case_json(case_id)
+        except Exception:
+            case = None
+        variant = find_variant(case or {}, variant_name)
+        target = variant.get("target") if variant else None
+        candidates = []
+        if target:
+            candidates.append(BUILD_DIR / "fusion" / target)
+        candidates.append(BUILD_DIR / "fusion" / f"{case_id}_{variant_name}.riscv")
+        for binary in candidates:
+            if binary.exists():
+                return binary
+        return None
+
+    for subdir in ("runtime", "tensor", "primitive", "fusion"):
         b = BUILD_DIR / subdir / f"{case_id}.riscv"
         if b.exists():
             return b
@@ -425,6 +564,7 @@ def _find_binary(case_id: str) -> Path | None:
 
 def run_case(case_id: str, hwconfig: str, verify_config: dict,
              base_addrs: list[int | None] | None = None) -> CaseResult:
+    _, variant_name = split_case_variant(case_id)
     case_dir = _find_case_dir(case_id)
     if case_dir is None:
         return CaseResult(case_id, False, f"case.json not found for {case_id}")
@@ -468,9 +608,8 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
         return CaseResult(case_id, False, f"run.out not found: {trace_path}")
 
     # --- verify ---
-    golden_ref = case.get("golden", "")
-    verify_info = dict(verify_config)
-    verify_info.update(case.get("verify", {}))
+    golden_ref = get_case_golden(case, variant_name)
+    verify_info = get_case_verify(case, variant_name, verify_config)
     verify_mode = verify_info.get("mode", VERIFY_MODE_BIT_EXACT)
     if not needs_bit_exact(verify_mode):
         return CaseResult(case_id, True, "return code OK")
@@ -484,7 +623,7 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
 
     targets = normalize_verify_targets(verify_info)
     base_addrs = base_addrs or []
-    bindings = case.get("bindings", {})
+    bindings = get_case_bindings(case, variant_name)
     details: list[str] = []
 
     for index, target in enumerate(targets):
@@ -560,7 +699,8 @@ def main() -> int:
         suite = yaml.safe_load(f)
 
     hwconfig = args.hwconfig or suite["hwconfig"]
-    cases = suite.get("cases", [])
+    suite_cases = suite.get("cases", [])
+    cases = expand_case_refs(suite_cases)
     parallel = args.parallel if args.parallel is not None else suite.get("parallel", 1)
     verify_config = suite.get("verify", {})
     do_build = suite.get("build", False) and not args.skip_build
@@ -571,7 +711,10 @@ def main() -> int:
 
     print(f"Suite: {Path(args.suite).name}")
     print(f"  hwconfig: {hwconfig}")
-    print(f"  cases:    {len(cases)}")
+    if len(cases) == len(suite_cases):
+        print(f"  cases:    {len(cases)}")
+    else:
+        print(f"  cases:    {len(cases)} ({len(suite_cases)} suite entries expanded)")
     print(f"  parallel: {parallel}")
     print()
 
