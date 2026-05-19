@@ -530,38 +530,38 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     val C_SCP_Free = RegInit(VecInit(Seq.fill(2)(true.B)))
 
     //微指令队列
-    val Load_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new LoadMicroInst().getWidth.W))))
-    val Load_MicroInst_FINISH_Ready_GO = RegInit(VecInit(Seq.fill(4)(false.B)))//Load微指令是否完成
-    val Load_MicroInst_FINISH_Ready_Commit = RegInit(VecInit(Seq.fill(4)(false.B)))//Load微指令是否可以提交
-    val Compute_MicroInst_FINISH_Ready_GO = RegInit(VecInit(Seq.fill(4)(false.B)))//Compute微指令是否完成
-    val Compute_MicroInst_FINISH_Ready_Commit = RegInit(VecInit(Seq.fill(4)(false.B)))//Compute微指令是否可以提交
-    val Compute_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new ComputeMicroInst().getWidth.W))))
-    val Store_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new StoreMicroInst().getWidth.W))))
+    val Load_MicroInst_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new LoadMicroInst().getWidth.W))))
+    val Load_MicroInst_FINISH_Ready_GO = RegInit(VecInit(Seq.fill(16)(false.B)))//Load微指令是否完成
+    val Load_MicroInst_FINISH_Ready_Commit = RegInit(VecInit(Seq.fill(16)(false.B)))//Load微指令是否可以提交
+    val Compute_MicroInst_FINISH_Ready_GO = RegInit(VecInit(Seq.fill(16)(false.B)))//Compute微指令是否完成
+    val Compute_MicroInst_FINISH_Ready_Commit = RegInit(VecInit(Seq.fill(16)(false.B)))//Compute微指令是否可以提交
+    val Compute_MicroInst_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new ComputeMicroInst().getWidth.W))))
+    val Store_MicroInst_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new StoreMicroInst().getWidth.W))))
 
-    val Load_MicroInst_FIFO_Head = RegInit(0.U(2.W))
-    val Load_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
+    val Load_MicroInst_FIFO_Head = RegInit(0.U(4.W))
+    val Load_MicroInst_FIFO_Tail = RegInit(0.U(4.W))
     val Load_MicroInst_FIFO_Empty = Load_MicroInst_FIFO_Head === Load_MicroInst_FIFO_Tail
-    val Load_MicroInst_FIFO_Full = WrapInc(Load_MicroInst_FIFO_Head, 4) === Load_MicroInst_FIFO_Tail
-    val Load_MicroInst_FINISH_Head = RegInit(0.U(2.W))
+    val Load_MicroInst_FIFO_Full = WrapInc(Load_MicroInst_FIFO_Head, 16) === Load_MicroInst_FIFO_Tail
+    val Load_MicroInst_FINISH_Head = RegInit(0.U(4.W))
     val Load_MicroInst_FINISH_All = Load_MicroInst_FINISH_Head === Load_MicroInst_FIFO_Head//所有的Load微指令都已经完成
 
-    val Store_MicroInst_FIFO_Head = RegInit(0.U(2.W))
-    val Store_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
+    val Store_MicroInst_FIFO_Head = RegInit(0.U(4.W))
+    val Store_MicroInst_FIFO_Tail = RegInit(0.U(4.W))
     val Store_MicroInst_FIFO_Empty = Store_MicroInst_FIFO_Head === Store_MicroInst_FIFO_Tail
-    val Store_MicroInst_FIFO_Full = WrapInc(Store_MicroInst_FIFO_Head, 4) === Store_MicroInst_FIFO_Tail
-    val Store_MicroInst_FINISH_HEAD = RegInit(0.U(2.W))
+    val Store_MicroInst_FIFO_Full = WrapInc(Store_MicroInst_FIFO_Head, 16) === Store_MicroInst_FIFO_Tail
+    val Store_MicroInst_FINISH_HEAD = RegInit(0.U(4.W))
 
-    val Compute_MicroInst_FIFO_Head = RegInit(0.U(2.W))
-    val Compute_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
+    val Compute_MicroInst_FIFO_Head = RegInit(0.U(4.W))
+    val Compute_MicroInst_FIFO_Tail = RegInit(0.U(4.W))
     val Compute_MicroInst_FIFO_Empty = Compute_MicroInst_FIFO_Head === Compute_MicroInst_FIFO_Tail
-    val Compute_MicroInst_FIFO_Full = WrapInc(Compute_MicroInst_FIFO_Head, 4) === Compute_MicroInst_FIFO_Tail
-    val Compute_MicroInst_FINISH_HEAD = RegInit(0.U(2.W))
+    val Compute_MicroInst_FIFO_Full = WrapInc(Compute_MicroInst_FIFO_Head, 16) === Compute_MicroInst_FIFO_Tail
+    val Compute_MicroInst_FINISH_HEAD = RegInit(0.U(4.W))
     val Compute_MicroInst_FINISH_All = Compute_MicroInst_FINISH_HEAD === Compute_MicroInst_FIFO_Head//所有的Compute微指令都已经完成
 
     //微指令执行状态队列
-    val Load_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new LoadMicroInst_Resource_Info().getWidth.W))))
-    val Store_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new StoreMicroInst_Resource_Info().getWidth.W))))
-    val Compute_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new ComputeMicroInst_Resource_Info().getWidth.W))))
+    val Load_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new LoadMicroInst_Resource_Info().getWidth.W))))
+    val Store_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new StoreMicroInst_Resource_Info().getWidth.W))))
+    val Compute_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new ComputeMicroInst_Resource_Info().getWidth.W))))
 
     // --- AME injection: FIFO status outputs ---
     io.ame_inject.load_fifo_full    := Load_MicroInst_FIFO_Full
@@ -863,7 +863,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             when(Have_Load_Micro_Inst && Can_Decode_More_Micro_Inst)
             {
                 Load_MicroInst_FIFO(Load_MicroInst_FIFO_Head) := Load_MicroInst.asUInt
-                Load_MicroInst_FIFO_Head := WrapInc(Load_MicroInst_FIFO_Head, 4)
+                Load_MicroInst_FIFO_Head := WrapInc(Load_MicroInst_FIFO_Head, 16)
                 Load_MicroInst_FINISH_Ready_GO(Load_MicroInst_FIFO_Head) := false.B
                 Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FIFO_Head) := false.B
                 if (YJPDebugEnable)
@@ -910,7 +910,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
                 Compute_MicroInst_Resource_Info_FIFO(Compute_MicroInst_FIFO_Head) := Compute_Resource_Info.asUInt
                 Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FIFO_Head) := false.B
                 Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FIFO_Head) := false.B
-                Compute_MicroInst_FIFO_Head := WrapInc(Compute_MicroInst_FIFO_Head, 4)
+                Compute_MicroInst_FIFO_Head := WrapInc(Compute_MicroInst_FIFO_Head, 16)
                 if (YJPDebugEnable)
                 {
                     printf("[TaskController<%d>]:Compute MicroInst Insert!  Compute_MicroInst_FIFO_Head = %d, Compute_MicroInst_FIFO_Tail = %d\n",io.DebugTimeStampe, Compute_MicroInst_FIFO_Head, Compute_MicroInst_FIFO_Tail)
@@ -943,7 +943,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             {
                 Store_MicroInst_FIFO(Store_MicroInst_FIFO_Head) := Store_MicroInst.asUInt
                 Store_MicroInst_Resource_Info_FIFO(Store_MicroInst_FIFO_Head) := Store_Resource_Info.asUInt
-                Store_MicroInst_FIFO_Head := WrapInc(Store_MicroInst_FIFO_Head, 4)
+                Store_MicroInst_FIFO_Head := WrapInc(Store_MicroInst_FIFO_Head, 16)
                 if (YJPDebugEnable)
                 {
                     printf("[TaskController<%d>]:Store MicroInst Insert!  Store_MicroInst_FIFO_Head = %d, Store_MicroInst_FIFO_Tail = %d\n",io.DebugTimeStampe, Store_MicroInst_FIFO_Head, Store_MicroInst_FIFO_Tail)
@@ -964,7 +964,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         Load_MicroInst_Resource_Info_FIFO(Load_MicroInst_FIFO_Head) := io.ame_inject.load_resource_inject_bits
         Load_MicroInst_FINISH_Ready_GO(Load_MicroInst_FIFO_Head) := false.B
         Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FIFO_Head) := false.B
-        Load_MicroInst_FIFO_Head := WrapInc(Load_MicroInst_FIFO_Head, 4)
+        Load_MicroInst_FIFO_Head := WrapInc(Load_MicroInst_FIFO_Head, 16)
         if (ZZHDebugEnable) {
             printf("[AME-TC<%d>] Load FIFO enqueue at head=%d\n", io.DebugTimeStampe, Load_MicroInst_FIFO_Head)
         }
@@ -974,7 +974,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         Compute_MicroInst_Resource_Info_FIFO(Compute_MicroInst_FIFO_Head) := io.ame_inject.compute_resource_inject_bits
         Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FIFO_Head) := false.B
         Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FIFO_Head) := false.B
-        Compute_MicroInst_FIFO_Head := WrapInc(Compute_MicroInst_FIFO_Head, 4)
+        Compute_MicroInst_FIFO_Head := WrapInc(Compute_MicroInst_FIFO_Head, 16)
         if (ZZHDebugEnable) {
             printf("[AME-TC<%d>] Compute FIFO enqueue at head=%d\n", io.DebugTimeStampe, Compute_MicroInst_FIFO_Head)
         }
@@ -982,36 +982,36 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     when(io.ame_inject.store_inject_valid) {
         Store_MicroInst_FIFO(Store_MicroInst_FIFO_Head) := io.ame_inject.store_inject_bits
         Store_MicroInst_Resource_Info_FIFO(Store_MicroInst_FIFO_Head) := io.ame_inject.store_resource_inject_bits
-        Store_MicroInst_FIFO_Head := WrapInc(Store_MicroInst_FIFO_Head, 4)
+        Store_MicroInst_FIFO_Head := WrapInc(Store_MicroInst_FIFO_Head, 16)
         if (ZZHDebugEnable) {
             printf("[AME-TC<%d>] Store FIFO enqueue at head=%d\n", io.DebugTimeStampe, Store_MicroInst_FIFO_Head)
         }
     }
 
     // 微指令队列
-    // val Load_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new LoadMicroInst().getWidth.W))))
-    // val Store_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new StoreMicroInst().getWidth.W))))
-    // val Compute_MicroInst_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new ComputeMicroInst().getWidth.W))))
+    // val Load_MicroInst_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new LoadMicroInst().getWidth.W))))
+    // val Store_MicroInst_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new StoreMicroInst().getWidth.W))))
+    // val Compute_MicroInst_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new ComputeMicroInst().getWidth.W))))
 
     // val Load_MicroInst_FIFO_Head = RegInit(0.U(2.W))
     // val Load_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
     // val Load_MicroInst_FIFO_Empty = Load_MicroInst_FIFO_Head === Load_MicroInst_FIFO_Tail
-    // val Load_MicroInst_FIFO_Full = WrapInc(Load_MicroInst_FIFO_Head, 4) === Load_MicroInst_FIFO_Tail
+    // val Load_MicroInst_FIFO_Full = WrapInc(Load_MicroInst_FIFO_Head, 16) === Load_MicroInst_FIFO_Tail
 
     // val Store_MicroInst_FIFO_Head = RegInit(0.U(2.W))
     // val Store_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
     // val Store_MicroInst_FIFO_Empty = Store_MicroInst_FIFO_Head === Store_MicroInst_FIFO_Tail
-    // val Store_MicroInst_FIFO_Full = WrapInc(Store_MicroInst_FIFO_Head, 4) === Store_MicroInst_FIFO_Tail
+    // val Store_MicroInst_FIFO_Full = WrapInc(Store_MicroInst_FIFO_Head, 16) === Store_MicroInst_FIFO_Tail
 
     // val Compute_MicroInst_FIFO_Head = RegInit(0.U(2.W))
     // val Compute_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
     // val Compute_MicroInst_FIFO_Empty = Compute_MicroInst_FIFO_Head === Compute_MicroInst_FIFO_Tail
-    // val Compute_MicroInst_FIFO_Full = WrapInc(Compute_MicroInst_FIFO_Head, 4) === Compute_MicroInst_FIFO_Tail
+    // val Compute_MicroInst_FIFO_Full = WrapInc(Compute_MicroInst_FIFO_Head, 16) === Compute_MicroInst_FIFO_Tail
 
     // //微指令执行状态队列
-    // val Load_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new LoadMicroInst_Resource_Info().getWidth.W))))
-    // val Store_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new StoreMicroInst_Resource_Info().getWidth.W))))
-    // val Compute_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(4)(0.U(new ComputeMicroInst_Resource_Info().getWidth.W))))
+    // val Load_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new LoadMicroInst_Resource_Info().getWidth.W))))
+    // val Store_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new StoreMicroInst_Resource_Info().getWidth.W))))
+    // val Compute_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new ComputeMicroInst_Resource_Info().getWidth.W))))
 
     val Current_ADC_SCP_ID = RegInit(0.U(2.W))
     val Current_BDC_SCP_ID = RegInit(0.U(2.W))
@@ -1190,7 +1190,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             }
             when(!Load_Micro_Inst_Wait_A_Finish && !Load_Micro_Inst_Wait_B_Finish && !Load_Micro_Inst_Wait_A_Scale_Finish && !Load_Micro_Inst_Wait_B_Scale_Finish && !Load_Micro_Inst_Wait_C_Finish)
             {
-                Load_MicroInst_FINISH_Head := WrapInc(Load_MicroInst_FINISH_Head, 4)
+                Load_MicroInst_FINISH_Head := WrapInc(Load_MicroInst_FINISH_Head, 16)
                 Load_MicroInst_FINISH_Ready_GO(Load_MicroInst_FINISH_Head) := true.B
                 // AME mode: auto-commit Load on completion (original path relies on Compute to commit)
                 Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FINISH_Head) := true.B
@@ -1207,7 +1207,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     //提交Load微指令
     when(Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FIFO_Tail) === true.B)
     {
-        Load_MicroInst_FIFO_Tail := WrapInc(Load_MicroInst_FIFO_Tail, 4)
+        Load_MicroInst_FIFO_Tail := WrapInc(Load_MicroInst_FIFO_Tail, 16)
         Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FIFO_Tail) := false.B
         if (ZZHDebugEnable)
         {
@@ -1394,7 +1394,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             }
             when(!Compute_Micro_Inst_Wait_A_Finish && !Compute_Micro_Inst_Wait_B_Finish && !Compute_Micro_Inst_Wait_C_Finish && !Compute_Micro_Inst_Wait_B_Scale_Finish && !Compute_Micro_Inst_Wait_A_Scale_Finish)
             {
-                Compute_MicroInst_FINISH_HEAD := WrapInc(Compute_MicroInst_FINISH_HEAD, 4)
+                Compute_MicroInst_FINISH_HEAD := WrapInc(Compute_MicroInst_FINISH_HEAD, 16)
                 Compute_MicroInst_FINISH_Ready_GO(Compute_MicroInst_FINISH_HEAD) := true.B
                 // AME mode: auto-commit Compute on completion
                 Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FINISH_HEAD) := true.B
@@ -1423,7 +1423,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
     //提交Compute微指令
     when(Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FIFO_Tail) === true.B)
     {
-        Compute_MicroInst_FIFO_Tail := WrapInc(Compute_MicroInst_FIFO_Tail, 4)
+        Compute_MicroInst_FIFO_Tail := WrapInc(Compute_MicroInst_FIFO_Tail, 16)
         Compute_MicroInst_FINISH_Ready_Commit(Compute_MicroInst_FIFO_Tail) := false.B
         if (YJPDebugEnable)
         {
@@ -1491,7 +1491,7 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             }
             when(!Store_Micro_Inst_Wait_C_Finish)
             {
-                Store_MicroInst_FIFO_Tail := WrapInc(Store_MicroInst_FIFO_Tail, 4)
+                Store_MicroInst_FIFO_Tail := WrapInc(Store_MicroInst_FIFO_Tail, 16)
                 Store_Micro_Inst_Issue_State_Reg := issue_state_idle
                 when(Store_Micro_Inst_Is_Last_Store)
                 {

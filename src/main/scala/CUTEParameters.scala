@@ -1721,14 +1721,12 @@ class AMEInjectIO()(implicit p: Parameters) extends CuteBundle {
     val store_inject_bits           = Input(UInt(new StoreMicroInst().getWidth.W))
     val store_resource_inject_valid = Input(Bool())
     val store_resource_inject_bits  = Input(UInt(new StoreMicroInst_Resource_Info().getWidth.W))
-    val scp_override_valid          = Input(Bool())
-    val scp_override_bits           = Input(new SCPControlInfo)
     val load_fifo_full          = Output(Bool())
     val compute_fifo_full       = Output(Bool())
     val store_fifo_full         = Output(Bool())
     val all_fifo_empty          = Output(Bool())
-    val load_fifo_head          = Output(UInt(2.W))
-    val compute_fifo_head       = Output(UInt(2.W))
+    val load_fifo_head          = Output(UInt(4.W))
+    val compute_fifo_head       = Output(UInt(4.W))
 }
 
 

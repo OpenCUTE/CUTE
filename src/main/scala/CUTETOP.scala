@@ -203,8 +203,6 @@ class CUTEV2Top()(implicit p: Parameters) extends CuteModule{
     TaskCtrl.io.ame_inject.store_inject_bits            := AMEDec.io.store_inject.bits.asUInt
     TaskCtrl.io.ame_inject.store_resource_inject_valid  := AMEDec.io.store_resource_inject.valid
     TaskCtrl.io.ame_inject.store_resource_inject_bits   := AMEDec.io.store_resource_inject.bits.asUInt
-    TaskCtrl.io.ame_inject.scp_override_valid          := AMEDec.io.scp_override.valid
-    TaskCtrl.io.ame_inject.scp_override_bits           := AMEDec.io.scp_override.bits
 
     //给每个SCP的输入进行defuat的赋值
     for (i <- 0 until 2){

@@ -23,14 +23,12 @@ class AMEDecoderIO()(implicit p: Parameters) extends CuteBundle {
   val compute_resource_inject = Valid(new ComputeMicroInst_Resource_Info)
   val store_inject   = Valid(new StoreMicroInst)
   val store_resource_inject = Valid(new StoreMicroInst_Resource_Info)
-  val scp_override   = Valid(new SCPControlInfo)
-
   val load_fifo_full    = Input(Bool())
   val compute_fifo_full = Input(Bool())
   val store_fifo_full   = Input(Bool())
   val all_fifo_empty    = Input(Bool())
-  val load_fifo_head    = Input(UInt(2.W))
-  val compute_fifo_head = Input(UInt(2.W))
+  val load_fifo_head    = Input(UInt(4.W))
+  val compute_fifo_head = Input(UInt(4.W))
   val stall             = Output(Bool())
 
   val resp_data  = Output(UInt(64.W))
@@ -53,11 +51,20 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   val csr_xtrenb = ReduceWidthByte.U(64.W)
   val csr_xalenb = (Tensor_M * Tensor_N * ResultWidthByte).U(64.W)
 
-  // --- Instruction fields ---
-  val cmd_valid = io.ame_cmd.valid
-  val inst      = io.ame_cmd.bits.inst   // full 32-bit AME instruction
-  val rs1_data  = io.ame_cmd.bits.rs1_data
-  val rs2_data  = io.ame_cmd.bits.rs2_data
+  // --- Instruction FIFO ---
+  // CPU enqueues freely (never stalled). Decoder drains at its own pace.
+  val cmd_fifo = Module(new Queue(new AMECommand, 512))
+  cmd_fifo.io.enq.valid := io.ame_cmd.valid
+  cmd_fifo.io.enq.bits  := io.ame_cmd.bits
+  // CPU is never stalled by AMEDecoder
+  io.stall := false.B
+
+  // Decode from FIFO head. Dequeue when the instruction can be dispatched.
+  val cmd_valid = cmd_fifo.io.deq.valid
+  val inst      = cmd_fifo.io.deq.bits.inst
+  val rs1_data  = cmd_fifo.io.deq.bits.rs1_data
+  val rs2_data  = cmd_fifo.io.deq.bits.rs2_data
+  val funct     = cmd_fifo.io.deq.bits.funct
 
   // AME native 32-bit instruction field extraction (per insts spec & ame.h)
   val inst_func4    = inst(31, 28)        // instruction sub-type
@@ -79,9 +86,8 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   val is_msettilem  = is_config && inst_func4 === 0.U && inst_imm_sel === 1.U
   val is_msettilek  = is_config && inst_func4 === 1.U && inst_imm_sel === 1.U
   val is_msettilen  = is_config && inst_func4 === 2.U && inst_imm_sel === 1.U
-  val is_mrelease   = is_config && inst === "h0000002B".U  // all zeros except opcode=0x2B
+  val is_mrelease   = is_config && inst === "h0000002B".U
 
-  // uop=01: load/store
   val is_ldst       = cmd_valid && inst_uop === 1.U
   val is_load       = is_ldst && !inst_ls
   val is_store      = is_ldst && inst_ls
@@ -100,21 +106,15 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   val is_mzero      = is_misc && inst_func4 === 0.U
 
   // fence.m and mstatus are handled at CUTE2YGJK level, never reach AMEDecoder
-  val funct         = io.ame_cmd.bits.funct
 
-  // --- Stall logic ---
-  // Stall must NOT depend on cmd_valid to avoid combinational cycle.
-  // Uses inst fields (pure data path from io.cmd.bits) and FIFO status.
-  // fence.m stall is handled at CUTE2YGJK level.
-  val would_load    = cmd_valid && inst_uop === 1.U && !inst_ls  // load
-  val would_mzero   = cmd_valid && inst_uop === 3.U && inst_func4 === 0.U  // mzero
-  val would_compute = cmd_valid && inst_uop === 2.U  // matmul
-  val would_store   = cmd_valid && inst_uop === 1.U && inst_ls  // store
+  // --- Dispatch stall: can't dequeue if downstream FIFO is full ---
+  val load_blocked    = (is_load || is_mzero) && io.load_fifo_full
+  val compute_blocked = is_compute && io.compute_fifo_full
+  val store_blocked   = is_store && io.store_fifo_full
+  val dispatch_blocked = load_blocked || compute_blocked || store_blocked
 
-  val load_stall    = (would_load || would_mzero) && io.load_fifo_full
-  val compute_stall = would_compute && io.compute_fifo_full
-  val store_stall   = would_store && io.store_fifo_full
-  io.stall := load_stall || compute_stall || store_stall
+  // Dequeue from cmd_fifo when instruction is dispatched (not blocked, not config which is instant)
+  cmd_fifo.io.deq.ready := cmd_valid && !dispatch_blocked
 
   // --- CSR write handling ---
   when(is_msettilem) {
@@ -154,22 +154,6 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   a_scp_bank := Mux(is_load_a, inst_md(0), inst_ms1(0))
   b_scp_bank := Mux(is_load_b, inst_md(0), inst_ms2(0))
   c_scp_bank := inst_md(0)
-
-  // --- SCP override output ---
-  io.scp_override.valid := (is_load || is_mzero || is_compute || is_store) && !io.stall
-  io.scp_override.bits  := 0.U.asTypeOf(new SCPControlInfo)
-  when(is_load_a || is_compute) {
-    io.scp_override.bits.AML_SCP_ID := a_scp_bank
-    io.scp_override.bits.ADC_SCP_ID := a_scp_bank
-  }
-  when(is_load_b || is_compute) {
-    io.scp_override.bits.BML_SCP_ID := b_scp_bank
-    io.scp_override.bits.BDC_SCP_ID := b_scp_bank
-  }
-  when(is_load_c || is_mzero || is_compute || is_store) {
-    io.scp_override.bits.CML_SCP_ID := c_scp_bank
-    io.scp_override.bits.CDC_SCP_ID := c_scp_bank
-  }
 
   // --- Load micro-instruction generation ---
   val load_inst = Wire(new LoadMicroInst)
@@ -245,7 +229,7 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
 
   load_inst.IsTranspose := is_transpose
 
-  io.load_inject.valid := (is_load || is_mzero) && !io.stall
+  io.load_inject.valid := (is_load || is_mzero) && !dispatch_blocked
   io.load_inject.bits  := load_inst
 
   val load_resource = Wire(new LoadMicroInst_Resource_Info)
@@ -330,7 +314,7 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   compute_inst.ScaratchpadTensor_K := csr_mtilek
   compute_inst.Have_Store_Micro_Inst := false.B
 
-  io.compute_inject.valid := is_compute && !io.stall
+  io.compute_inject.valid := is_compute && !dispatch_blocked
   io.compute_inject.bits  := compute_inst
 
   val compute_resource = Wire(new ComputeMicroInst_Resource_Info)
@@ -341,7 +325,7 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   // after Load injection head has advanced, so the last Load is at (head-1) mod 4.
   // Load is executed sequentially, so when the last Load finishes, all prior Loads
   // are guaranteed to have finished already.
-  compute_resource.Load_Micro_Inst_FIFO_Index := (io.load_fifo_head - 1.U)(1, 0)
+  compute_resource.Load_Micro_Inst_FIFO_Index := (io.load_fifo_head - 1.U)(3, 0)
   io.compute_resource_inject.valid := io.compute_inject.valid
   io.compute_resource_inject.bits  := compute_resource
 
@@ -367,13 +351,13 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   store_inst.ScaratchpadTensor_N := csr_mtilen
   store_inst.Is_Last_Store       := true.B
 
-  io.store_inject.valid := is_store && !io.stall
+  io.store_inject.valid := is_store && !dispatch_blocked
   io.store_inject.bits  := store_inst
 
   val store_resource = Wire(new StoreMicroInst_Resource_Info)
   store_resource.C_SCPID := c_scp_bank
   // Point to the last enqueued Compute entry: (head-1) mod 4.
-  store_resource.Compute_Micro_Inst_FIFO_Index := (io.compute_fifo_head - 1.U)(1, 0)
+  store_resource.Compute_Micro_Inst_FIFO_Index := (io.compute_fifo_head - 1.U)(3, 0)
   store_resource.Marco_Inst_FIFO_Index := 0.U
   io.store_resource_inject.valid := io.store_inject.valid
   io.store_resource_inject.bits  := store_resource

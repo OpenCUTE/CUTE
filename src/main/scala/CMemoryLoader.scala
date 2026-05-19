@@ -597,7 +597,7 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
         when(io.ConfigInfo.MicroTaskEndReady && io.ConfigInfo.MicroTaskEndValid){
             memoryload_state := s_load_idle
             state := s_idle
-            if (YJPCMLDebugEnable)
+            if (ZZHDebugEnable)
             {
                 printf("[CMemoryLoader_Load<%d>]Load Finish\n",io.DebugInfo.DebugTimeStampe)
             }
