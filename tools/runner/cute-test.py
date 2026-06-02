@@ -88,6 +88,7 @@ RUNTIMES_DIR = SDK_ROOT / "tests" / "runtime"
 TENSOR_DIR = SDK_ROOT / "tests" / "tensor"
 PRIMITIVE_DIR = SDK_ROOT / "tests" / "primitive"
 FUSION_DIR = SDK_ROOT / "tests" / "fusion"
+LAYER_DIR = SDK_ROOT / "tests" / "layer"
 BUILD_DIR = SDK_ROOT / "build"
 CUTE_BUILD = CUTE_ROOT / "tools" / "runner" / "cute-build.py"
 CUTE_RUN = CUTE_ROOT / "tools" / "runner" / "cute-run.py"
@@ -113,7 +114,7 @@ VERIFY_MODES = (
     VERIFY_MODE_RETURN_CODE,
     VERIFY_MODE_RETURN_CODE_AND_BIT_EXACT,
 )
-SIM_TIMEOUT_SECONDS = 20 * 60
+DEFAULT_SIM_TIMEOUT_SECONDS = 20 * 60
 BIT_EXACT_MODES = {
     VERIFY_MODE_BIT_EXACT,
     VERIFY_MODE_RETURN_CODE_AND_BIT_EXACT,
@@ -123,6 +124,17 @@ BIT_EXACT_MODES = {
 def short_run_artifacts(run_dir: Path) -> str:
     """Return compact pointers to detailed simulation artifacts."""
     return f"logs: {run_dir / 'run.log'}, {run_dir / 'run.out'}"
+
+
+def trace_has_finish_marker(run_dir: Path) -> bool:
+    """Return true when an existing trace appears to come from a completed run."""
+    run_log = run_dir / "run.log"
+    if run_log.is_file():
+        try:
+            return "Verilog $finish" in run_log.read_text(errors="ignore")
+        except OSError:
+            return False
+    return False
 
 
 def needs_bit_exact(mode: str) -> bool:
@@ -137,6 +149,7 @@ def normalize_verify_targets(verify_info: dict) -> list[dict]:
             "tensor": verify_info.get("tensor", "D"),
             "symbol": verify_info.get("symbol", ""),
             "float_tolerance_percent": verify_info.get("float_tolerance_percent"),
+            "float_tolerance_ulp": verify_info.get("float_tolerance_ulp"),
         }]
     if not isinstance(targets, list):
         raise ValueError("verify.tensors must be a list")
@@ -154,6 +167,10 @@ def normalize_verify_targets(verify_info: dict) -> list[dict]:
                 "float_tolerance_percent",
                 verify_info.get("float_tolerance_percent"),
             ),
+            "float_tolerance_ulp": target.get(
+                "float_tolerance_ulp",
+                verify_info.get("float_tolerance_ulp"),
+            ),
         })
     return normalized
 
@@ -166,6 +183,46 @@ def validate_float_tolerance(value, field: str) -> str | None:
     if value < 0:
         return f"{field} must be non-negative"
     return None
+
+
+def validate_float_tolerance_ulp(value, field: str) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        return f"{field} must be an integer"
+    if value < 0:
+        return f"{field} must be non-negative"
+    return None
+
+
+def validate_timeout_seconds(value, field: str) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return f"{field} must be a number"
+    if value <= 0:
+        return f"{field} must be positive"
+    return None
+
+
+def get_case_timeout_seconds(case: dict, default_timeout_seconds: int) -> int:
+    run = case.get("run", {})
+    if not isinstance(run, dict):
+        return default_timeout_seconds
+    value = run.get("timeout_seconds")
+    if value is None:
+        return default_timeout_seconds
+    return int(value)
+
+
+def get_case_ref_timeout_seconds(case_ref: str, default_timeout_seconds: int) -> int:
+    try:
+        _, case = load_case_json(case_ref)
+    except Exception:
+        case = None
+    if case is None:
+        return default_timeout_seconds
+    return get_case_timeout_seconds(case, default_timeout_seconds)
 
 
 def split_case_variant(case_ref: str) -> tuple[str, str | None]:
@@ -365,6 +422,12 @@ def validate_case(case_ref: str) -> list[str]:
     else:
         if "hwconfig" not in run and "trace_source" not in run:
             errors.append("run.hwconfig or run.trace_source is required")
+        timeout_error = validate_timeout_seconds(
+            run.get("timeout_seconds"),
+            "run.timeout_seconds",
+        )
+        if timeout_error:
+            errors.append(timeout_error)
 
     # --- golden section ---
     golden_ref = get_case_golden(case, requested_variant)
@@ -393,6 +456,12 @@ def validate_case(case_ref: str) -> list[str]:
         )
         if tolerance_error:
             errors.append(tolerance_error)
+        ulp_error = validate_float_tolerance_ulp(
+            verify.get("float_tolerance_ulp"),
+            "verify.float_tolerance_ulp",
+        )
+        if ulp_error:
+            errors.append(ulp_error)
         if needs_bit_exact(mode):
             try:
                 targets = normalize_verify_targets(verify)
@@ -415,6 +484,12 @@ def validate_case(case_ref: str) -> list[str]:
                 )
                 if tolerance_error:
                     errors.append(tolerance_error)
+                ulp_error = validate_float_tolerance_ulp(
+                    target.get("float_tolerance_ulp"),
+                    f"verify.tensors[{i}].float_tolerance_ulp",
+                )
+                if ulp_error:
+                    errors.append(ulp_error)
 
     return errors
 
@@ -527,9 +602,9 @@ def resolve_all_symbols(cases: list[str]) -> dict[str, list[int | None]]:
 # ---------------------------------------------------------------------------
 
 def _find_case_dir(case_ref: str) -> Path | None:
-    """Find case directory under tests/runtime/, tests/tensor/, tests/primitive/, or tests/fusion/."""
+    """Find case directory under the SDK test roots."""
     case_id, _ = split_case_variant(case_ref)
-    for base in (RUNTIMES_DIR, TENSOR_DIR, PRIMITIVE_DIR, FUSION_DIR):
+    for base in (RUNTIMES_DIR, TENSOR_DIR, PRIMITIVE_DIR, FUSION_DIR, LAYER_DIR):
         d = base / case_id
         if (d / "case.json").is_file():
             return d
@@ -537,7 +612,7 @@ def _find_case_dir(case_ref: str) -> Path | None:
 
 
 def _find_binary(case_ref: str) -> Path | None:
-    """Find built binary under build/runtime/, build/tensor/, build/primitive/, or build/fusion/."""
+    """Find built binary under build/runtime/, tensor/, primitive/, fusion/, or layer/."""
     case_id, variant_name = split_case_variant(case_ref)
     if variant_name:
         try:
@@ -555,7 +630,7 @@ def _find_binary(case_ref: str) -> Path | None:
                 return binary
         return None
 
-    for subdir in ("runtime", "tensor", "primitive", "fusion"):
+    for subdir in ("runtime", "tensor", "primitive", "fusion", "layer"):
         b = BUILD_DIR / subdir / f"{case_id}.riscv"
         if b.exists():
             return b
@@ -563,6 +638,8 @@ def _find_binary(case_ref: str) -> Path | None:
 
 
 def run_case(case_id: str, hwconfig: str, verify_config: dict,
+             default_timeout_seconds: int,
+             skip_run: bool = False,
              base_addrs: list[int | None] | None = None) -> CaseResult:
     _, variant_name = split_case_variant(case_id)
     case_dir = _find_case_dir(case_id)
@@ -572,6 +649,7 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
     case_json = case_dir / "case.json"
     with open(case_json) as f:
         case = json.load(f)
+    timeout_seconds = get_case_timeout_seconds(case, default_timeout_seconds)
 
     binary = _find_binary(case_id)
     if binary is None:
@@ -583,27 +661,38 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
     run_dir = CUTE_ROOT / "build" / "chipyard_runs" / hwconfig / test_name
     trace_path = run_dir / "run.out"
 
-    try:
-        r = subprocess.run(
-            [sys.executable, str(CUTE_RUN),
-             "--hwconfig", hwconfig,
-             "--test", str(binary)],
-            capture_output=True, text=True,
-            timeout=SIM_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as e:
-        return CaseResult(
-            case_id,
-            False,
-            f"simulation timed out after {int(e.timeout)}s ({short_run_artifacts(run_dir)})",
-        )
+    if skip_run:
+        if not trace_path.exists():
+            return CaseResult(case_id, False, f"run.out not found: {trace_path}")
+        if not trace_has_finish_marker(run_dir):
+            return CaseResult(
+                case_id,
+                False,
+                f"existing trace is incomplete (no Verilog $finish; "
+                f"{short_run_artifacts(run_dir)})",
+            )
+    else:
+        try:
+            r = subprocess.run(
+                [sys.executable, str(CUTE_RUN),
+                 "--hwconfig", hwconfig,
+                 "--test", str(binary)],
+                capture_output=True, text=True,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as e:
+            return CaseResult(
+                case_id,
+                False,
+                f"simulation timed out after {int(e.timeout)}s ({short_run_artifacts(run_dir)})",
+            )
 
-    if r.returncode != 0:
-        return CaseResult(
-            case_id,
-            False,
-            f"simulation failed (rc={r.returncode}; {short_run_artifacts(run_dir)})",
-        )
+        if r.returncode != 0:
+            return CaseResult(
+                case_id,
+                False,
+                f"simulation failed (rc={r.returncode}; {short_run_artifacts(run_dir)})",
+            )
     if not trace_path.exists():
         return CaseResult(case_id, False, f"run.out not found: {trace_path}")
 
@@ -612,7 +701,11 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
     verify_info = get_case_verify(case, variant_name, verify_config)
     verify_mode = verify_info.get("mode", VERIFY_MODE_BIT_EXACT)
     if not needs_bit_exact(verify_mode):
-        return CaseResult(case_id, True, "return code OK")
+        return CaseResult(
+            case_id,
+            True,
+            "existing trace complete" if skip_run else "return code OK",
+        )
 
     if not golden_ref:
         return CaseResult(case_id, False, "no golden reference in case.json")
@@ -665,6 +758,12 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
                 "--float-tolerance-percent",
                 str(float_tolerance_percent),
             ]
+        float_tolerance_ulp = target.get("float_tolerance_ulp")
+        if float_tolerance_ulp is not None:
+            memverify_cmd += [
+                "--float-tolerance-ulp",
+                str(float_tolerance_ulp),
+            ]
 
         r = subprocess.run(
             memverify_cmd,
@@ -678,7 +777,12 @@ def run_case(case_id: str, hwconfig: str, verify_config: dict,
             return CaseResult(case_id, False, f"{tensor_name}: {detail}")
         details.append(f"{tensor_name}: {output.replace(chr(10), '; ')}")
 
-    prefix = "return code OK; " if verify_mode == VERIFY_MODE_RETURN_CODE_AND_BIT_EXACT else ""
+    if skip_run:
+        prefix = "existing trace complete; "
+    elif verify_mode == VERIFY_MODE_RETURN_CODE_AND_BIT_EXACT:
+        prefix = "return code OK; "
+    else:
+        prefix = ""
     return CaseResult(case_id, True, prefix + " | ".join(details))
 
 
@@ -693,6 +797,8 @@ def main() -> int:
     parser.add_argument("--parallel", type=int, help="Override parallel count from YAML")
     parser.add_argument("--skip-build", action="store_true",
                         help="Skip hwconfig + cmake build")
+    parser.add_argument("--skip-run", action="store_true",
+                        help="Skip simulation and verify existing run.out traces")
     args = parser.parse_args()
 
     with open(args.suite) as f:
@@ -703,10 +809,20 @@ def main() -> int:
     cases = expand_case_refs(suite_cases)
     parallel = args.parallel if args.parallel is not None else suite.get("parallel", 1)
     verify_config = suite.get("verify", {})
+    default_timeout_seconds = int(
+        suite.get("timeout_seconds", DEFAULT_SIM_TIMEOUT_SECONDS)
+    )
     do_build = suite.get("build", False) and not args.skip_build
 
     if not cases:
         print("No cases in suite YAML")
+        return 1
+    timeout_error = validate_timeout_seconds(
+        default_timeout_seconds,
+        "timeout_seconds",
+    )
+    if timeout_error:
+        print(f"[SUITE] INVALID: {timeout_error}")
         return 1
 
     print(f"Suite: {Path(args.suite).name}")
@@ -716,6 +832,12 @@ def main() -> int:
     else:
         print(f"  cases:    {len(cases)} ({len(suite_cases)} suite entries expanded)")
     print(f"  parallel: {parallel}")
+    print(f"  run:      {'skipped (verify existing traces)' if args.skip_run else 'simulate + verify'}")
+    print(f"  default timeout: {default_timeout_seconds}s")
+    for cid in cases:
+        case_timeout = get_case_ref_timeout_seconds(cid, default_timeout_seconds)
+        if case_timeout != default_timeout_seconds:
+            print(f"  [{cid}] timeout: {case_timeout}s")
     print()
 
     # --- validate case.json for all cases ---
@@ -750,12 +872,17 @@ def main() -> int:
     results: list[CaseResult] = []
     if parallel <= 1:
         for cid in cases:
-            print(f"[{cid}] running...", flush=True)
+            action = "verifying existing trace" if args.skip_run else "running"
+            print(f"[{cid}] {action}...", flush=True)
             results.append(run_case(cid, hwconfig, verify_config,
+                                   default_timeout_seconds,
+                                   skip_run=args.skip_run,
                                    base_addrs=addr_map.get(cid)))
     else:
         with ThreadPoolExecutor(max_workers=parallel) as pool:
             futures = {pool.submit(run_case, cid, hwconfig, verify_config,
+                                   default_timeout_seconds,
+                                   skip_run=args.skip_run,
                                    base_addrs=addr_map.get(cid)): cid
                        for cid in cases}
             for fut in as_completed(futures):
