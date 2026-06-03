@@ -110,57 +110,6 @@ trace 类别在 `trace/catalogs/cute_trace.json` 中定义：
 
 ---
 
-## 功能验证等级
-
-功能验证等级描述检查器的目标，以及它依赖哪些 trace 类别。
-
-| 验证等级 | 含义 | 依赖 | Trace 类别 |
-|---|---|---|---|
-| `Level1_Inst` | 所有发往 CUTE 的指令正常，程序正常退出，所有 `cute_inst` 和 `cute_task` 正常 | 无 | `cute_inst`, `cute_task` |
-| `Level2_mem_cute` | 所有 CUTE 的访存请求正常 | `Level1_Inst` | `cute_loadstore` |
-| `Level2ex_all_cute` | CUTE 计算符合 golden 定义，用于定位包含计算路径的问题 | `Level1_Inst` | `cute_loadstore`, `cute_compute` |
-| `Level3_mem_vector` | 所有和 vector 配合的任务访存请求正常 | `Level2_mem_cute` | `vector_loadstore` |
-
-`Level2ex_all_cute` 是扩展检查器路径。当调试目标需要定位更宽的 CUTE 侧错误时，可以启用它。
-
----
-
-## 功能检查器布局
-
-```text
-trace/python/func/
-  level1_inst.py
-  level2_mem_cute.py
-  level2ex_all_cute.py
-  level3_mem_vector.py
-```
-
-每个检查器都消费由过滤器 manifest 选出的 decoded trace event。
-
----
-
-## 过滤器 Manifest
-
-Phase 0.6 定义这些可复用的过滤器标识：
-
-| 过滤器 | 用途 | 验证等级 | Trace 类别 |
-|---|---|---|---|
-| `func_level1_inst` | 功能验证 | `Level1_Inst` | `cute_inst`, `cute_task` |
-| `func_level2_mem_cute` | 功能验证 | `Level2_mem_cute` | `cute_loadstore` |
-| `func_level2ex_all_cute` | 功能验证 | `Level2ex_all_cute` | `cute_loadstore`, `cute_compute` |
-| `func_level3_mem_vector` | 功能验证 | `Level3_mem_vector` | `vector_loadstore` |
-| `perf_topdown_status` | 性能归因 | status / profile | TopDownStatus |
-
-过滤器 manifest 位于：
-
-```text
-configs/trace_filters/*.yaml
-```
-
-过滤器引用会对照 `trace/catalogs/cute_trace.json` 校验。
-
----
-
 ## 文件布局
 
 ```text
