@@ -38,7 +38,7 @@ T_workload
 ```text
 让 workload 更快
   ->
-矩阵乘计算量最高
+AI workload 的大头通常是矩阵乘
   ->
 让矩阵乘计算部件尽可能持续、尽可能满载地工作
   ->
@@ -49,15 +49,37 @@ T_workload
 
 ### 0.2 What This Top-Down Explains
 
-因此，这里的 top-down 归因重点会从“某条 CPU 指令的退休效率”扩展到下面这些问题：
+把话说得更直白一点，这套 top-down 主要是在回答下面这条链路：
 
 ```text
-为什么 workload 还没有结束
-为什么矩阵乘相关时间这么长
-为什么这一拍矩阵算力没有被充分释放
+AI workload 为什么还没有结束
+  ->
+大头是不是卡在矩阵乘相关阶段
+  ->
+矩阵乘单元有没有被持续、充分地喂满
 ```
 
-换句话说，矩阵乘部件利用率不是凭空挑出来的指标，它是从 workload 总执行时间这一最朴素目标顺着结构分解一路推导下来的核心观测量。
+所以这里的性能分析重点，会自然收敛到：
+
+```text
+围绕矩阵乘单元去看：
+谁在给它喂活
+谁在给它供数
+谁在拖慢它
+它自己有没有跑满
+```
+
+`Matrix Peak Utilization` 也不是凭空挑出来的指标，而是顺着
+
+```text
+workload 总执行时间
+  ->
+矩阵乘是主成分
+  ->
+矩阵乘单元利用率
+```
+
+这条最直观的链路推出来的核心观测量。
 
 ### 0.3 Performance Objective
 
@@ -234,24 +256,21 @@ MatrixPeakUtil = AchievedOps / (PeakOpsPerCycle * WindowCycles)
 
 ### 4.2 Loss Decomposition
 
-为了把 `Matrix Peak Utilization` 进一步拆开，需要对损失做两类分解：
+第一版先不建模 `UnderPeak / ActivePartial`。
+
+因此第一版的损失分解先聚焦在：
 
 - `StallLoss`
   这一拍矩阵执行单元没有有效产出
 
-- `UnderfillLoss`
-  这一拍矩阵执行单元有产出，但没有跑满理论峰值
-
-因此在一个窗口内：
+第一版的主问题先收成：
 
 ```text
-MatrixPeakUtil + StallLoss + UnderfillLoss = 1
+哪些时间矩阵引擎没有工作
+以及这些 idle / wait 时间为什么出现
 ```
 
-这意味着：
-
-- `UnderPeak` 必须被认真建模
-- 不能只做“忙/闲”二值分析
+`UnderfillLoss` 保留为后续增强项，不放进 v1 的强制实现范围。
 
 ### 4.3 Why Matrix Peak Utilization Is the Core But Not the Only View
 
@@ -266,7 +285,8 @@ MatrixPeakUtil + StallLoss + UnderfillLoss = 1
 
 ```text
 先用 workload 执行时间作为总目标
-再用 `Matrix Peak Utilization` 作为矩阵主指标
+先用矩阵侧工作/停顿视图去解释时间损失
+再逐步增强到 `Matrix Peak Utilization`
 再用资源状态向量 + 软件上下文去解释它为什么上不去
 ```
 
@@ -279,6 +299,38 @@ MatrixPeakUtil + StallLoss + UnderfillLoss = 1
 - 资源状态热力图
 - host 侧 top-down 投影
 
+### 4.4 Final Outputs
+
+本计划最终面向 3 类输出：
+
+1. `Resource Activity Heatmap`
+   纵轴是资源，横轴是时间，颜色值是 `busy ratio / activity ratio`。
+   它回答：
+   - 哪些资源在某段 workload / slice 内持续活跃
+   - 哪些资源形成明显热区
+   - 哪些资源几乎没有参与
+
+2. `Resource Status Views`
+   用于回答“热得健康不健康”。
+   第一版至少包含：
+   - `Resource Dominant Status Heatmap`
+   - `Resource Status Composition View`
+
+   它们展示某个时间窗口内，资源处于：
+   - `NoWork`
+   - `Active`
+   - `Waiting`
+   - `Blocked`
+
+   这 4 类粗状态的主导关系和比例关系。
+
+3. `Slice Bottleneck Attribution Report`
+   用于回答：
+   - 某个 slice 为什么慢
+   - 峰值算力主要损失在哪些瓶颈类别
+   - 这些瓶颈主要落在哪些资源上
+   - 下一步优化应优先看哪里
+
 ---
 
 ## 5. Step 1: Semantic Model Freeze
@@ -290,11 +342,58 @@ Step 1 的目标不是实现 trace，而是冻结语义模型。
 1. `Context Axis` / `Attribution Axis`
 2. `GlobalWorkloadWindow` / `SliceWindow` / `EngineActiveWindow`
 3. 主指标和损失分解
-4. `PhysicalResource` 资源树
-5. `ResourceLocalState` 建模规则
-6. host 侧 top-down 投影规则框架
+4. `BottleneckCatalog`
+5. `PhysicalResource` 资源树
+6. `ResourceLocalState` 建模规则
+7. host 侧 top-down 投影规则框架
 
-### 5.1 PhysicalResource Taxonomy
+### 5.1 BottleneckCatalog v1
+
+`BottleneckCatalog` 的角色不是重复资源树，而是定义“slice 层面最终要解释成哪类问题”。
+
+它回答的是：
+
+```text
+这一段 slice 为什么慢
+```
+
+而不是：
+
+```text
+哪个资源存在
+```
+
+因此：
+
+- `PhysicalResource` 是对象层
+- `BottleneckCatalog` 是问题层
+
+`BottleneckCatalog v1` 先定义最上级 slice 瓶颈分类。
+
+| id | definition | main_evidence | common_loci | shareable | valid_secondary_classes | optimization_direction |
+|---|---|---|---|---|---|---|
+| `CoreBound` | slice 的主要损失来自 core 侧控制、编排、同步或命令发起 | `Core` 的 `Preparing/Waiting/Blocked` 比例高，且 `MatrixEngine` 活跃不足 | `Core.ScalarPipe` / `RoCCCmd` / `RoCCResp` / `HostSync` | `true` | `VectorBound`, `SharedSystemBound` | 提高 core 对后续执行对象的持续供给能力，减少控制与同步停顿 |
+| `VectorBound` | slice 的主要损失来自向量侧准备、辅助计算或后处理 | `VectorEngine` 活跃或等待占比高，但未与 `MatrixEngine` 形成理想交叠 | `VectorLSU`, `VREG`, `VPermutation`, `VFMA`, `VDIV`, `VScoreboard` | `true` | `CoreBound`, `SharedSystemBound`, `MatrixFeedBound` | 提高向量阶段与矩阵阶段的交叠，降低向量准备对矩阵启动的拖累 |
+| `MatrixFeedBound` | slice 的主要损失来自矩阵执行链条前端或 operand 供给不足 | `MatrixEngine` 活跃不足，同时 `LoadIngress/LocalMemory/ControlPlane` 等待占比高 | `TaskController`, `AMLLoad`, `BMLLoad`, `CMLLoad`, `ScaleLoad`, `AScratchpad`, `BScratchpad`, `CScratchpad`, `DataController`, `LocalMMU` | `true` | `SharedSystemBound`, `VectorBound` | 提高矩阵前端持续供给能力，缩短 operand 与本地搬运等待 |
+| `ResultDrainBound` | slice 的主要损失来自矩阵结果排出和写回路径 | `StoreEgress` 高等待或高阻塞，矩阵计算受 drain 反压 | `CMLStore`, `StoreQueue`, `TCM` | `true` | `SharedSystemBound` | 提高写回路径吞吐，降低结果排空对矩阵推进的反压 |
+| `SharedSystemBound` | slice 的主要损失来自共享存储或共享互连争用 | `MemorySubsystem` 或 `SharedInterconnect` 的等待、争用、反压占比高，且同时影响多个执行对象 | `TCM`, `LLC`, `DRAM`, `SysBus`, `NoC`, `Crossbar`, `Arbiter` | `true` | `CoreBound`, `VectorBound`, `MatrixFeedBound`, `ResultDrainBound` | 降低共享资源争用，提高存储和互连侧的服务能力与隔离性 |
+| `WellOverlapped` | slice 中 Core / Vector / Matrix 交叠合理，矩阵引擎高活跃，其他对象不形成主导拖累 | `MatrixEngine` 高活跃，`Core/Vector` 不形成主导等待，`SharedSystem` 不形成主导争用 | `MTE` 及相关活跃资源 | `false` | 无 | 无主导瓶颈，进一步优化更多是局部打磨 |
+
+#### 5.1.1 Dominant vs Secondary
+
+每个 slice 的报告支持：
+
+- `dominant_class`
+- `secondary_classes`
+
+其中：
+
+- `dominant_class` 是该 slice 的主解释类别
+- `secondary_classes` 用于保留次主导问题，避免过度压扁真实情况
+
+`secondary_classes` 不要求唯一，也不要求只有一个。
+
+### 5.2 PhysicalResource Topology
 
 当前顶层 5 类资源域定义为：
 
@@ -308,25 +407,34 @@ Step 1 的目标不是实现 trace，而是冻结语义模型。
 
 它们都服务于完整 workload 的推进，并共同决定矩阵算力最终能否被吃满。
 
-#### 5.1.1 Core
+#### 5.2.1 Core
 
 表示 CPU core 侧负责控制、编排、同步和命令发起的资源。
+
+Core 这一层保留 CPU top-down 的分析味道，但在矩阵乘扩展 workload 的语境下增强为：
+
+- Core 自己的标量执行
+- Core 对向量执行体系的控制和驱动
+- Core 对矩阵执行体系的控制和驱动
 
 第二层建议先挂：
 
 - `ScalarExecution`
-- `CommandIssue`
-- `CoreSynchronization`
+- `CoreVectorControl`
+- `CoreMatrixControl`
 
 第三层可先包含：
 
 - `ScalarPipe`
+- `VectorIssueControl`
+- `VectorConfig`
+- `VectorWait`
 - `RoCCCmd`
 - `RoCCResp`
-- `IssueControl`
-- `HostSync`
+- `MatrixIssueControl`
+- `MatrixWait`
 
-#### 5.1.2 VectorEngine
+#### 5.2.2 VectorEngine
 
 表示 workload 中负责向量准备、辅助计算和后处理的向量执行体系。
 
@@ -357,7 +465,7 @@ Step 1 的目标不是实现 trace，而是冻结语义模型。
 
 第二层用于默认聚合，第三层用于深挖具体瓶颈。
 
-#### 5.1.3 MatrixEngine
+#### 5.2.3 MatrixEngine
 
 表示 CUTE 私有的矩阵执行链条及其本地控制/本地存储资源。
 
@@ -398,7 +506,7 @@ Step 1 的目标不是实现 trace，而是冻结语义模型。
 
 都属于 `MatrixEngine`，因为它们是 CUTE 私有执行链条的一部分，而不是系统级共享存储。
 
-#### 5.1.4 MemorySubsystem
+#### 5.2.4 MemorySubsystem
 
 表示系统级共享存储体系。
 
@@ -419,7 +527,7 @@ Step 1 的目标不是实现 trace，而是冻结语义模型。
 - `L2Bank`
 - `MemCtrl`
 
-#### 5.1.5 SharedInterconnect
+#### 5.2.5 SharedInterconnect
 
 表示系统级共享搬运与仲裁链路。
 
@@ -435,11 +543,11 @@ Step 1 的目标不是实现 trace，而是冻结语义模型。
 - `Crossbar`
 - `Arbiter`
 
-### 5.2 Resource Taxonomy vs Dependency Graph
+### 5.3 Resource Topology vs Dependency Graph
 
 需要明确区分：
 
-1. `resource_taxonomy`
+1. `resource_topology`
    用树表达“资源如何归组、如何聚合、热力图纵轴如何组织”
 
 2. `resource_dependency_graph`
@@ -459,7 +567,60 @@ Step 1 的目标不是实现 trace，而是冻结语义模型。
 - 树用于展示和聚合
 - 图用于因果重建和依赖分析
 
-### 5.3 ResourceLocalState
+#### 5.3.1 Global Resource Dependency Graph
+
+系统中只维护一张 `Global Resource Dependency Graph`。
+
+这张图是唯一真相源，用于描述：
+
+- 资源节点之间的控制依赖
+- 资源节点之间的数据依赖
+- 共享存储/共享服务关系
+- 结果排出路径
+
+每个 slice 不定义独立的新图。
+
+slice 的分析方式是：
+
+```text
+Global Resource Dependency Graph
++ SliceWindow / EngineActiveWindow 时间投影
++ 软件 marker 上下文
++ 该窗口内的资源状态变化
+```
+
+也就是说：
+
+- 图是全局唯一的
+- slice 只是这张全局图在某个时间窗口上的活跃投影
+
+#### 5.3.2 Graph Nodes
+
+`Global Resource Dependency Graph` 的节点对象就是 `PhysicalResource` 的叶节点。
+
+第一版不引入额外的 `LogicalPathNode`。
+
+原因：
+
+- 叶节点已经是工程师熟悉的真实资源
+- 路径关系可以由边结构自然表达
+- host 侧可以直接基于叶节点状态做切片归因
+
+#### 5.3.3 Edge Types
+
+第一版边类型先冻结为以下 5 类：
+
+| edge_type | 含义 | 例子 |
+|---|---|---|
+| `control_edge` | 控制、发射、准入关系 | `Core -> RoCCCmd`, `TaskController -> AMLLoad` |
+| `data_edge` | 本地数据流或寄存器/缓冲到消费者的数据依赖 | `AScratchpad -> MTE`, `VREG -> VFMA` |
+| `read_service_edge` | 从共享存储/共享服务路径获取输入数据 | `DRAM -> LLC`, `LLC -> SysBus`, `SysBus -> DataController` |
+| `write_service_edge` | 向共享存储/共享服务路径排出结果 | `MTE -> CMLStore`, `CMLStore -> TCM`, `VectorStore -> LLC` |
+| `sync_edge` | 同步、等待、credit、scoreboard、依赖解除关系 | `VScoreboard -> VectorPipe`, `CreditTracker -> TaskController`, `HostSync -> RoCCCmd` |
+
+边方向按真实控制/数据流方向定义，而不是按“谁卡谁”的反向语义定义。
+
+### 5.4 ResourceLocalState
 
 原始 trace 不记录最终 top-down reason。
 
@@ -467,68 +628,88 @@ Step 1 的目标不是实现 trace，而是冻结语义模型。
 
 - `resource_id`
 - `local_state_id`
-- 可选数值字段，例如：
-  - `util_num / util_den`
-  - `queue_depth`
-  - `credit`
-  - `active_client_mask`
+- 可选数值字段
+- `cause_edges`
 
-#### 5.3.1 建模原则
+#### 5.4.1 建模原则
 
-不定义统一的全局 flat state enum。
+不定义统一的大而全的复杂状态机。
 
-而是：
+第一版先冻结一个极小的节点状态最小集合，再通过 `cause_edges` 和 `optional metrics` 补足解释能力。
 
-- 每类资源有自己的 `local_state` 字典
-- host 侧根据 `resource_class + local_state` 去解释语义
+#### 5.4.2 Node State Minimal Set
 
-#### 5.3.2 First-Cut State Schemas
+第一版所有资源共享同一套基础节点状态：
 
-第一版建议按资源域先定义如下状态集合。
-
-##### Core.local_state
-
-- `Idle`
-- `Preparing`
-- `Issuing`
+- `NoWork`
+- `Active`
 - `Waiting`
 - `Blocked`
 
-##### VectorEngine.local_state
+含义：
 
-- `Idle`
-- `Loading`
-- `Executing`
-- `Storing`
-- `Blocked`
+| state | 含义 |
+|---|---|
+| `NoWork` | 当前这拍该资源没有参与该 workload / slice 的推进 |
+| `Active` | 当前这拍该资源在做有效工作 |
+| `Waiting` | 当前这拍该资源想推进，但上游输入、任务或服务没有到位 |
+| `Blocked` | 当前这拍该资源想推进，但下游消费者或排出路径接不住 |
 
-##### MatrixEngine.local_state
+这套基础状态首先服务于：
 
-- `Idle`
-- `Issuing`
-- `Loading`
-- `ComputingFull`
-- `ComputingPartial`
-- `Draining`
-- `Blocked`
+- `Resource Activity Heatmap`
+- `Resource Status Views`
 
-##### MemorySubsystem.local_state
+#### 5.4.3 Optional Metrics
 
-- `Idle`
-- `ServingRead`
-- `ServingWrite`
-- `Contention`
-- `Backpressured`
+第一版先不依赖 `optional metrics` 做 `UnderPeak` 建模。
 
-##### SharedInterconnect.local_state
+因此 `optional metrics` 在 v1 中只保留为可扩展字段，不作为主线分析的强制输入。
 
-- `Idle`
-- `Transferring`
-- `Arbitrating`
-- `Contended`
-- `Backpressured`
+第一版建议的候选字段：
 
-### 5.4 Multi-Blocker Semantics
+- `queue_depth`
+- `credit`
+- `active_client_mask`
+
+`util_num / util_den` 保留为后续增强项，用于未来扩展 `Matrix Peak Utilization` 的更细粒度解释。
+
+#### 5.4.4 Cause Edges
+
+当一个节点处于 `Waiting` 或 `Blocked` 时，仅有状态本身还不足以解释“为什么不好”。
+
+因此每个节点每拍允许附带：
+
+```text
+cause_edges = {edge_id_1, edge_id_2, ...}
+```
+
+语义：
+
+- 对 `Waiting`
+  `cause_edges` 表示当前没满足的输入/服务依赖边
+- 对 `Blocked`
+  `cause_edges` 表示当前送不出去、排不空的输出依赖边
+
+例子：
+
+```text
+MTE:
+  state = Waiting
+  cause_edges = {AScratchpad->MTE, BScratchpad->MTE}
+
+CMLStore:
+  state = Blocked
+  cause_edges = {CMLStore->TCM}
+```
+
+`cause_edges` 的作用是：
+
+- 让“不健康状态”有迹可循
+- 避免把复杂原因全部揉进状态枚举
+- 让 host 侧能沿边继续追到主要依赖位置
+
+### 5.5 Multi-Blocker Semantics
 
 原始模型允许一个周期存在多个 blocker。
 
@@ -557,15 +738,17 @@ host 聚合时允许分数记账。
 
 后续如果需要，可以升级成加权分摊，但第一版不在硬件里写死权重逻辑。
 
-### 5.5 Top-Down Projection
+### 5.6 Top-Down Projection
 
 top-down 归因不是 trace 原始字段，而是 host 侧投影结果。
 
 投影输入：
 
 - `resource_state_vector`
-- `resource_taxonomy`
+- `resource_topology`
 - `resource_dependency_graph`
+- `cause_edges`
+- `optional_metrics`
 - 软件 marker 上下文
 - 分析窗口
 
@@ -740,3 +923,4 @@ Step 6 的目标是校准这套归因口径，验证其可信度。
 6. top-down 归因在 host 侧完成
 
 7. 一个周期允许存在多个 blocker，host 侧可做分数记账
+8. 第一版不建模 `UnderPeak / ActivePartial`，先聚焦 `NoWork / Active / Waiting / Blocked` 以及 stall 类归因
