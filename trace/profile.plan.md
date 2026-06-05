@@ -373,7 +373,7 @@ Step 1 的目标不是实现 trace，而是冻结语义模型。
 | id | definition | main_evidence | common_loci | shareable | valid_secondary_classes | optimization_direction |
 |---|---|---|---|---|---|---|
 | `CoreBound` | slice 的主要损失来自 core 侧控制、编排、同步或命令发起 | `Core` 的 `Preparing/Waiting/Blocked` 比例高，且 `MatrixEngine` 活跃不足 | `Core.ScalarPipe` / `RoCCCmd` / `RoCCResp` / `HostSync` | `true` | `VectorBound`, `SharedSystemBound` | 提高 core 对后续执行对象的持续供给能力，减少控制与同步停顿 |
-| `VectorBound` | slice 的主要损失来自向量侧准备、辅助计算或后处理 | `VectorEngine` 活跃或等待占比高，但未与 `MatrixEngine` 形成理想交叠 | `VectorLSU`, `VREG`, `VPermutation`, `VFMA`, `VDIV`, `VScoreboard` | `true` | `CoreBound`, `SharedSystemBound`, `MatrixFeedBound` | 提高向量阶段与矩阵阶段的交叠，降低向量准备对矩阵启动的拖累 |
+| `VectorBound` | slice 的主要损失来自向量侧准备、辅助计算或后处理 | `VectorEngine` 活跃或等待占比高，但未与 `MatrixEngine` 形成理想交叠 | `VLSULoadPath`, `VRF`, `VPermutation`, `VFMA`, `VDIV`, `VScoreboard`, `VLSUStorePath` | `true` | `CoreBound`, `SharedSystemBound`, `MatrixFeedBound` | 提高向量阶段与矩阵阶段的交叠，降低向量准备对矩阵启动的拖累 |
 | `MatrixFeedBound` | slice 的主要损失来自矩阵执行链条前端或 operand 供给不足 | `MatrixEngine` 活跃不足，同时 `LoadIngress/LocalMemory/ControlPlane` 等待占比高 | `TaskController`, `AMLLoad`, `BMLLoad`, `CMLLoad`, `ScaleLoad`, `AScratchpad`, `BScratchpad`, `CScratchpad`, `DataController`, `LocalMMU` | `true` | `SharedSystemBound`, `VectorBound` | 提高矩阵前端持续供给能力，缩短 operand 与本地搬运等待 |
 | `ResultDrainBound` | slice 的主要损失来自矩阵结果排出和写回路径 | `StoreEgress` 高等待或高阻塞，矩阵计算受 drain 反压 | `CMLStore`, `StoreQueue`, `TCM` | `true` | `SharedSystemBound` | 提高写回路径吞吐，降低结果排空对矩阵推进的反压 |
 | `SharedSystemBound` | slice 的主要损失来自共享存储或共享互连争用 | `MemorySubsystem` 或 `SharedInterconnect` 的等待、争用、反压占比高，且同时影响多个执行对象 | `TCM`, `LLC`, `DRAM`, `SysBus`, `NoC`, `Crossbar`, `Arbiter` | `true` | `CoreBound`, `VectorBound`, `MatrixFeedBound`, `ResultDrainBound` | 降低共享资源争用，提高存储和互连侧的服务能力与隔离性 |
@@ -423,14 +423,18 @@ Core 这一层保留 CPU top-down 的分析味道，但在矩阵乘扩展 worklo
 - `CoreVectorControl`
 - `CoreMatrixControl`
 
-第三层可先包含：
+第一版第三层先只保留最小必要叶节点：
 
 - `ScalarPipe`
+- `RoCCCmd`
+- `RoCCResp`
+- `HostSync`
+
+后续如果 `CoreBound` 解释力不足，再补：
+
 - `VectorIssueControl`
 - `VectorConfig`
 - `VectorWait`
-- `RoCCCmd`
-- `RoCCResp`
 - `MatrixIssueControl`
 - `MatrixWait`
 
@@ -448,22 +452,24 @@ Core 这一层保留 CPU top-down 的分析味道，但在矩阵乘扩展 worklo
 - `VectorSpecialPath`
 - `VectorWriteback`
 
-第三层可先包含：
+第一版第三层先保留最小必要叶节点：
 
-- `VREG`
-- `VLoad`
-- `VStore`
-- `VectorLSU`
-- `VectorMemQueue`
+- `VRF`
+- `VLSULoadPath`
+- `VLSUStorePath`
 - `VPermutation`
 - `VFMA`
-- `VINTALU`
 - `VDIV`
-- `VSQRT`
-- `VWBPort`
 - `VScoreboard`
 
 第二层用于默认聚合，第三层用于深挖具体瓶颈。
+
+后续如需增强，再补：
+
+- `VINTALU`
+- `VSQRT`
+- `VWBPort`
+- `VectorMemQueue`
 
 #### 5.2.3 MatrixEngine
 
@@ -473,17 +479,13 @@ Core 这一层保留 CPU top-down 的分析味道，但在矩阵乘扩展 worklo
 
 - `ControlPlane`
 - `LoadIngress`
-- `LocalStorage`
+- `LocalMemory`
 - `ComputeCore`
 - `StoreEgress`
 
-第三层可先包含：
+第一版第三层先保留最小必要叶节点：
 
 - `TaskController`
-- `MicroTaskScheduler`
-- `DependencyTracker`
-- `CreditTracker`
-- `IssueQueues`
 - `AMLLoad`
 - `BMLLoad`
 - `CMLLoad`
@@ -497,6 +499,13 @@ Core 这一层保留 CPU top-down 的分析味道，但在矩阵乘扩展 worklo
 - `MTE`
 - `CMLStore`
 - `StoreQueue`
+
+后续如需增强，再补：
+
+- `MicroTaskScheduler`
+- `DependencyTracker`
+- `CreditTracker`
+- `IssueQueues`
 
 这里明确约定：
 
@@ -512,20 +521,21 @@ Core 这一层保留 CPU top-down 的分析味道，但在矩阵乘扩展 worklo
 
 第二层建议先挂：
 
-- `NearSharedMemory`
-- `LastLevelCache`
-- `OffChipMemory`
+- `NearMemory`
+- `SharedCache`
+- `MainMemory`
 
-第三层可先包含：
+第一版第三层先保留最小必要叶节点：
 
 - `TCM`
-- `LLC`
+- `InclusiveCache`
+- `MemoryController`
 - `DRAM`
 
 后续如果需要更细化，可以继续扩展：
 
 - `L2Bank`
-- `MemCtrl`
+- `MemCtrlQueue`
 
 #### 5.2.5 SharedInterconnect
 
@@ -534,14 +544,17 @@ Core 这一层保留 CPU top-down 的分析味道，但在矩阵乘扩展 worklo
 第二层建议先挂：
 
 - `OnChipFabric`
-- `Arbitration`
+- `InterconnectArbitration`
 
-第三层可先包含：
+第一版第三层先保留最小必要叶节点：
 
-- `SysBus`
-- `NoC`
+- `SystemBus`
+
+后续如果需要更细化，可以继续扩展：
+
 - `Crossbar`
 - `Arbiter`
+- `NoC`
 
 ### 5.3 Resource Topology vs Dependency Graph
 
@@ -613,12 +626,88 @@ Global Resource Dependency Graph
 | edge_type | 含义 | 例子 |
 |---|---|---|
 | `control_edge` | 控制、发射、准入关系 | `Core -> RoCCCmd`, `TaskController -> AMLLoad` |
-| `data_edge` | 本地数据流或寄存器/缓冲到消费者的数据依赖 | `AScratchpad -> MTE`, `VREG -> VFMA` |
-| `read_service_edge` | 从共享存储/共享服务路径获取输入数据 | `DRAM -> LLC`, `LLC -> SysBus`, `SysBus -> DataController` |
-| `write_service_edge` | 向共享存储/共享服务路径排出结果 | `MTE -> CMLStore`, `CMLStore -> TCM`, `VectorStore -> LLC` |
+| `data_edge` | 本地数据流或寄存器/缓冲到消费者的数据依赖 | `AScratchpad -> MTE`, `VRF -> VFMA` |
+| `read_service_edge` | 从共享存储/共享服务路径获取输入数据 | `DRAM -> InclusiveCache`, `InclusiveCache -> SystemBus`, `SystemBus -> DataController` |
+| `write_service_edge` | 向共享存储/共享服务路径排出结果 | `MTE -> CMLStore`, `CMLStore -> TCM`, `VLSUStorePath -> InclusiveCache` |
 | `sync_edge` | 同步、等待、credit、scoreboard、依赖解除关系 | `VScoreboard -> VectorPipe`, `CreditTracker -> TaskController`, `HostSync -> RoCCCmd` |
 
 边方向按真实控制/数据流方向定义，而不是按“谁卡谁”的反向语义定义。
+
+#### 5.3.4 Initial Edge Set
+
+第一版不追求把整个 SoC 全图铺满，而是先覆盖那些会直接改变：
+
+- `Resource Activity Heatmap`
+- `Resource Status Views`
+- `Slice Bottleneck Attribution Report`
+
+结论的关键边。
+
+第一版建议优先纳入以下边：
+
+**Core -> Vector control path**
+
+- `ScalarPipe -> RoCCCmd` (`control_edge`)
+- `RoCCCmd -> VLSULoadPath` (`control_edge`)
+- `RoCCCmd -> VRF` (`control_edge`)
+
+**Core -> Matrix control path**
+
+- `ScalarPipe -> RoCCCmd` (`control_edge`)
+- `RoCCCmd -> TaskController` (`control_edge`)
+- `HostSync -> RoCCCmd` (`sync_edge`)
+
+**Vector internal path**
+
+- `TCM -> VLSULoadPath` (`read_service_edge`)
+- `VLSULoadPath -> VRF` (`data_edge`)
+- `VRF -> VPermutation` (`data_edge`)
+- `VRF -> VFMA` (`data_edge`)
+- `VRF -> VDIV` (`data_edge`)
+- `VScoreboard -> VFMA` (`sync_edge`)
+- `VScoreboard -> VDIV` (`sync_edge`)
+- `VFMA -> VRF` (`data_edge`)
+- `VDIV -> VRF` (`data_edge`)
+- `VRF -> VLSUStorePath` (`data_edge`)
+- `VLSUStorePath -> InclusiveCache` (`write_service_edge`)
+
+**Matrix operand feed path**
+
+- `DRAM -> InclusiveCache` (`read_service_edge`)
+- `InclusiveCache -> SystemBus` (`read_service_edge`)
+- `SystemBus -> DataController` (`read_service_edge`)
+- `DataController -> AMLLoad` (`read_service_edge`)
+- `DataController -> BMLLoad` (`read_service_edge`)
+- `DataController -> CMLLoad` (`read_service_edge`)
+- `DataController -> ScaleLoad` (`read_service_edge`)
+- `AMLLoad -> AScratchpad` (`data_edge`)
+- `BMLLoad -> BScratchpad` (`data_edge`)
+- `CMLLoad -> CScratchpad` (`data_edge`)
+- `ScaleLoad -> ScaleScratchpad` (`data_edge`)
+- `AScratchpad -> MTE` (`data_edge`)
+- `BScratchpad -> MTE` (`data_edge`)
+- `CScratchpad -> MTE` (`data_edge`)
+- `ScaleScratchpad -> MTE` (`data_edge`)
+
+**Matrix result drain path**
+
+- `MTE -> CMLStore` (`write_service_edge`)
+- `CMLStore -> StoreQueue` (`write_service_edge`)
+- `StoreQueue -> TCM` (`write_service_edge`)
+
+**Shared-system conflict observation path**
+
+- `VLSUStorePath -> SystemBus` (`write_service_edge`)
+- `SystemBus -> InclusiveCache` (`write_service_edge`)
+- `SystemBus -> TCM` (`write_service_edge`)
+
+这套初始边集的目标不是完整表达所有可能通路，而是先确保：
+
+- Core 如何把活喂给 Vector / Matrix
+- Vector 如何从 TCM / memory system 取数并写回
+- Matrix 如何从 InclusiveCache / bus / controller / scratchpad 供给到 MTE
+- Matrix 结果如何排到 TCM
+- Vector 与 Matrix 如何在系统共享资源上发生冲突
 
 ### 5.4 ResourceLocalState
 
