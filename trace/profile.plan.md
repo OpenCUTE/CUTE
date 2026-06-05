@@ -373,7 +373,7 @@ Step 1 的目标不是实现 trace，而是冻结语义模型。
 | id | definition | main_evidence | common_loci | shareable | valid_secondary_classes | optimization_direction |
 |---|---|---|---|---|---|---|
 | `CoreBound` | slice 的主要损失来自 core 侧控制、编排、同步或命令发起 | `Core` 的 `Preparing/Waiting/Blocked` 比例高，且 `MatrixEngine` 活跃不足 | `Core.ScalarPipe` / `RoCCCmd` / `RoCCResp` / `HostSync` | `true` | `VectorBound`, `SharedSystemBound` | 提高 core 对后续执行对象的持续供给能力，减少控制与同步停顿 |
-| `VectorBound` | slice 的主要损失来自向量侧准备、辅助计算或后处理 | `VectorEngine` 活跃或等待占比高，但未与 `MatrixEngine` 形成理想交叠 | `VLSULoadPath`, `VRF`, `VPermutation`, `VFMA`, `VDIV`, `VScoreboard`, `VLSUStorePath` | `true` | `CoreBound`, `SharedSystemBound`, `MatrixFeedBound` | 提高向量阶段与矩阵阶段的交叠，降低向量准备对矩阵启动的拖累 |
+| `VectorBound` | slice 的主要损失来自向量侧准备、辅助计算或后处理 | `VectorEngine` 活跃或等待占比高，但未与 `MatrixEngine` 形成理想交叠 | `VectorIssueSequencing`, `VectorRegisterSubsystem`, `VectorLoadPath`, `VectorStorePath`, `VectorArithmeticPath`, `VectorSpecialPath`, `VectorLaneFabric` | `true` | `CoreBound`, `SharedSystemBound`, `MatrixFeedBound` | 提高向量阶段与矩阵阶段的交叠，降低向量准备对矩阵启动的拖累 |
 | `MatrixFeedBound` | slice 的主要损失来自矩阵执行链条前端或 operand 供给不足 | `MatrixEngine` 活跃不足，同时 `LoadIngress/LocalMemory/ControlPlane` 等待占比高 | `TaskController`, `AMLLoad`, `BMLLoad`, `CMLLoad`, `ScaleLoad`, `AScratchpad`, `BScratchpad`, `CScratchpad`, `DataController`, `LocalMMU` | `true` | `SharedSystemBound`, `VectorBound` | 提高矩阵前端持续供给能力，缩短 operand 与本地搬运等待 |
 | `ResultDrainBound` | slice 的主要损失来自矩阵结果排出和写回路径 | `StoreEgress` 高等待或高阻塞，矩阵计算受 drain 反压 | `CMLStore`, `StoreQueue`, `TCM` | `true` | `SharedSystemBound` | 提高写回路径吞吐，降低结果排空对矩阵推进的反压 |
 | `SharedSystemBound` | slice 的主要损失来自共享存储或共享互连争用 | `MemorySubsystem` 或 `SharedInterconnect` 的等待、争用、反压占比高，且同时影响多个执行对象 | `TCM`, `LLC`, `DRAM`, `SysBus`, `NoC`, `Crossbar`, `Arbiter` | `true` | `CoreBound`, `VectorBound`, `MatrixFeedBound`, `ResultDrainBound` | 降低共享资源争用，提高存储和互连侧的服务能力与隔离性 |
@@ -442,34 +442,123 @@ Core 这一层保留 CPU top-down 的分析味道，但在矩阵乘扩展 worklo
 
 表示 workload 中负责向量准备、辅助计算和后处理的向量执行体系。
 
-第二层建议按功能簇划分：
+向量部分后续需要同时适配 Saturn 和 Titan-I，因此第一版不直接绑定某一家实现里的具体队列名或流水段名，而是先抽象成跨实现稳定的“能力资源”。
 
-- `VectorFrontend`
+第一版第二层就直接作为叶节点使用：
+
+- `VectorFrontendControl`
+- `VectorIssueSequencing`
 - `VectorRegisterSubsystem`
-- `VectorMemoryPath`
-- `VectorPermutationPath`
+- `VectorLoadPath`
+- `VectorStorePath`
 - `VectorArithmeticPath`
 - `VectorSpecialPath`
-- `VectorWriteback`
+- `VectorLaneFabric`
 
-第一版第三层先保留最小必要叶节点：
+这些叶节点的意图是：
 
-- `VRF`
-- `VLSULoadPath`
-- `VLSUStorePath`
-- `VPermutation`
-- `VFMA`
-- `VDIV`
-- `VScoreboard`
+| 资源对象 | 含义 |
+|---|---|
+| `VectorFrontendControl` | 向量指令进入向量单元前的派发、fault check、配置更新、与 host core 的交互 |
+| `VectorIssueSequencing` | 向量指令在 backend 中的 issue / sequencer / token / scoreboard 协调 |
+| `VectorRegisterSubsystem` | 向量寄存器文件及其读写/端口冲突相关结构 |
+| `VectorLoadPath` | 向量 load 地址生成、请求发出、返回重组、写回准备路径 |
+| `VectorStorePath` | 向量 store 数据整形、地址生成、请求发出、确认路径 |
+| `VectorArithmeticPath` | 常规向量算术主路径，例如加减乘加、逻辑、移位等 |
+| `VectorSpecialPath` | 高延迟或特殊行为路径，例如除法、平方根、特殊 mask/reduction/slide/gather 类路径 |
+| `VectorLaneFabric` | lane 间数据交换、cross-read、mask exchange、lane stage bridge 等跨 lane 连接资源 |
 
-第二层用于默认聚合，第三层用于深挖具体瓶颈。
+这 8 个对象优先服务于：
 
-后续如需增强，再补：
+- `Resource Activity Heatmap`
+- `Resource Status Views`
+- `Slice Bottleneck Attribution Report`
 
-- `VINTALU`
-- `VSQRT`
-- `VWBPort`
-- `VectorMemQueue`
+后续如果需要更细粒度的 drill-down，再把每个能力资源继续拆成该实现内部的真实微结构对象。
+
+##### 5.2.2.1 Saturn Mapping
+
+Saturn 可以大致映射为：
+
+- `VectorFrontendControl`
+  - `VFU frontend`
+  - `PFC`
+  - `IFC`
+- `VectorIssueSequencing`
+  - `VDQ`
+  - `VIQ`
+  - `VXS`
+  - `VPS`
+  - `scoreboard / hazard tracking`
+- `VectorRegisterSubsystem`
+  - `VRF`
+- `VectorLoadPath`
+  - `LAS`
+  - `LROB`
+  - `LMU`
+  - `LSB`
+- `VectorStorePath`
+  - `SSB`
+  - `SMU`
+  - `SAS`
+  - `SAU`
+- `VectorArithmeticPath`
+  - `integer / floating VXU regular arithmetic pipes`
+- `VectorSpecialPath`
+  - `divider`
+  - `slides`
+  - `gather`
+  - `compress`
+  - `reduction`
+- `VectorLaneFabric`
+  - `read crossbar`
+  - `segment-buffer related reordering / lane-cross behavior`
+
+##### 5.2.2.2 Titan-I Mapping
+
+Titan-I / T1 可以大致映射为：
+
+- `VectorFrontendControl`
+  - `decoder`
+  - `interface`
+- `VectorIssueSequencing`
+  - `sequencer`
+  - `T1TokenManager`
+  - `LaneStage token / scheduling logic`
+- `VectorRegisterSubsystem`
+  - `VRF`
+  - `VrfReadPipe`
+- `VectorLoadPath`
+  - `LSU`
+  - `LoadUnit`
+- `VectorStorePath`
+  - `StoreUnit`
+  - `LSU write-related path`
+- `VectorArithmeticPath`
+  - `LaneAdder`
+  - `LaneMul`
+  - `LaneFloat`
+  - `LaneLogic`
+  - `LaneShifter`
+- `VectorSpecialPath`
+  - `LaneDiv`
+  - `LaneDivFP`
+  - `MaskUnit`
+  - `OtherUnit`
+  - `ZVMA`
+- `VectorLaneFabric`
+  - `CrossReadUnit`
+  - `MaskExchangeUnit`
+  - `LaneExecutionBridge`
+  - `Distributor`
+
+#### 5.2.2.3 Why This Abstraction
+
+这层抽象的目标不是做得“最细”，而是做得“跨实现稳定”：
+
+- Saturn 和 Titan-I 都能映射到同一组资源对象
+- slice 级热力图和归因报告可以跨实现复用
+- 第一版不被某一家实现的具体队列/流水段名字绑死
 
 #### 5.2.3 MatrixEngine
 
