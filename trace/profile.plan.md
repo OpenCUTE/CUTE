@@ -560,6 +560,29 @@ Titan-I / T1 可以大致映射为：
 - slice 级热力图和归因报告可以跨实现复用
 - 第一版不被某一家实现的具体队列/流水段名字绑死
 
+#### 5.2.2.4 First-Cut Observation Targets
+
+对这 8 个向量对象，第一版不追求把所有内部细节都 trace 出来，而只保留最少但有用的观测：
+
+| 资源对象 | 第一版重点回答的问题 | 建议最少观测 |
+|---|---|---|
+| `VectorFrontendControl` | 向量指令有没有持续进入向量体系，是否被 fault / config / host 接口卡住 | `NoWork/Active/Waiting/Blocked`，可选 `cause_edges` |
+| `VectorIssueSequencing` | 向量后端是否有可执行工作，是否因为 sequencing / token / scoreboarding 不能继续推进 | `NoWork/Active/Waiting/Blocked`，`cause_edges` |
+| `VectorRegisterSubsystem` | VRF 是否成为端口/读写/可见性瓶颈 | `NoWork/Active/Waiting/Blocked`，可选 `queue_depth` |
+| `VectorLoadPath` | 向量 load 路径是否供不上 | `NoWork/Active/Waiting/Blocked`，`cause_edges` |
+| `VectorStorePath` | 向量 store 路径是否排不出去 | `NoWork/Active/Waiting/Blocked`，`cause_edges` |
+| `VectorArithmeticPath` | 常规算术主路径是否在稳定提供有效计算 | `NoWork/Active/Waiting/Blocked` |
+| `VectorSpecialPath` | 高延迟/特殊功能路径是否成为主导拖慢因素 | `NoWork/Active/Waiting/Blocked` |
+| `VectorLaneFabric` | lane 间数据交换/跨 lane 连接是否形成等待或阻塞 | `NoWork/Active/Waiting/Blocked`，`cause_edges` |
+
+这一步的目的不是一开始就把向量单元“讲透”，而是先让：
+
+- `Resource Activity Heatmap`
+- `Resource Status Views`
+- `Slice Bottleneck Attribution Report`
+
+在 Saturn / Titan-I 上都能用同一套解释框架看问题。
+
 #### 5.2.3 MatrixEngine
 
 表示 CUTE 私有的矩阵执行链条及其本地控制/本地存储资源。
