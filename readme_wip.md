@@ -210,7 +210,7 @@ Use the existing test scripts to build bare-metal RISC-V binaries:
 
 ```bash
 ./scripts/setup-get-rvv-toolchain.sh
-./scripts/build_cute_test.sh
+./scripts/build-test.sh
 ```
 
 The current test tree includes base tests, GEMM tests, ResNet50 kernels, and
