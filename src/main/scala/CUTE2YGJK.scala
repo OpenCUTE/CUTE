@@ -216,24 +216,17 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     acc.io.ame_cmd.bits.rs1_data := io.cmd.bits.rs1
     acc.io.ame_cmd.bits.rs2_data := io.cmd.bits.rs2
 
-    // fence.m stall: block CPU until all AME FIFOs are empty
-    val ame_fence_stall = is_ame_fence && !acc.io.ame_all_idle
-
-    if (ZZHDebugEnable) {
-      when(io.cmd.fire && is_ame_inst) {
-        printf("[AME-ROCC] inst=%x funct=%x rd=%d rs1=%d rs2=%d rs1_data=%x rs2_data=%x stall=%d fence_stall=%d all_idle=%d\n",
-          io.cmd.bits.inst.asUInt, io.cmd.bits.inst.funct,
-          io.cmd.bits.inst.rd, io.cmd.bits.inst.rs1, io.cmd.bits.inst.rs2,
-          io.cmd.bits.rs1, io.cmd.bits.rs2, acc.io.ame_stall, ame_fence_stall, acc.io.ame_all_idle)
-      }
-    }
 
     //一拍的时间接受指令，下一拍的时间返回结果
     //后面可以设置成一个指令fifo
-    io.cmd.ready := !canResp
-    when(io.cmd.fire && io.cmd.bits.inst.xd === true.B){
+    
+    val ame_fence_ready = !is_ame_fence || acc.io.ame_all_idle
+    io.cmd.ready := !canResp && ame_fence_ready
+
+    // 普通 xd 指令：接收后立即可响应
+    when(io.cmd.fire && io.cmd.bits.inst.xd) {
       canResp := true.B
-    }.elsewhen(io.resp.fire){
+    }.elsewhen(io.resp.fire) {
       canResp := false.B
     }
      /*if (ZZHDebugEnable)
@@ -244,7 +237,7 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
          printf("[CUTE2YGJK.top]io.cmd.valid: %x, io.cmd.ready: %x, io.resp.valid: %x, io.resp.ready: %x\n", io.cmd.valid, io.cmd.ready, io.resp.valid, io.resp.ready)
      }*/
   
-    rd := io.cmd.bits.inst.rd    //下一拍一定会返回
+    when(io.cmd.fire) { rd := io.cmd.bits.inst.rd }
     io.resp.bits.rd := rd
     io.resp.bits.data := rd_data
     io.resp.valid := canResp
@@ -275,13 +268,12 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
         printf("[CUTE2YGJK.top-test1]io.cmd.valid: %x, io.cmd.ready: %x, io.resp.valid: %x, io.resp.ready: %x\n", io.cmd.valid, io.cmd.ready, io.resp.valid, io.resp.ready)
       }
     }
-    /*when(io.resp.valid){
-      val ame_idle = acc.io.ame_all_idle
-      if(ZZHDebugEnable){
-        printf("[AME-ROCC] mstatus query: all_idle=%d\n", ame_idle)
-        printf("[CUTE2YGJK.top-test2]io.cmd.valid: %x, io.cmd.ready: %x, io.resp.valid: %x, io.resp.ready: %x\n", io.cmd.valid, io.cmd.ready, io.resp.valid, io.resp.ready)
-      }
+    
+    val ame_idle = acc.io.ame_all_idle
+    /*if(ZZHDebugEnable){
+      printf("[AME-ROCC] mstatus query: all_idle=%d\n", ame_idle)
     }*/
+    
     when(acc.io.mmu2llc.Request.fire){
         when(acc.io.mmu2llc.Request.bits.RequestType_isWrite === 0.U){
             memNum_r := memNum_r + 1.U
@@ -289,6 +281,7 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
             memNum_w := memNum_w + 1.U
         }
     }
+    io.busy := ac_busy || !acc.io.ame_all_idle
     io.interrupt := false.B
     // io.badvaddr_ygjk := Mux(jk_state=/=jk_resp, missAddr, missAddr+1.U)
     switch(jk_state){

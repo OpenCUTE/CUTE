@@ -988,31 +988,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
         }
     }
 
-    // 微指令队列
-    // val Load_MicroInst_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new LoadMicroInst().getWidth.W))))
-    // val Store_MicroInst_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new StoreMicroInst().getWidth.W))))
-    // val Compute_MicroInst_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new ComputeMicroInst().getWidth.W))))
-
-    // val Load_MicroInst_FIFO_Head = RegInit(0.U(2.W))
-    // val Load_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
-    // val Load_MicroInst_FIFO_Empty = Load_MicroInst_FIFO_Head === Load_MicroInst_FIFO_Tail
-    // val Load_MicroInst_FIFO_Full = WrapInc(Load_MicroInst_FIFO_Head, 16) === Load_MicroInst_FIFO_Tail
-
-    // val Store_MicroInst_FIFO_Head = RegInit(0.U(2.W))
-    // val Store_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
-    // val Store_MicroInst_FIFO_Empty = Store_MicroInst_FIFO_Head === Store_MicroInst_FIFO_Tail
-    // val Store_MicroInst_FIFO_Full = WrapInc(Store_MicroInst_FIFO_Head, 16) === Store_MicroInst_FIFO_Tail
-
-    // val Compute_MicroInst_FIFO_Head = RegInit(0.U(2.W))
-    // val Compute_MicroInst_FIFO_Tail = RegInit(0.U(2.W))
-    // val Compute_MicroInst_FIFO_Empty = Compute_MicroInst_FIFO_Head === Compute_MicroInst_FIFO_Tail
-    // val Compute_MicroInst_FIFO_Full = WrapInc(Compute_MicroInst_FIFO_Head, 16) === Compute_MicroInst_FIFO_Tail
-
-    // //微指令执行状态队列
-    // val Load_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new LoadMicroInst_Resource_Info().getWidth.W))))
-    // val Store_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new StoreMicroInst_Resource_Info().getWidth.W))))
-    // val Compute_MicroInst_Resource_Info_FIFO = RegInit(VecInit(Seq.fill(16)(0.U(new ComputeMicroInst_Resource_Info().getWidth.W))))
-
     val Current_ADC_SCP_ID = RegInit(0.U(2.W))
     val Current_BDC_SCP_ID = RegInit(0.U(2.W))
     val Current_CDC_SCP_ID = RegInit(0.U(2.W))
@@ -1192,7 +1167,6 @@ class TaskController(implicit p: Parameters) extends CuteModule{
             {
                 Load_MicroInst_FINISH_Head := WrapInc(Load_MicroInst_FINISH_Head, 16)
                 Load_MicroInst_FINISH_Ready_GO(Load_MicroInst_FINISH_Head) := true.B
-                // AME mode: auto-commit Load on completion (original path relies on Compute to commit)
                 Load_MicroInst_FINISH_Ready_Commit(Load_MicroInst_FINISH_Head) := true.B
                 Load_Micro_Inst_Issue_State_Reg := issue_state_idle
                 if (YJPDebugEnable)

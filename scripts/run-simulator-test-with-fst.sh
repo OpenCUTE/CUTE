@@ -15,9 +15,10 @@ TEST_BINARY_NAME_NOEXT="${TEST_BINARY_NAME%.riscv}"
 TIME=$(date +"%Y%m%d_%H%M%S")
 echo ""
 echo "[Simulator-Test-step-2] Using Chipyard Generating Simulator with CONFIG=$CONFIG_NAME BINARY=$TEST_BINARY ..."
+export MM_LATENCY=${MM_LATENCY:-100}   # DRAM read latency in cycles; override with MM_LATENCY=N ./scripts/...
 source "$CUTE_ROOT_DIR/chipyard/env.sh"
 cd "$CUTE_ROOT_DIR/chipyard/sims/verilator"
-make CONFIG=$CONFIG_NAME run-binary-debug-hex BINARY=$TEST_BINARY USE_FST=1 -j24
+make CONFIG=$CONFIG_NAME run-binary-debug-hex BINARY=$TEST_BINARY USE_FST=1 -j96
 echo "[Simulator-Test-step-2] Simulator Test complete."
 
 echo $CUTE_ROOT_DIR
