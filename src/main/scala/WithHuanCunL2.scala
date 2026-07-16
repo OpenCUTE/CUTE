@@ -11,8 +11,6 @@ case class HuanCunL2Params(
   ways:        Int             = 8,
   sets:        Int             = 128,
   inclusive:   Boolean         = false,
-  cacheWays:   Int             = 0,          // 0 = use all `ways` for cache
-  tcmWays:     Int             = 0,          // 0 = no TCM
   tcmBaseAddr: Option[BigInt]  = None
 )
 
@@ -46,8 +44,6 @@ case class HuanCunL2MasterPortParams(
         blockGranularity = 6,
         blockBytes       = 64
       )) else Nil,
-      cacheWays         = l2.cacheWays,
-      tcmWays           = l2.tcmWays,
       tcmBaseAddr       = l2.tcmBaseAddr
     )
 
