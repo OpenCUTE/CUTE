@@ -62,17 +62,6 @@ case class HuanCunL2MasterPortParams(
     }))
     privateL2.suggestName(s"tile${tileId}_huancun_L2")
 
-    if (hcParams.tcmWays > 0 && hcParams.tcmBaseAddr.isDefined) {
-      // Insert an inner XBar so tile traffic fans out to both the cache port and the
-      // dedicated TCM port.  Diplomacy address routing separates them automatically
-      // because node and tcmNode advertise non-overlapping address sets.
-      val innerXbar = LazyModule(new TLXbar)
-      innerXbar.suggestName(s"tile${tileId}_tcm_xbar")
-      privateL2.node       :*=* innerXbar.node
-      privateL2.tcmNode.get :=  innerXbar.node
-      innerXbar.node       :*=* base.injectNode(context)(p)
-    } else {
-      privateL2.node :*=* base.injectNode(context)(p)
-    }
+    privateL2.node :*=* base.injectNode(context)(p)
   }
 }
