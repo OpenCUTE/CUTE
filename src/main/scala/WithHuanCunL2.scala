@@ -8,9 +8,12 @@ import huancun._
 import utility.{PerfCounterOptionsKey, PerfCounterOptions, XSPerfLevel}
 
 case class HuanCunL2Params(
-  ways:      Int     = 8,
-  sets:      Int     = 128,
-  inclusive: Boolean = false
+  ways:        Int             = 8,
+  sets:        Int             = 128,
+  inclusive:   Boolean         = false,
+  cacheWays:   Int             = 0,          // 0 = use all `ways` for cache
+  tcmWays:     Int             = 0,          // 0 = no TCM
+  tcmBaseAddr: Option[BigInt]  = None
 )
 
 case object HuanCunL2ParamsKey extends Field[HuanCunL2Params](HuanCunL2Params())
@@ -42,7 +45,10 @@ case class HuanCunL2MasterPortParams(
         ways             = 4,
         blockGranularity = 6,
         blockBytes       = 64
-      )) else Nil
+      )) else Nil,
+      cacheWays         = l2.cacheWays,
+      tcmWays           = l2.tcmWays,
+      tcmBaseAddr       = l2.tcmBaseAddr
     )
 
     val privateL2 = LazyModule(new HuanCun()(p.alterPartial {
@@ -56,6 +62,17 @@ case class HuanCunL2MasterPortParams(
     }))
     privateL2.suggestName(s"tile${tileId}_huancun_L2")
 
-    privateL2.node :*=* base.injectNode(context)(p)
+    if (hcParams.tcmWays > 0 && hcParams.tcmBaseAddr.isDefined) {
+      // Insert an inner XBar so tile traffic fans out to both the cache port and the
+      // dedicated TCM port.  Diplomacy address routing separates them automatically
+      // because node and tcmNode advertise non-overlapping address sets.
+      val innerXbar = LazyModule(new TLXbar)
+      innerXbar.suggestName(s"tile${tileId}_tcm_xbar")
+      privateL2.node       :*=* innerXbar.node
+      privateL2.tcmNode.get :=  innerXbar.node
+      innerXbar.node       :*=* base.injectNode(context)(p)
+    } else {
+      privateL2.node :*=* base.injectNode(context)(p)
+    }
   }
 }
