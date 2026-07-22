@@ -5,6 +5,7 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.subsystem._
 import huancun._
+import shuttle.common.ShuttleTile
 import utility.{PerfCounterOptionsKey, PerfCounterOptions, XSPerfLevel}
 
 case class HuanCunL2Params(
@@ -58,6 +59,34 @@ case class HuanCunL2MasterPortParams(
     }))
     privateL2.suggestName(s"tile${tileId}_huancun_L2")
 
-    privateL2.node :*=* base.injectNode(context)(p)
+    // cacheNode goes through the standard master-injection chain to sbus.
+    // Its manager address filter has TCM subtracted, so upstream Xbar routes
+    // TCM traffic elsewhere (see the tcmNode binding below).
+    val chainNode = privateL2.cacheNode :*=* base.injectNode(context)(p)
+
+    // Bind tcmNode as an ADDITIONAL slave directly on the tile's internal
+    // tlMasterXbar. This is what makes HuanCun a true dual-port L2 from the
+    // tile's view: cache and TCM travel on physically distinct TL edges out
+    // of tlMasterXbar and never share any Diplomacy channel.
+    privateL2.tcmNode.foreach { tcmN =>
+      context match {
+        case sub: InstantiatesHierarchicalElements =>
+          val tile = sub.totalTiles.getOrElse(tileId,
+            throw new IllegalStateException(
+              s"WithHuanCunL2: tile $tileId not present in subsystem totalTiles"))
+          tile match {
+            case st: ShuttleTile =>
+              st.attachSlaveToMasterXbar(tcmN)
+            case other =>
+              throw new IllegalStateException(
+                s"WithHuanCunL2 dual-port TCM currently only supports ShuttleTile; got ${other.getClass.getSimpleName}")
+          }
+        case _ =>
+          throw new IllegalStateException(
+            "WithHuanCunL2 dual-port TCM requires an InstantiatesHierarchicalElements context")
+      }
+    }
+
+    chainNode
   }
 }
