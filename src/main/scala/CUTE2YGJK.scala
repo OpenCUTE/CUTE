@@ -33,6 +33,18 @@ class RoCC2CUTE(opcodes: OpcodeSet)(implicit p: Parameters) extends LazyRoCC(opc
   override lazy val module = new CUTETile(this)
  lazy val LLCMemPort = LazyModule(new Cute2TL)
  atlNode := TLWidthWidget(outsideDataWidthByte) := LLCMemPort.node
+
+ // AME_DMA_LOAD driver: an extra narrow master that issues MMIO writes to the
+ // TcmDmaEngine's control window. Only present when TcmDmaKey is set, so
+ // configs without a DMA don't pay the diplomacy cost. Building here (in the
+ // class body, not lazily) so the atlNode binding happens before `.module`
+ // is evaluated.
+ val dmaCtrlOpt: Option[TcmDmaCtrl] = p(TcmDmaKey).map { dmaParams =>
+   val tileId  = p(TileKey).tileId
+   val perTile = dmaParams.ctrlAddress + BigInt(tileId) * dmaParams.ctrlWindow
+   LazyModule(new TcmDmaCtrl(perTile))
+ }
+ dmaCtrlOpt.foreach { d => atlNode := d.node }
 }
 
 
@@ -202,11 +214,12 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     // All AME instructions use CUSTOM1 opcode (0x2B). The inst word carries the full AME encoding.
     val is_ame_inst = io.cmd.valid && io.cmd.bits.inst.opcode === "h2B".U
     // fence.m and mstatus are intercepted here, NOT forwarded to AMEDecoder
-    val is_ame_fence  = is_ame_inst && io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_FENCE_M
-    val is_ame_status = is_ame_inst && io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_MSTATUS
-    val is_ame_normal = is_ame_inst && !is_ame_fence && !is_ame_status
+    val is_ame_fence    = is_ame_inst && io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_FENCE_M
+    val is_ame_status   = is_ame_inst && io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_MSTATUS
+    val is_ame_dma_load = is_ame_inst && io.cmd.bits.inst.funct === AMEInstConfigs.FUNCT_DMA_LOAD
+    val is_ame_normal   = is_ame_inst && !is_ame_fence && !is_ame_status && !is_ame_dma_load
 
-    // Only forward normal AME instructions (not fence/mstatus) to AMEDecoder
+    // Only forward normal AME instructions (not fence/mstatus/dma_load) to AMEDecoder
     acc.io.ame_cmd.valid         := io.cmd.fire && is_ame_normal
     acc.io.ame_cmd.bits.inst     := io.cmd.bits.inst.asUInt
     acc.io.ame_cmd.bits.funct    := io.cmd.bits.inst.funct
@@ -216,12 +229,31 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     acc.io.ame_cmd.bits.rs1_data := io.cmd.bits.rs1
     acc.io.ame_cmd.bits.rs2_data := io.cmd.bits.rs2
 
+    // --- ame_dma_load handling ---
+    // Blocking semantics: CPU holds io.cmd until the TcmDmaCtrl FSM has walked
+    // the full MMIO sequence (setup writes, poll STATUS, cleanup). If no DMA
+    // ctrl is present (config didn't include WithTcmDma), the instruction is
+    // treated as a nop that immediately completes.
+    val dmaCtrlBusy = outer.dmaCtrlOpt.map(_.module.io.busy).getOrElse(false.B)
+    outer.dmaCtrlOpt.foreach { dc =>
+      // rs1 = source (64b) ; rs2 = { dst[63:32], length[31:0] }
+      dc.module.io.req.valid     := io.cmd.fire && is_ame_dma_load
+      dc.module.io.req.bits.src  := io.cmd.bits.rs1
+      dc.module.io.req.bits.dst  := io.cmd.bits.rs2(63, 32)
+      dc.module.io.req.bits.len  := io.cmd.bits.rs2(31, 0)
+    }
 
     //一拍的时间接受指令，下一拍的时间返回结果
     //后面可以设置成一个指令fifo
-    
+
+    // Accept a new AME cmd only when the DMA controller is idle. This makes
+    // ame_dma_load act like a synchronous, blocking op (like fence.m).
+    val dma_load_ready = outer.dmaCtrlOpt match {
+      case Some(dc) => dc.module.io.req.ready
+      case None     => true.B
+    }
     val ame_fence_ready = !is_ame_fence || acc.io.ame_all_idle
-    io.cmd.ready := !canResp && ame_fence_ready
+    io.cmd.ready := !canResp && ame_fence_ready && !dmaCtrlBusy && dma_load_ready
 
     // 普通 xd 指令：接收后立即可响应
     when(io.cmd.fire && io.cmd.bits.inst.xd) {
@@ -281,7 +313,7 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
             memNum_w := memNum_w + 1.U
         }
     }
-    io.busy := ac_busy || !acc.io.ame_all_idle
+    io.busy := ac_busy || !acc.io.ame_all_idle || dmaCtrlBusy
     io.interrupt := false.B
     // io.badvaddr_ygjk := Mux(jk_state=/=jk_resp, missAddr, missAddr+1.U)
     switch(jk_state){

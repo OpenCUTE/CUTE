@@ -146,6 +146,9 @@ object AMEInstConfigs {
   // --- Fence/status: funct[6:4] = 111 ---
   val FUNCT_FENCE_M   = "h70".U(7.W)  // fence.m: wait for all operations to complete
   val FUNCT_MSTATUS   = "h71".U(7.W)  // query FIFO/pipeline status -> rd
+  val FUNCT_DMA_LOAD  = "h72".U(7.W)  // ame_dma_load: rs1=src, rs2={dst[63:32],len[31:0]}
+                                       //   Bulk-copy from DRAM into TCM via TcmDmaEngine MMIO.
+                                       //   Blocking: CPU stalls until DMA finishes.
 
   // ============================================================
   // CSR addresses (AME spec Chapter 3)

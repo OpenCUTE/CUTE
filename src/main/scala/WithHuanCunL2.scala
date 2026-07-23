@@ -64,27 +64,56 @@ case class HuanCunL2MasterPortParams(
     // TCM traffic elsewhere (see the tcmNode binding below).
     val chainNode = privateL2.cacheNode :*=* base.injectNode(context)(p)
 
+    // Helper: look up the ShuttleTile associated with this tileId.
+    // Both the tcmNode binding and the optional DMA integration need the tile.
+    def lookupShuttleTile(): ShuttleTile = context match {
+      case sub: InstantiatesHierarchicalElements =>
+        sub.totalTiles.getOrElse(tileId,
+          throw new IllegalStateException(
+            s"WithHuanCunL2: tile $tileId not present in subsystem totalTiles")) match {
+          case st: ShuttleTile => st
+          case other =>
+            throw new IllegalStateException(
+              s"WithHuanCunL2 currently only supports ShuttleTile; got ${other.getClass.getSimpleName}")
+        }
+      case _ =>
+        throw new IllegalStateException(
+          "WithHuanCunL2 requires an InstantiatesHierarchicalElements context")
+    }
+
     // Bind tcmNode as an ADDITIONAL slave directly on the tile's internal
     // tlMasterXbar. This is what makes HuanCun a true dual-port L2 from the
     // tile's view: cache and TCM travel on physically distinct TL edges out
     // of tlMasterXbar and never share any Diplomacy channel.
     privateL2.tcmNode.foreach { tcmN =>
-      context match {
-        case sub: InstantiatesHierarchicalElements =>
-          val tile = sub.totalTiles.getOrElse(tileId,
-            throw new IllegalStateException(
-              s"WithHuanCunL2: tile $tileId not present in subsystem totalTiles"))
-          tile match {
-            case st: ShuttleTile =>
-              st.attachSlaveToMasterXbar(tcmN)
-            case other =>
-              throw new IllegalStateException(
-                s"WithHuanCunL2 dual-port TCM currently only supports ShuttleTile; got ${other.getClass.getSimpleName}")
-          }
-        case _ =>
-          throw new IllegalStateException(
-            "WithHuanCunL2 dual-port TCM requires an InstantiatesHierarchicalElements context")
-      }
+      lookupShuttleTile().attachSlaveToMasterXbar(tcmN)
+    }
+
+    // Optional TCM DMA engine. When a WithTcmDma fragment has populated the
+    // Field, we spin up one DMA per tile that also has TCM enabled. Its two
+    // master edges join the tile's tlMasterXbar; its MMIO control window is
+    // coupled onto PBUS.
+    (p(TcmDmaKey), privateL2.tcmNode) match {
+      case (Some(dmaBaseParams), Some(_)) =>
+        val dmaParams = dmaBaseParams.copy(
+          // Give every tile a unique MMIO window so multi-tile configs don't
+          // collide.
+          ctrlAddress = dmaBaseParams.ctrlAddress + BigInt(tileId) * dmaBaseParams.ctrlWindow)
+        val dma = LazyModule(new TcmDmaEngine(dmaParams))
+        dma.suggestName(s"tile${tileId}_tcm_dma")
+
+        val tile = lookupShuttleTile()
+        tile.attachMasterToMasterXbar(dma.memReadNode)
+        tile.attachMasterToMasterXbar(dma.tcmWriteNode)
+
+        val pbus = context.locateTLBusWrapper(PBUS)
+        pbus.coupleTo(s"tile${tileId}_tcm_dma_ctrl") { bus =>
+          dma.ctrlNode := TLFragmenter(pbus.beatBytes, pbus.blockBytes) := bus
+        }
+      case (Some(_), None) =>
+        throw new IllegalStateException(
+          s"WithTcmDma set for tile $tileId but HuanCunL2 has no TCM (l2.tcmBaseAddr = None)")
+      case _ => // no DMA requested
     }
 
     chainNode
