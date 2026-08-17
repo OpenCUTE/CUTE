@@ -207,7 +207,7 @@ Simulator 构建完成后，工具会输出匹配到的 Chipyard Scala config cl
 
 ```bash
 ./scripts/setup-get-rvv-toolchain.sh
-./scripts/build_cute_test.sh
+./scripts/build-test.sh
 ```
 
 当前 `cutetest/` 下包含 base tests、GEMM tests、ResNet50 kernels
