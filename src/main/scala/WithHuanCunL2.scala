@@ -9,10 +9,17 @@ import shuttle.common.ShuttleTile
 import utility.{PerfCounterOptionsKey, PerfCounterOptions, XSPerfLevel}
 
 case class HuanCunL2Params(
-  ways:        Int             = 8,
-  sets:        Int             = 128,
-  inclusive:   Boolean         = false,
-  tcmBaseAddr: Option[BigInt]  = None
+  ways:            Int             = 8,
+  sets:            Int             = 128,
+  inclusive:       Boolean         = false,
+  tcmBaseAddr:     Option[BigInt]  = None,
+  // Base of the MMIO control region that lets software runtime-repartition
+  // cache vs TCM ways. Ignored when tcmBaseAddr is None.
+  tcmCtrlBaseAddr: Option[BigInt]  = None,
+  // Initial (reset-time) number of TCM ways. Must be one of {0, 1, 2, ...,
+  // pow2 ≤ ways}. When None, defaults to ways/2. Also caps the maximum
+  // TCM allocation — TcmCtrl accepts writes up to this value only.
+  tcmWayCount:     Option[Int]     = None
 )
 
 case object HuanCunL2ParamsKey extends Field[HuanCunL2Params](HuanCunL2Params())
@@ -45,7 +52,9 @@ case class HuanCunL2MasterPortParams(
         blockGranularity = 6,
         blockBytes       = 64
       )) else Nil,
-      tcmBaseAddr       = l2.tcmBaseAddr
+      tcmBaseAddr       = l2.tcmBaseAddr,
+      tcmCtrlBaseAddr   = l2.tcmCtrlBaseAddr,
+      tcmWayCountOpt    = l2.tcmWayCount
     )
 
     val privateL2 = LazyModule(new HuanCun()(p.alterPartial {
@@ -87,6 +96,16 @@ case class HuanCunL2MasterPortParams(
     // of tlMasterXbar and never share any Diplomacy channel.
     privateL2.tcmNode.foreach { tcmN =>
       lookupShuttleTile().attachSlaveToMasterXbar(tcmN)
+    }
+
+    // Optional TCM partition control (Step 2A). When the user sets
+    // l2.tcmCtrlBaseAddr, HuanCun instantiates a TcmCtrl MMIO regmap; couple
+    // its ctrlNode onto PBUS so software can write it.
+    privateL2.tcmCtrlNode.foreach { ctrlN =>
+      val pbus = context.locateTLBusWrapper(PBUS)
+      pbus.coupleTo(s"tile${tileId}_tcm_ctrl") { bus =>
+        ctrlN := TLFragmenter(pbus.beatBytes, pbus.blockBytes) := bus
+      }
     }
 
     // Optional TCM DMA engine. When a WithTcmDma fragment has populated the

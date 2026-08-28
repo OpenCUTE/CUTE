@@ -138,7 +138,13 @@ class TcmDmaEngineImp(outer: TcmDmaEngine) extends LazyModuleImp(outer) {
   val readRem   = Reg(UInt(32.W))
   val writeRem  = Reg(UInt(32.W))
 
-  val writeInFlight = RegInit(false.B)
+  // Multi-outstanding Put: up to N in flight (was 1). Sourced by rotating
+  // putIssueSeq. The tcmWriteNode's sourceIdBits >= tagBits requirement was
+  // already implied by params.sourceIdBits.
+  val putIssueSeq  = RegInit(0.U(tagBits.W))
+  val putsInFlight = RegInit(0.U(log2Ceil(N + 1).W))
+  require(tcmEdge.bundle.sourceBits >= tagBits,
+    s"tcmWriteNode edge sourceBits (${tcmEdge.bundle.sourceBits}) < tagBits ($tagBits)")
 
   // MMIO-visible registers.
   val srcAddrLo = RegInit(0.U(32.W))
@@ -190,16 +196,25 @@ class TcmDmaEngineImp(outer: TcmDmaEngine) extends LazyModuleImp(outer) {
   }
 
   // -----------------------------------------------------------------------
-  // Write side (1 outstanding Put; TCM is fast so this is rarely a bottleneck).
+  // Write side — up to N outstanding Puts.
+  //   * putIssueSeq  : rotating sourceId for Put addresses
+  //   * writerSeq    : which roBuf slot's data to consume (in issue order)
+  //   * putsInFlight : Puts issued but not yet ACKed (0..N). Backpressure the
+  //                    issue side when full.
+  // Since Puts to a TCM-only slave complete in order and TCM's TcmSinkA
+  // response queue serialises acks, we don't need out-of-order ack handling
+  // on the sourceId; it's just a means of getting past the "1 in-flight per
+  // sourceId" TL restriction.
   // -----------------------------------------------------------------------
-  val putSource = 0.U(tcmEdge.bundle.sourceBits.W)
+  val putSource = putIssueSeq.pad(tcmEdge.bundle.sourceBits)
   val (putLegal, putBits) = tcmEdge.Put(
     fromSource = putSource,
     toAddress  = writeAddr(tcmEdge.bundle.addressBits - 1, 0),
     lgSize     = lgBlock.U,
     data       = roBuf(writerSeq))
 
-  val canIssuePut = active && (writeRem =/= 0.U) && !writeInFlight && roValid(writerSeq)
+  val canIssuePut = active && (writeRem =/= 0.U) &&
+                    (putsInFlight < N.U) && roValid(writerSeq)
   tcmA.a.valid := canIssuePut
   tcmA.a.bits  := putBits
   tcmA.d.ready := true.B
@@ -212,34 +227,40 @@ class TcmDmaEngineImp(outer: TcmDmaEngine) extends LazyModuleImp(outer) {
   val putAcked  = tcmA.d.fire
 
   when(putIssued) {
-    writeInFlight     := true.B
-    writeAddr         := writeAddr + blockBytes.U
-    writeRem          := writeRem  - blockBytes.U
+    writeAddr          := writeAddr + blockBytes.U
+    writeRem           := writeRem  - blockBytes.U
     roValid(writerSeq) := false.B                  // slot data has been latched into tcmA
-    writerSeq         := writerSeq + 1.U
+    writerSeq          := writerSeq + 1.U
+    putIssueSeq        := putIssueSeq + 1.U
   }
 
   when(putAcked) {
-    writeInFlight := false.B
     errLatch := errLatch | tcmA.d.bits.denied | tcmA.d.bits.corrupt
   }
 
+  // putsInFlight tracker (increment on issue, decrement on ack; net on both).
+  val putInc = putIssued && !putAcked
+  val putDec = putAcked  && !putIssued
+  when(putInc) { putsInFlight := putsInFlight + 1.U }
+  when(putDec) { putsInFlight := putsInFlight - 1.U }
+
   // -----------------------------------------------------------------------
-  // slotsInUse: Gets in flight or waiting to be Put. Increments on Get issue,
-  // decrements on Put ACK (which is when the slot becomes fully consumed).
-  // If both happen in the same cycle, they net to zero.
+  // slotsInUse: reorder-buffer slots outstanding (Get issued but block not
+  // yet consumed by Put). Increments on Get issue, decrements when a Put
+  // consumes the block (= putIssued, since the block is latched into tcmA
+  // at that point and roValid drops).
   // -----------------------------------------------------------------------
-  val slotsInc = getIssued && !putAcked
-  val slotsDec = putAcked  && !getIssued
+  val slotsInc = getIssued && !putIssued
+  val slotsDec = putIssued && !getIssued
   when(slotsInc) { slotsInUse := slotsInUse + 1.U }
   when(slotsDec) { slotsInUse := slotsInUse - 1.U }
 
   // -----------------------------------------------------------------------
   // Completion detection: no more reads to issue, no more writes to issue,
-  // all outstanding requests have retired, and no ACK still pending.
+  // no roBuf slot in use, no Put still awaiting ack.
   // -----------------------------------------------------------------------
   val allDone = active && (readRem === 0.U) && (writeRem === 0.U) &&
-                (slotsInUse === 0.U) && !writeInFlight
+                (slotsInUse === 0.U) && (putsInFlight === 0.U)
   when(allDone) {
     active    := false.B
     doneLatch := true.B
@@ -256,7 +277,8 @@ class TcmDmaEngineImp(outer: TcmDmaEngine) extends LazyModuleImp(outer) {
     issueSeq      := 0.U
     writerSeq     := 0.U
     slotsInUse    := 0.U
-    writeInFlight := false.B
+    putIssueSeq   := 0.U
+    putsInFlight  := 0.U
     roValid.foreach(_ := false.B)
     doneLatch     := false.B
     errLatch      := false.B
