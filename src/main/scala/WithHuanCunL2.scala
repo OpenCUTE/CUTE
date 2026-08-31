@@ -53,7 +53,11 @@ case class HuanCunL2MasterPortParams(
         blockBytes       = 64
       )) else Nil,
       tcmBaseAddr       = l2.tcmBaseAddr,
-      tcmCtrlBaseAddr   = l2.tcmCtrlBaseAddr,
+      // Give every tile its own 4 KB MMIO window for the TcmCtrl regmap so
+      // PBUS doesn't reject overlapping AddressSets when >1 tile carries a
+      // private L2 with TCM. Matches the TcmDmaEngine convention below
+      // (ctrlAddress + tileId * ctrlWindow, ctrlWindow=0x1000).
+      tcmCtrlBaseAddr   = l2.tcmCtrlBaseAddr.map(_ + BigInt(tileId) * 0x1000),
       tcmWayCountOpt    = l2.tcmWayCount
     )
 

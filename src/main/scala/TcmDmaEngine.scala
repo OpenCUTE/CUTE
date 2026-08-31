@@ -287,6 +287,25 @@ class TcmDmaEngineImp(outer: TcmDmaEngine) extends LazyModuleImp(outer) {
     }.otherwise {
       active := true.B
     }
+    printf(p"[TcmDmaEngine] START src=${Hexadecimal(Cat(srcAddrHi, srcAddrLo))} dst=${Hexadecimal(Cat(dstAddrHi, dstAddrLo))} len=${lengthReg}\n")
+  }
+
+  // Fire-level diagnostics. Only print on the cycle a transaction actually
+  // moves so the log stays proportional to real work instead of stall time.
+  when(getIssued) {
+    printf(p"[TcmDmaEngine] getIssued src=${issueSeq} readRem=${readRem} slotsInUse=${slotsInUse}\n")
+  }
+  when(getRespd) {
+    printf(p"[TcmDmaEngine] getRespd tag=${memA.d.bits.source(tagBits-1,0)} denied=${memA.d.bits.denied} corrupt=${memA.d.bits.corrupt}\n")
+  }
+  when(putIssued) {
+    printf(p"[TcmDmaEngine] putIssued src=${putIssueSeq} writeRem=${writeRem} putsInFlight=${putsInFlight}\n")
+  }
+  when(putAcked) {
+    printf(p"[TcmDmaEngine] putAcked denied=${tcmA.d.bits.denied} corrupt=${tcmA.d.bits.corrupt}\n")
+  }
+  when(allDone) {
+    printf(p"[TcmDmaEngine] allDone\n")
   }
 
   // -----------------------------------------------------------------------

@@ -152,6 +152,25 @@ class CUTE2TLImp(outer: Cute2TL) extends LazyModuleImp(outer) with CUTEImplParam
     (io.mmu.Request.bits.RequestType_isWrite === 1.U) -> edge.Put(id, io.mmu.Request.bits.RequestPhysicalAddr, log2Ceil(outsideDataWidthByte).U, data,io.mmu.Request.bits.RequestMask)._2
   ))
 
+  // ---- Put-specific diagnostic --------------------------------------------
+  // Fires only when the master is actually attempting a write. Distinguishes
+  // "Put never issued" (log has no [Cute2TL PUT] lines) from "Put issued but
+  // ACK lost" (has issued lines but no matching D.fire from downstream).
+  val putAttempt  = io.mmu.Request.valid && (io.mmu.Request.bits.RequestType_isWrite === 1.U)
+  val putFire     = tl_out.a.fire && (io.mmu.Request.bits.RequestType_isWrite === 1.U)
+  val isTcmAddr   = io.mmu.Request.bits.RequestPhysicalAddr(31, 24) === "h81".U
+  when(putAttempt) {
+    printf(p"[Cute2TL PUT-attempt] fire=${tl_out.a.fire} a.ready=${tl_out.a.ready} " +
+           p"is_full=${is_full} isTcm=${isTcmAddr} " +
+           p"addr=${Hexadecimal(io.mmu.Request.bits.RequestPhysicalAddr)} " +
+           p"sourceId=${id}\n")
+  }
+  when(putFire) {
+    printf(p"[Cute2TL PUT-fire] isTcm=${isTcmAddr} " +
+           p"addr=${Hexadecimal(io.mmu.Request.bits.RequestPhysicalAddr)} " +
+           p"sourceId=${id} size=${log2Ceil(outsideDataWidthByte).U}\n")
+  }
+
   io.mmu.Response.valid := tl_out.d.valid && (tl_out.d.bits.opcode === TLMessages.AccessAckData || tl_out.d.bits.opcode === TLMessages.AccessAck)
   io.mmu.Request.ready := tl_out.a.ready && !(busy.reduce(_&_))
   io.mmu.Response.bits.ReseponseData := tl_out.d.bits.data

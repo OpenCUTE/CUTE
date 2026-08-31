@@ -651,6 +651,21 @@ class CMemoryLoader(implicit p: Parameters) extends CuteModule{
         Write_Mem_Wait_Table(sourceId) := false.B
     }
 
+    // CML-side ACK counter. Increments each cycle a write ack propagates all
+    // the way back to Write_Mem_Wait_Table's clearing logic. Compare against
+    // TcmSinkA's isWrite=1 arrival count (should match) and against
+    // Cute2TL's D.fire ack count (should also match). Whichever pair
+    // diverges pinpoints the segment that drops the ACK.
+    val cmlAckCnt = RegInit(0.U(32.W))
+    when(io.LocalMMUIO.Response.fire) {
+        cmlAckCnt := cmlAckCnt + 1.U
+        when(cmlAckCnt(6, 0) === 0.U) {
+            printf(p"[CML-ACK] count=${cmlAckCnt} src=${io.LocalMMUIO.Response.bits.ReseponseSourceID} " +
+                   p"pendingAcks=${PopCount(Write_Mem_Wait_Table)} " +
+                   p"storeState=${memorystore_state}\n")
+        }
+    }
+
     val M_Get_IteratorMax = Mux(Is_Transpose, (ScaratchpadTensor_M / (Matrix_M.U * 2.U) + (ScaratchpadTensor_M % (Matrix_M.U * 2.U) =/= 0.U)) * 2.U, (ScaratchpadTensor_M / Matrix_M.U) + ((ScaratchpadTensor_M % Matrix_M.U) =/= 0.U))
     val N_Get_IteratorMax = WireInit(0.U(log2Ceil(CScratchpadBankNEntrys).W))
     N_Get_IteratorMax := (ScaratchpadTensor_N / Matrix_N.U)
