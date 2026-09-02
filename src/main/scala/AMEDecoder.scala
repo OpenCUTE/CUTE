@@ -45,6 +45,11 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   val csr_mtilek = RegInit(ReduceGroupSize.U(ScaratchpadMaxTensorDimBitSize.W))
   val csr_xmcsr  = RegInit(0.U(64.W))
 
+  // NVFP4 scale base sticky registers (Phase A). Written by msetscalea/msetscaleb,
+  // consumed by future NVFP4 matmul load micro-instructions (Phase B).
+  val scale_a_base_reg = RegInit(0.U(MMUAddrWidth.W))
+  val scale_b_base_reg = RegInit(0.U(MMUAddrWidth.W))
+
   // Read-only CSR constants
   val csr_xmisa  = (1.U(64.W)) // INT8 support
   val csr_xtlenb = (Tensor_M * ReduceGroupSize * ReduceWidthByte).U(64.W)
@@ -82,18 +87,23 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
 
   // --- Instruction classification (based on uop and func4) ---
   // uop=00: config
-  val is_config     = cmd_valid && inst_uop === 0.U
-  val is_msettilem  = is_config && inst_func4 === 0.U && inst_imm_sel === 1.U
-  val is_msettilek  = is_config && inst_func4 === 1.U && inst_imm_sel === 1.U
-  val is_msettilen  = is_config && inst_func4 === 2.U && inst_imm_sel === 1.U
-  val is_mrelease   = is_config && inst === "h0000002B".U
+  val is_config      = cmd_valid && inst_uop === 0.U
+  val is_msettilem   = is_config && inst_func4 === 0.U && inst_imm_sel === 1.U
+  val is_msettilek   = is_config && inst_func4 === 1.U && inst_imm_sel === 1.U
+  val is_msettilen   = is_config && inst_func4 === 2.U && inst_imm_sel === 1.U
+  val is_msetscalea  = is_config && inst_func4 === 3.U && inst_imm_sel === 1.U  // Phase A: NVFP4 A-scale base
+  val is_msetscaleb  = is_config && inst_func4 === 4.U && inst_imm_sel === 1.U  // Phase A: NVFP4 B-scale base
+  val is_mrelease    = is_config && inst === "h0000002B".U
 
   val is_ldst       = cmd_valid && inst_uop === 1.U
   val is_load       = is_ldst && !inst_ls
   val is_store      = is_ldst && inst_ls
   // func4 determines matrix type: 0=A, 1=B, 2=C, 4=At, 5=Bt, 6=Ct, 8=whole
-  val is_load_a     = is_load && (inst_func4 === 0.U || inst_func4 === 4.U)
-  val is_load_b     = is_load && (inst_func4 === 1.U || inst_func4 === 5.U)
+  // Phase B adds NVFP4 variants: 9=A-nvfp4, 10=B-nvfp4 (both scale-triggering).
+  val is_load_a_nvfp4 = is_load && inst_func4 === 9.U
+  val is_load_b_nvfp4 = is_load && inst_func4 === 10.U
+  val is_load_a     = is_load && (inst_func4 === 0.U || inst_func4 === 4.U || is_load_a_nvfp4)
+  val is_load_b     = is_load && (inst_func4 === 1.U || inst_func4 === 5.U || is_load_b_nvfp4)
   val is_load_c     = is_load && (inst_func4 === 2.U || inst_func4 === 6.U)
   val is_store_c    = is_store && (inst_func4 === 2.U || inst_func4 === 6.U)
   val is_transpose  = cmd_valid && (inst_func4 === 4.U || inst_func4 === 5.U || inst_func4 === 6.U)
@@ -134,6 +144,35 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
     csr_mtilen := Tensor_N.U
     csr_mtilek := ReduceGroupSize.U
     csr_xmcsr  := 0.U
+    // Phase A: mrelease also resets the NVFP4 scale bases so back-to-back tests
+    // don't inherit stale addresses.
+    scale_a_base_reg := 0.U
+    scale_b_base_reg := 0.U
+  }
+  // Phase A: NVFP4 scale base writes. Config instructions never block the
+  // dispatch pipeline (they don't inject into any FIFO), so the deque-ready
+  // logic below already lets them retire in one cycle.
+  when(is_msetscalea) {
+    scale_a_base_reg := rs1_data(MMUAddrWidth-1, 0)
+    // Unconditional printf so Phase A smoke can observe the write even when
+    // ZZHDebugEnable is off in the active config. Fires once per instruction.
+    printf("[AME-DEC %d] MSET_SCALEA: rs1=%x -> scale_a_base_reg\n",
+      io.DebugTimeStampe, rs1_data)
+  }
+  when(is_msetscaleb) {
+    scale_b_base_reg := rs1_data(MMUAddrWidth-1, 0)
+    printf("[AME-DEC %d] MSET_SCALEB: rs1=%x -> scale_b_base_reg\n",
+      io.DebugTimeStampe, rs1_data)
+  }
+  // Phase B: log every NVFP4 tile-load dispatch so the smoke can prove that
+  // Is_A/B_Scale_Work fired and ASL/BSL got the right base.
+  when(is_load_a_nvfp4 && !dispatch_blocked) {
+    printf("[AME-DEC %d] MLAE4: A_base=%x A_stride=%x scale_a_base=%x\n",
+      io.DebugTimeStampe, rs1_data, rs2_data, scale_a_base_reg)
+  }
+  when(is_load_b_nvfp4 && !dispatch_blocked) {
+    printf("[AME-DEC %d] MLBE4: B_base=%x B_stride=%x scale_b_base=%x\n",
+      io.DebugTimeStampe, rs1_data, rs2_data, scale_b_base_reg)
   }
 
   // --- Response (CSR read / status query) ---
@@ -162,12 +201,19 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   // Derive datatype from instruction's d_size field for load/store
   // d_size: 00=8bit, 01=16bit, 10=32bit, 11=64bit
   // Map to CUTE ElementDataType (used for address stride calculation)
+  //
+  // Phase B: mlae4 / mlbe4 (func4=9/10) override to NVFP4 regardless of d_size.
+  // The d_size field is left as 00 (8-bit) in the encoding for these; the func4
+  // discrimination is authoritative.
   val ls_datatype = Wire(UInt(ElementDataType.DataTypeBitWidth.W))
   ls_datatype := ElementDataType.DataTypeI8I8I32 // default: 8-bit
   switch(inst_d_size) {
     is("b00".U) { ls_datatype := ElementDataType.DataTypeI8I8I32 }      // 8-bit
     is("b01".U) { ls_datatype := ElementDataType.DataTypeF16F16F32 }    // 16-bit
     is("b10".U) { ls_datatype := ElementDataType.DataTypeTF32TF32F32 }  // 32-bit
+  }
+  when(is_load_a_nvfp4 || is_load_b_nvfp4) {
+    ls_datatype := ElementDataType.DataTypenvfp4F32
   }
 
   load_inst.ApplicationTensor_A.ApplicationTensor_A_BaseVaddr := rs1_data(MMUAddrWidth-1, 0)
@@ -192,8 +238,25 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
   load_inst.ApplicationTensor_B.Convolution_KH_DIM_Length     := 0.U
   load_inst.ApplicationTensor_B.Convolution_KW_DIM_Length     := 0.U
 
+  // Phase B: wire Scale bases from AMEDecoder sticky regs (written by msetscalea/b).
+  // For AME, software issues tile-by-tile, so BlockScale_*_BaseVaddr == the raw
+  // configured base — no macro-inst tile iteration offset (see the main-path
+  // TaskController.scala:840/851 where macro-inst adds Tile_M/N_Iter offsets).
+  // dataType is set only when this Load's datatype is NVFP4; for INT8/BF16
+  // baseline loads it stays 0, and Is_A/B_Scale_Work below will be false so
+  // ASL/BSL never fire — the fields are ignored in that case.
   load_inst.ApplicationScale_A := 0.U.asTypeOf(new ApplicationScale_A_Info)
   load_inst.ApplicationScale_B := 0.U.asTypeOf(new ApplicationScale_B_Info)
+  when(is_load_a_nvfp4) {
+    load_inst.ApplicationScale_A.ApplicationScale_A_BaseVaddr := scale_a_base_reg
+    load_inst.ApplicationScale_A.BlockScale_A_BaseVaddr       := scale_a_base_reg
+    load_inst.ApplicationScale_A.dataType                     := ls_datatype
+  }
+  when(is_load_b_nvfp4) {
+    load_inst.ApplicationScale_B.ApplicationScale_B_BaseVaddr := scale_b_base_reg
+    load_inst.ApplicationScale_B.BlockScale_B_BaseVaddr       := scale_b_base_reg
+    load_inst.ApplicationScale_B.dataType                     := ls_datatype
+  }
 
   load_inst.ApplicationTensor_C.ApplicationTensor_C_BaseVaddr := rs1_data(MMUAddrWidth-1, 0)
   load_inst.ApplicationTensor_C.BlockTensor_C_BaseVaddr       := rs1_data(MMUAddrWidth-1, 0)
@@ -219,8 +282,11 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
 
   load_inst.Is_A_Work       := is_load_a
   load_inst.Is_B_Work       := is_load_b
-  load_inst.Is_A_Scale_Work := false.B
-  load_inst.Is_B_Scale_Work := false.B
+  // Phase B: enable ASL/BSL when the current load is a NVFP4 tile-load.
+  // TaskController.scala:1035-1099 consumes these to fire the corresponding
+  // ScaleLoader against ApplicationScale_A/B set above.
+  load_inst.Is_A_Scale_Work := is_load_a_nvfp4
+  load_inst.Is_B_Scale_Work := is_load_b_nvfp4
   load_inst.Is_C_Work       := is_load_c || is_mzero
 
   load_inst.A_SCPID := a_scp_bank
@@ -260,6 +326,11 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
     .elsewhen(!ms1_signed && !ms2_signed) { ame_datatype := ElementDataType.DataTypeU8U8I32 }   // mmaccu.w.b
     .elsewhen(ms1_signed && !ms2_signed)  { ame_datatype := ElementDataType.DataTypeI8U8I32 }   // mmaccsu.w.b
     .elsewhen(!ms1_signed && ms2_signed)  { ame_datatype := ElementDataType.DataTypeU8I8I32 }   // mmaccus.w.b
+  }.elsewhen(inst_func4 === "b0010".U) {
+    // NVFP4 scaled matmul (func4=0010). Replaces the previously reserved-but-
+    // unused "integer hybrid" encoding slot. s_size / d_size are ignored here —
+    // the datatype and per-block E4M3 scale semantics are fully implied by func4.
+    ame_datatype := ElementDataType.DataTypenvfp4F32   // mfmacc.s.nvfp4
   }.elsewhen(inst_func4 === "b0000".U) {
     // Float matrix multiplication (func4=0000)
     val is_hybrid = inst(24)    // 1=hybrid/widen, 0=same-precision
@@ -384,8 +455,9 @@ class AMEDecoder()(implicit p: Parameters) extends CuteModule {
         rs1_data, rs2_data, csr_mtilem, csr_mtilen)
     }
     when(is_config) {
-      printf("[AME-DEC %d] CONFIG: funct=%x mtilem=%d mtilen=%d mtilek=%d\n",
-        io.DebugTimeStampe,funct, csr_mtilem, csr_mtilen, csr_mtilek)
+      printf("[AME-DEC %d] CONFIG: funct=%x mtilem=%d mtilen=%d mtilek=%d scaleA=%x scaleB=%x\n",
+        io.DebugTimeStampe,funct, csr_mtilem, csr_mtilen, csr_mtilek,
+        scale_a_base_reg, scale_b_base_reg)
     }
     when(io.stall) {
       printf("[AME-DEC] STALL: load_full=%d compute_full=%d store_full=%d fence_wait=%d\n",

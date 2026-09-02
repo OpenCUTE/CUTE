@@ -133,6 +133,19 @@ object AMEInstConfigs {
   val FUNCT_MFMACC_S_E4  = "h4F".U(7.W)  // mfmacc.s.e4 (fp8e4m3 -> fp32)
   val FUNCT_MFMACC_S_E5  = "h50".U(7.W)  // mfmacc.s.e5 (fp8e5m2 -> fp32)
 
+  // NVFP4 scaled matmul (Phase A): func4=0010 (previously reserved as INTHYB, now taken
+  // by NVFP4 since integer-hybrid was never implemented). uop=10, size_sup=011.
+  // Documentary value = inst[31:25] = 0010_10_0 = 0x14.
+  val FUNCT_MFMACC_S_NVFP4 = "h14".U(7.W)  // mfmacc.s.nvfp4 (fp4 -> fp32, w/ E4M3 block scale)
+
+  // NVFP4 packed-4-bit tile load (Phase B). Load family uses uop=01, ls=0.
+  // Distinct func4 values chosen from the reserved-unused slots {3, 7, 9..15} so the
+  // decoder can flip Is_A_Scale_Work / Is_B_Scale_Work without extra state.
+  // mlae4: func4=1001 → inst[31:25] = 1001_01_0 = 0x4A
+  // mlbe4: func4=1010 → inst[31:25] = 1010_01_0 = 0x54
+  val FUNCT_MLAE4 = "h4A".U(7.W)  // mlae4 md, rs1, rs2 : load A row (NVFP4 packed 2/byte)
+  val FUNCT_MLBE4 = "h54".U(7.W)  // mlbe4 md, rs1, rs2 : load B row (NVFP4 packed 2/byte)
+
   // --- MISC instructions: funct[6:4] = 101 ---
   val FUNCT_MZERO   = "h58".U(7.W)  // mzero: zero accumulator/tile register
 
@@ -142,6 +155,13 @@ object AMEInstConfigs {
   val FUNCT_MSETTILEK = "h61".U(7.W)  // msettile{k}[i]: set tile K dimension (func4=0001)
   val FUNCT_MSETTILEN = "h62".U(7.W)  // msettile{n}[i]: set tile N dimension (func4=0010)
   val FUNCT_MRELEASE  = "h63".U(7.W)  // mrelease: set MS field to Initial
+
+  // NVFP4 scale base configuration (Phase A). uop=00 (config), imm_sel=1.
+  // msetscalea: func4=0011 → inst[31:25] = 0011_00_1 = 0x19 (documentary; decoder
+  //   matches on inst_uop=00 && inst_func4=3 rather than on this funct7 value)
+  // msetscaleb: func4=0100 → inst[31:25] = 0100_00_1 = 0x21
+  val FUNCT_MSETSCALEA = "h19".U(7.W)  // msetscalea rs1: set A-side scale base vaddr (func4=0011)
+  val FUNCT_MSETSCALEB = "h21".U(7.W)  // msetscaleb rs1: set B-side scale base vaddr (func4=0100)
 
   // --- Fence/status: funct[6:4] = 111 ---
   val FUNCT_FENCE_M   = "h70".U(7.W)  // fence.m: wait for all operations to complete
