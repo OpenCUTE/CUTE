@@ -109,3 +109,31 @@ Mermaid 10.4.0 脚本、许可证和来源哈希固定在主仓库的
 `doc/docs/assets/vendor/mermaid-10.4.0/`。统一构建在临时目录中为设计站提供同一份脚本，
 不依赖设计子模块中是否保留该资源，也不修改其源文件。图的源代码直接维护在 Markdown
 的 Mermaid 代码块中；保存后预览自动更新。
+
+## 发布到 GitHub Pages
+
+仓库提供 `.github/workflows/docs-pages.yml`。它在 `master` 的文档相关文件更新时构建
+主站、SDK 和设计站，检查本地链接后部署到 GitHub Pages；也可在 Actions 页面手动运行。
+Pull request 只构建检查，不部署。构建只下载两个文档子模块，不需要硬件工具链。
+
+首次启用：在 `OpenCUTE/CUTE` 仓库的 **Settings → Pages → Build and deployment →
+Source** 中选择 **GitHub Actions**，然后提交、推送 workflow 和相关构建修改。
+此操作需要仓库管理权限。流程依据 GitHub 的
+[自定义 Pages 工作流说明](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
+
+默认项目地址为 `https://opencute.github.io/CUTE/`，实际发布地址以 Pages 设置及
+Actions 部署结果为准。三个入口仍在同一个网站，子项目位于 `/CUTE/sdk/`、`/CUTE/design/`。
+部署后的静态网站由 GitHub 托管，不需要本机一直运行预览服务。
+
+构建器会将跨站根路径转换为页面相对链接，适配 `/CUTE/` 项目路径；源 Markdown
+继续使用原有链接，子模块文件不改写。发布前可在本机检查：
+
+```sh
+../opencute-out/docs-env/bin/python tools/docs/build_docs.py \
+  --out ../opencute-out/docs-pages-test \
+  --site-url https://opencute.github.io/CUTE/
+```
+
+两个文档子模块当前为公开仓库，workflow 通过 HTTPS 下载主仓库记录的提交，无需额外
+SSH 密钥。子项目更新后，要在主仓库提交相应 gitlink，网站才会采用新版本；只推送
+子项目分支不会改变已固定的版本。失败时查看 Actions 的构建诊断步骤，不会部署失败产物。

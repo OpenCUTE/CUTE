@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 WATCH = [ROOT / p for p in (
     'doc/docs', 'trace/docs', 'doc/sdk-doc/docs', 'doc/design-doc/docs',
     'doc/mkdocs.yml', 'doc/sdk-doc/mkdocs.yml', 'doc/design-doc/mkdocs.yml',
-    'tools/docs/build_docs.py', 'tools/docs/check_links.py',
+    'tools/docs/build_docs.py', 'tools/docs/check_links.py', 'tools/docs/site_paths.py',
 )]
 LIVE_SCRIPT = r"""(() => {
   const initial = document.currentScript.dataset.revision;

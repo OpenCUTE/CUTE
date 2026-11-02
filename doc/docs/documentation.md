@@ -80,5 +80,19 @@ python3 tools/docs/preview_docs.py --python ../opencute-out/docs-env/bin/python
    独立仓库，顶层 gitlink 不包含子模块尚未提交的内容。
 
 输出目录须位于源码树之外，且为空目录或该脚本此前生成的站点。此构建只生成
-本地网站；发布或提交文档是后续独立操作。历史论文数据与当前实验报告分开标明，
+本地网站；提交文档与 GitHub Pages 发布按下面步骤操作。历史论文数据与当前实验报告分开标明，
 文档检查通过不构成新的功能或性能验收。
+
+## GitHub Pages 发布
+
+首次在 GitHub 仓库 **Settings → Pages → Source** 选择 **GitHub Actions**。
+`.github/workflows/docs-pages.yml` 会在 `master` 上的文档更新后自动执行统一构建与链接
+检查，成功后发布；Pull request 只验证。也可在 Actions 中选择
+**OpenCUTE documentation → Run workflow** 手动发布 `master`。
+
+默认地址为 `https://opencute.github.io/CUTE/`，以实际 Pages 设置为准。构建器根据
+发布地址生成站点信息，并将跨站链接转换为相对路径；本地根路径预览继续可用。
+SDK 和设计文档使用主仓库记录的子模块版本，更新它们后要同步提交主仓库的子模块指针。
+
+GitHub 提供静态托管，不需要服务器维持本地预览进程。设置与权限说明见
+[GitHub Pages 官方文档](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)。

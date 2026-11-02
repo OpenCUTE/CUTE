@@ -1,0 +1,95 @@
+name: OpenCUTE documentation
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'doc/**'
+      - 'trace/docs/**'
+      - 'tools/docs/**'
+      - '.gitmodules'
+      - '.github/workflows/docs-pages.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'doc/**'
+      - 'trace/docs/**'
+      - 'tools/docs/**'
+      - '.gitmodules'
+      - '.github/workflows/docs-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Checkout the pinned documentation submodules
+        run: |
+          git config submodule.doc/sdk-doc.url https://github.com/OpenCUTE/cute-sdk-doc.git
+          git config submodule.doc/design-doc.url https://github.com/OpenCUTE/CUTE-Design-Doc.git
+          git submodule update --init --depth 1 -- doc/sdk-doc doc/design-doc
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: doc/requirements.txt
+
+      - name: Install documentation dependencies
+        run: python -m pip install -r doc/requirements.txt
+
+      - name: Configure Pages
+        if: github.event_name != 'pull_request'
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Test URL handling
+        run: python -m unittest discover -s tools/docs -p 'test_*.py' -v
+
+      - name: Build and check all sites
+        env:
+          DOC_SITE_URL: ${{ steps.pages.outputs.base_url || format('https://{0}.github.io/{1}', github.repository_owner, github.event.repository.name) }}
+        run: python tools/docs/build_docs.py --out "$RUNNER_TEMP/opencute-site" --site-url "$DOC_SITE_URL/"
+
+      - name: Print build diagnostics
+        if: failure()
+        run: |
+          if [ -d "$RUNNER_TEMP/opencute-site-logs" ]; then
+            tail -n 80 "$RUNNER_TEMP/opencute-site-logs/"*.log
+          fi
+
+      - name: Upload site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/opencute-site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

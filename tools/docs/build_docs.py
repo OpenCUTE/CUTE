@@ -8,6 +8,8 @@ import subprocess
 import sys
 import tempfile
 import yaml
+from urllib.parse import urlsplit
+from site_paths import localize_site
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -41,6 +43,9 @@ def main():
     p.add_argument('--out', type=lambda v: Path(v).resolve(), required=True)
     p.add_argument('--site-url', default='http://127.0.0.1:8010/', help='Base URL for local preview/canonical links')
     args = p.parse_args()
+    url = urlsplit(args.site_url)
+    if url.scheme not in ('http', 'https') or not url.netloc or url.query or url.fragment:
+        p.error('--site-url must be an HTTP(S) site base URL without query or fragment')
     if args.out == ROOT or args.out in ROOT.parents or ROOT in args.out.parents:
         p.error('--out must be outside the source repository and cannot contain it')
     if args.out.exists() and any(args.out.iterdir()) and not (args.out/'.opencute-docs-site').is_file():
@@ -106,6 +111,8 @@ def main():
             results.append({'site': name, 'exit': run.returncode, 'log': str(logs/(name+'.log'))})
             print(json.dumps(results[-1]), flush=True)
         if not any(r['exit'] for r in results):
+            # Cross-site links such as /sdk/ must also work under /CUTE/ on Pages.
+            localize_site(args.out, args.site_url)
             command = [sys.executable, str(ROOT/'tools/docs/check_links.py'), str(args.out),
                        '--report', str(logs/'links.json')]
             with (logs/'links.log').open('w') as log:
