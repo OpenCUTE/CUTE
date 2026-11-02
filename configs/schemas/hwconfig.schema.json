@@ -3,7 +3,13 @@
   "title": "CUTE HWConfig",
   "description": "可运行硬件目标组合。HWConfig 引用 ChipyardConfig，并绑定 memory model 与 simulator policy。",
   "type": "object",
-  "required": ["version", "name", "chipyard_config", "memory", "simulator"],
+  "required": [
+    "version",
+    "name",
+    "chipyard_config",
+    "memory",
+    "simulator"
+  ],
   "additionalProperties": false,
   "properties": {
     "version": {
@@ -18,7 +24,9 @@
     },
     "tags": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "标签列表，供 project.target matcher 使用"
     },
     "chipyard_config": {
@@ -28,13 +36,18 @@
     },
     "memory": {
       "type": "object",
-      "required": ["model"],
+      "required": [
+        "model"
+      ],
       "additionalProperties": false,
       "description": "内存模型配置引用。model=configs/memconfigs/<model>/，config 为其下的配置目录名。",
       "properties": {
         "model": {
           "type": "string",
-          "enum": ["dramsim2", "none"],
+          "enum": [
+            "dramsim2",
+            "none"
+          ],
           "description": "内存模型类型。dramsim2 表示使用 configs/memconfigs/dramsim2/<config>/。"
         },
         "config": {
@@ -46,28 +59,58 @@
       "allOf": [
         {
           "if": {
-            "properties": { "model": { "const": "dramsim2" } },
-            "required": ["model"]
+            "properties": {
+              "model": {
+                "const": "dramsim2"
+              }
+            },
+            "required": [
+              "model"
+            ]
           },
-          "then": { "required": ["config"] }
+          "then": {
+            "required": [
+              "config"
+            ]
+          }
         },
         {
           "if": {
-            "properties": { "model": { "const": "none" } },
-            "required": ["model"]
+            "properties": {
+              "model": {
+                "const": "none"
+              }
+            },
+            "required": [
+              "model"
+            ]
           },
-          "then": { "not": { "required": ["config"] } }
+          "then": {
+            "not": {
+              "required": [
+                "config"
+              ]
+            }
+          }
         }
       ]
     },
     "simulator": {
       "type": "object",
-      "required": ["backend", "binary", "max_cycles"],
+      "required": [
+        "backend",
+        "binary",
+        "max_cycles"
+      ],
       "additionalProperties": false,
       "properties": {
         "backend": {
           "type": "string",
-          "enum": ["verilator", "vcs", "fpga"],
+          "enum": [
+            "verilator",
+            "vcs",
+            "fpga"
+          ],
           "description": "仿真后端"
         },
         "binary": {
@@ -80,6 +123,10 @@
           "description": "最大仿真周期数"
         }
       }
+    },
+    "execution_profile": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
     }
   }
 }

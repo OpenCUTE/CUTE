@@ -1,0 +1,85 @@
+{
+  "step": "environment",
+  "status": "ENV_READY",
+  "checked_at_utc": "2026-10-30T04:05:44.283516+00:00",
+  "summary": [
+    "tools found: 12/12",
+    "Python: yaml / jsonschema / numpy",
+    "RV64 + RVV + HTIF: compile/link OK",
+    "next: build the configured SoC"
+  ],
+  "details": {
+    "tools": {
+      "git": "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/conda/bin/git",
+      "make": "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/conda/bin/make",
+      "gcc": "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/conda/bin/gcc",
+      "g++": "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/conda/bin/g++",
+      "cmake": "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/build-tools/bin/cmake",
+      "ninja": "/home/admin-yjp/workspace/cute-system-validation-20261027/tools/qemu-build/bin/ninja",
+      "java": "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/conda/bin/java",
+      "verilator": "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/conda/bin/verilator",
+      "firtool": "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/circt-1.75.0/firtool-1.75.0/bin/firtool",
+      "dtc": "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/conda/bin/dtc",
+      "pkg-config": "/home/admin-yjp/workspace/cute-system-validation-20261027/tools/qemu-build/bin/pkg-config",
+      "riscv-none-elf-gcc": "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/xpack-riscv-none-elf-gcc-15.2.0-1/bin/riscv-none-elf-gcc"
+    },
+    "python": "/home/admin-yjp/workspace/cute-config-pipeline-20261029/python/bin/python3",
+    "modules": {
+      "yaml": "/home/admin-yjp/workspace/cute-model-migration-20261028/tools/docs/lib/python3.11/site-packages/yaml/__init__.py",
+      "jsonschema": "/home/admin-yjp/workspace/cute-config-pipeline-20261029/python/lib/python3.11/site-packages/jsonschema/__init__.py",
+      "numpy": "/home/admin-yjp/workspace/cute-model-migration-20261028/tools/docs/lib/python3.11/site-packages/numpy/__init__.py"
+    },
+    "versions": [
+      {
+        "argv": [
+          "/home/admin-yjp/workspace/cute-system-validation-20261027/tools/qemu-build/bin/pkg-config",
+          "--modversion",
+          "glib-2.0"
+        ],
+        "output": "2.90.0"
+      },
+      {
+        "argv": [
+          "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/xpack-riscv-none-elf-gcc-15.2.0-1/bin/riscv-none-elf-gcc",
+          "--version"
+        ],
+        "output": "riscv-none-elf-gcc (xPack GNU RISC-V Embedded GCC x86_64) 15.2.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+      },
+      {
+        "argv": [
+          "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/conda/bin/verilator",
+          "--version"
+        ],
+        "output": "Verilator 5.022 2024-02-24 rev conda-forge build 1"
+      },
+      {
+        "argv": [
+          "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/conda/bin/java",
+          "-version"
+        ],
+        "output": "Picked up JAVA_TOOL_OPTIONS: -Xmx24G -Xss8M -XX:ActiveProcessorCount=12 -Dsbt.repository.config=/home/admin-yjp/cute-tsrvv/ki-simd-env/sbt.repositories -Dsbt.override.build.repos=true\nopenjdk version \"20.0.2-internal\" 2023-07-18\nOpenJDK Runtime Environment (build 20.0.2-internal-adhoc..src)\nOpenJDK 64-Bit Server VM (build 20.0.2-internal-adhoc..src, mixed mode, sharing)"
+      },
+      {
+        "argv": [
+          "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/circt-1.75.0/firtool-1.75.0/bin/firtool",
+          "--version"
+        ],
+        "output": "LLVM (http://llvm.org/):\n  LLVM version 19.0.0git\n  Optimized build.\nCIRCT firtool-1.75.0"
+      }
+    ],
+    "compile_command": [
+      "/home/admin-yjp/cute-tsrvv/ki-simd-env/tools/xpack-riscv-none-elf-gcc-15.2.0-1/bin/riscv-none-elf-gcc",
+      "-march=rv64gcv_zvl512b_zvfh",
+      "-mabi=lp64d",
+      "-specs=htif_nano.specs",
+      "-static",
+      "/home/admin-yjp/opencute-out/demo-20261030/final-cards/01-environment/toolchain-smoke.c",
+      "-o",
+      "/home/admin-yjp/opencute-out/demo-20261030/final-cards/01-environment/toolchain-smoke.riscv"
+    ],
+    "smoke_elf_sha256": "77b141410aeb3a5001a3bbc650105903c36e092813c97d6b2123b4ea43afbaff"
+  },
+  "sources": [],
+  "checker_sha256": "d5da4ee773831c80e6119bd53421b3232e5ddf7b4b9ee1863cb440f6abbc5096",
+  "limits": "Preflight only; the full build checks remaining dependencies."
+}

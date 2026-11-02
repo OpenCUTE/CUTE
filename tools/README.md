@@ -271,3 +271,16 @@ python3 tools/trace/decode_cute_trace.py --log <log_file> --mode jsonl -o out.js
 - 所有脚本支持 `python3 <script>` 直接运行，也支持 `./<script>`（有 shebang）。
 - Runner 脚本通过 `--root` 或自动搜索定位 CUTE 根目录。
 - 退出码：`0` 成功，`1` 表示检查失败或生成文件漂移，`2` 表示参数或输入错误。stdout 输出结果，stderr 输出错误。
+
+## 构建与逐任务验证
+
+- `runner/cute-check-config.py --hwconfig ... --dts ... --memmap ... --requires ...`：
+  检查 ISAProfile、MemoryMap 与 DTS 的对应关系，并匹配 SDK 的显式资源需求。
+  参见 [配置契约与边界](../doc/docs/config-contracts.md)。
+- `runner/cute-system-build.py`：SDK / QEMU / verifier / RTL 构建与源码身份记录。
+- `runner/cute-system.py`：QEMU golden、在线 ack trace 验证与离线重放。
+- `runner/cute-system-replay.py`：完整运行包的独立回放与分析超时恢复。
+- `runner/cute-model-build.py` / `runner/cute-model-run.py`：BERT / LLaMA 分阶段、分形状构建与验收。
+- [C++ verifier](verify/README.md)：协议及测试。
+- `docs/build_docs.py`：主文档、trace、SDK、设计文档严格构建。
+- [主文档](../doc/README.md)。

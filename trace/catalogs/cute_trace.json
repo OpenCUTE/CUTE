@@ -27,6 +27,16 @@
       "name": "vector_loadstore",
       "id": 4,
       "description": "vector 与 CUTE 配合时的访存观测。"
+    },
+    {
+      "name": "system_memory",
+      "id": 5,
+      "description": "Client request/response handshakes for ack-based system verification."
+    },
+    {
+      "name": "system_control",
+      "id": 6,
+      "description": "Software checkpoints with acknowledged RoCC markers."
     }
   ],
   "modules": [
@@ -64,6 +74,11 @@
       "name": "Vector",
       "id": 7,
       "description": "Vector 单元与 CUTE 配合时的访存观测模块。"
+    },
+    {
+      "name": "SystemTrace",
+      "id": 8,
+      "description": "System verification observation boundaries."
     }
   ],
   "tasks": [
@@ -115,6 +130,20 @@
       "module": "Vector",
       "method_group": "VectorStore",
       "description": "Vector store 任务 trace 组。"
+    },
+    {
+      "name": "SystemMemory",
+      "id": 8,
+      "module": "SystemTrace",
+      "method_group": "SystemMemory",
+      "description": "SystemMemory"
+    },
+    {
+      "name": "SystemCheckpoint",
+      "id": 9,
+      "module": "SystemTrace",
+      "method_group": "SystemCheckpoint",
+      "description": "SystemCheckpoint"
     }
   ],
   "events": [
@@ -454,6 +483,226 @@
         }
       ],
       "render": "task_count={task_count} vaddr=0x{vaddr:x} data=0x{data:x}"
+    },
+    {
+      "name": "SystemMemory.request",
+      "method": "request",
+      "id": 18,
+      "task": "SystemMemory",
+      "category": "system_memory",
+      "description": "SystemMemory.request",
+      "fields": [
+        {
+          "name": "hart",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "engine",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "port",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "event_seq",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "source",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "opcode",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "address",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "lg_size",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "width_bytes",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "mask",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "data",
+          "type": "uint",
+          "fmt": "hex"
+        }
+      ],
+      "render": "hart={hart:x} engine={engine:x} port={port:x} source={source:x} opcode={opcode:x} address={address:x} lg_size={lg_size:x} width_bytes={width_bytes:x} mask={mask:x} data={data:x} event_seq={event_seq:x}"
+    },
+    {
+      "name": "SystemMemory.response",
+      "method": "response",
+      "id": 19,
+      "task": "SystemMemory",
+      "category": "system_memory",
+      "description": "SystemMemory.response",
+      "fields": [
+        {
+          "name": "hart",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "engine",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "port",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "event_seq",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "source",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "opcode",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "lg_size",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "width_bytes",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "denied",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "corrupt",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "data",
+          "type": "uint",
+          "fmt": "hex"
+        }
+      ],
+      "render": "hart={hart:x} engine={engine:x} port={port:x} source={source:x} opcode={opcode:x} lg_size={lg_size:x} width_bytes={width_bytes:x} denied={denied:x} corrupt={corrupt:x} data={data:x} event_seq={event_seq:x}"
+    },
+    {
+      "name": "SystemCheckpoint.mark",
+      "method": "mark",
+      "id": 20,
+      "task": "SystemCheckpoint",
+      "category": "system_control",
+      "description": "SystemCheckpoint.mark",
+      "fields": [
+        {
+          "name": "hart",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "seq",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "key",
+          "type": "uint",
+          "fmt": "hex"
+        }
+      ],
+      "render": "hart={hart:x} seq={seq:x} key={key:x}"
+    },
+    {
+      "name": "SystemCheckpoint.returned",
+      "method": "returned",
+      "id": 21,
+      "task": "SystemCheckpoint",
+      "category": "system_control",
+      "description": "RoCC checkpoint response consumed by the CPU.",
+      "fields": [
+        {
+          "name": "hart",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "seq",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "key",
+          "type": "uint",
+          "fmt": "hex"
+        }
+      ],
+      "render": "hart={hart:x} seq={seq:x} key={key:x}"
+    },
+    {
+      "name": "SystemMemory.progress",
+      "method": "progress",
+      "id": 22,
+      "task": "SystemMemory",
+      "category": "system_memory",
+      "description": "Per-port complete-cycle event count and outstanding watermark.",
+      "fields": [
+        {
+          "name": "hart",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "engine",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "port",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "next_seq",
+          "type": "uint",
+          "fmt": "hex"
+        },
+        {
+          "name": "outstanding",
+          "type": "uint",
+          "fmt": "hex"
+        }
+      ],
+      "render": "hart={hart:x} engine={engine:x} port={port:x} next_seq={next_seq:x} outstanding={outstanding:x}"
     }
   ],
   "metadata": {

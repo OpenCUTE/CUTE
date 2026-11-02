@@ -1,6 +1,6 @@
 // Auto-generated from configs/cute_isa_versions/cute_isa_v1.yaml
 // DO NOT EDIT MANUALLY.
-// Generated at: Tue May 12 20:28:51 2026
+// Generated at: Tue Oct 27 17:05:40 2026
 
 package cute
 
@@ -139,6 +139,16 @@ object YGJKInstConfigs {
     def returnDescription = "返回FIFO中当前指令状态 (0010 = id为1的位置已有指令)"
   }
 
+  case object TraceMark extends CuteInstConfig {
+    def funct = 9
+    def name = "TRACE_MARK"
+    def cfgData1Fields = Some(Seq(InstField("seq", 63, 0, "Per-hart task checkpoint sequence.")))
+    def cfgData2Fields = Some(Seq(InstField("key", 63, 0, "Software task descriptor key.")))
+    def description = "Emit a task checkpoint at command acceptance and return its sequence."
+    def isYGJKInst = true
+    def returnDescription = "Echo seq after the marker has been accepted."
+  }
+
   val allInsts: Seq[CuteInstConfig] = Seq(
     QueryAcceleratorBusy,
     QueryRuntime,
@@ -147,7 +157,8 @@ object YGJKInstConfigs {
     QueryComputeTime,
     QueryMacroInstFinish,
     QueryMacroInstFIFOFull,
-    QueryMacroInstFIFOInfo
+    QueryMacroInstFIFOInfo,
+    TraceMark
   ).sortBy(_.funct)
 
   def getInstByFunct(funct: Int): Option[CuteInstConfig] =

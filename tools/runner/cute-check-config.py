@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+from cute_config_common import ConfigError, chipyard_contracts, configured_tcm, load_yaml as load_config_yaml
+
 try:
     import yaml
 except ImportError as exc:  # pragma: no cover - dependency preflight
@@ -28,6 +30,9 @@ SCHEMA_FILES = {
     "hwconfig": "configs/schemas/hwconfig.schema.json",
     "project": "configs/schemas/project.schema.json",
     "trace_filter": "configs/schemas/trace_filter.schema.json",
+    "isa_profile": "configs/schemas/isa_profile.schema.json",
+    "memory_map": "configs/schemas/memory_map.schema.json",
+    "execution_profile": "configs/schemas/execution_profile.schema.json",
 }
 
 MANIFEST_DIRS = {
@@ -37,6 +42,9 @@ MANIFEST_DIRS = {
     "vector_version": "configs/vector_versions",
     "hwconfig": "configs/hwconfigs",
     "trace_filter": "configs/trace_filters",
+    "isa_profile": "configs/isa_profiles",
+    "memory_map": "configs/memory_maps",
+    "execution_profile": "configs/execution_profiles",
 }
 
 ALL_SELECTED = "__all__"
@@ -173,18 +181,10 @@ class Checker:
         return self.root / path
 
     def load_yaml(self, path: Path) -> Dict[str, Any]:
-        if not path.exists():
-            raise CheckError("%s does not exist" % self.rel(path))
         try:
-            with path.open("r", encoding="utf-8") as handle:
-                data = yaml.safe_load(handle)
-        except yaml.YAMLError as exc:
-            raise CheckError("%s is not valid YAML: %s" % (self.rel(path), exc)) from exc
-        if data is None:
-            data = {}
-        if not isinstance(data, dict):
-            raise CheckError("%s must contain a YAML mapping" % self.rel(path))
-        return data
+            return load_config_yaml(path)
+        except ConfigError as exc:
+            raise CheckError(str(exc)) from exc
 
     def load_json(self, path: Path) -> Dict[str, Any]:
         if not path.exists():
@@ -242,6 +242,8 @@ class Checker:
             issues.extend(self.check_vector_version_manifest(doc, path))
         elif kind == "trace_filter":
             issues.extend(self.check_trace_filter_manifest(doc, path))
+        elif kind in ("isa_profile", "memory_map", "execution_profile"):
+            issues.extend(self.check_id_matches_file(doc, path, "id"))
         return issues, doc, path
 
     def collect_chipyard_config(self, value: str) -> Tuple[List[Issue], Optional[Dict[str, Any]], Path]:
@@ -324,8 +326,22 @@ class Checker:
         if not check_refs:
             return issues
 
+        for kind in ("isa_profile", "memory_map"):
+            if kind in chipyard:
+                issues.extend(self.check_manifest_reference(kind, chipyard[kind], "%s:%s" % (self.rel(path), kind)))
+        if not has_errors(issues):
+            try:
+                configured_tcm(self.root, chipyard)
+            except (ConfigError, KeyError, TypeError, ValueError) as exc:
+                issues.append(Issue("ERROR", self.rel(path), str(exc)))
+
         cute = chipyard.get("cute", {})
         if isinstance(cute, dict):
+            instances = cute.get("instances", [])
+            count = chipyard.get("soc", {}).get("core", {}).get("count", 0)
+            if isinstance(instances, list) and all(type(i) is int for i in instances) and type(count) is int:
+                if len(set(instances)) != len(instances) or any(i < 0 or i >= count for i in instances):
+                    issues.append(Issue("ERROR", self.rel(path)+":cute.instances", "CUTE instances must select distinct existing tile IDs"))
             cute_config_id = cute.get("config")
             if isinstance(cute_config_id, str):
                 issues.extend(self.check_manifest_reference("cute_config", cute_config_id, "%s:cute.config" % self.rel(path)))
@@ -470,6 +486,8 @@ class Checker:
 
     def check_hwconfig_references(self, hwconfig: Dict[str, Any], path: Path) -> List[Issue]:
         issues: List[Issue] = []
+        if 'execution_profile' in hwconfig:
+            issues.extend(self.check_manifest_reference('execution_profile', hwconfig['execution_profile'], self.rel(path)+':execution_profile'))
         name = hwconfig.get("name")
         if isinstance(name, str) and path.stem != name:
             issues.append(Issue("ERROR", self.rel(path), "name '%s' does not match file stem '%s'" % (name, path.stem)))
@@ -635,11 +653,14 @@ class Checker:
         project_requires = project_target.get("requires", {}) or {}
         variant_requires = variant_target.get("requires", {}) or {}
         merged_requires: Dict[str, Any] = {}
+        conflicts = []
         for key in ("fpe_versions", "isa_versions", "vector_versions"):
             base = list(project_requires.get(key, []) or [])
             override = list(variant_requires.get(key, []) or [])
             if base and override:
                 merged_requires[key] = [value for value in base if value in set(override)]
+                if not merged_requires[key]:
+                    conflicts.append(key)
             elif override:
                 merged_requires[key] = override
             else:
@@ -648,12 +669,15 @@ class Checker:
             "project_hwconfigs": project_target.get("hwconfigs", {}) or {},
             "variant_hwconfigs": variant_target.get("hwconfigs", {}) or {},
             "requires": merged_requires,
+            "conflicts": conflicts,
         }
 
     def match_project_variant(
         self, project: Dict[str, Any], variant: Dict[str, Any], resolved_hw: ResolvedHWConfig
     ) -> MatchResult:
         merged = self.merge_variant_target(project.get("target", {}) or {}, variant.get("target"))
+        if merged["conflicts"]:
+            return MatchResult("REQUIREMENT_CONFLICT", ["empty version intersection: " + ", ".join(merged["conflicts"])])
         ok, reasons = self.selector_matches(merged["project_hwconfigs"], resolved_hw.tags)
         if not ok:
             return MatchResult("HW_TAG_MISS", reasons)
@@ -662,6 +686,8 @@ class Checker:
             return MatchResult("HW_TAG_MISS", reasons)
 
         requires = merged["requires"]
+        if requires.get("fpe_versions"):
+            return MatchResult("INCOMPLETE", ["FPE implementation version is not exported; cannot prove fpe_versions"])
         isa_versions = requires.get("isa_versions", []) or []
         if isa_versions and resolved_hw.isa_version not in isa_versions:
             return MatchResult(
@@ -804,7 +830,7 @@ class Checker:
         resolved_hwconfigs: List[ResolvedHWConfig] = []
         projects: List[Tuple[Path, Dict[str, Any]]] = []
 
-        for kind in ("cute_config", "cute_isa_version", "vector_version", "chipyard_config", "trace_filter"):
+        for kind in ("cute_config", "cute_isa_version", "vector_version", "isa_profile", "memory_map", "execution_profile", "chipyard_config", "trace_filter"):
             manifest_dir = self.root / MANIFEST_DIRS[kind]
             for manifest_path in sorted(manifest_dir.glob("*.yaml")):
                 manifest_issues, _doc, _path = self.collect_manifest(kind, manifest_path)
@@ -869,6 +895,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project", nargs="?", const=ALL_SELECTED, metavar="PATH", help="Check one cute-sdk/**/project.yaml manifest.")
     parser.add_argument("--all", action="store_true", help="Check all manifests for the selected kind, e.g. --cute-config --all.")
     parser.add_argument("--scan", action="store_true", help="Scan all HWConfigs and projects and print the match matrix.")
+    parser.add_argument("--dts", type=Path, help="Inspect actual elaborated DTS with --hwconfig")
+    parser.add_argument("--memmap", type=Path, help="Same-elaboration memmap.json (optional permissions evidence)")
+    parser.add_argument("--requires", type=Path, help="SDK requirement file, checked against --dts")
+    parser.add_argument("--report", type=Path, help="Write the structured DTS/requirements report")
+    parser.add_argument("--dtc", default="dtc", help="Device tree compiler for --dts")
     return parser
 
 
@@ -877,6 +908,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         root = Path(args.root).resolve() if args.root else find_cute_root()
         checker = Checker(root, verbose=args.verbose)
+        if args.dts:
+            if not args.hwconfig or args.hwconfig == ALL_SELECTED or any((args.all, args.scan, args.project, args.chipyard_config, args.cute_config, args.cute_isa_version, args.vector_version, args.trace_filter)):
+                raise CheckError("--dts requires one --hwconfig and cannot combine with other check modes")
+            issues, resolved, _doc, _path = checker.collect_hwconfig(args.hwconfig)
+            if has_errors(issues) or resolved is None:
+                return checker.finish("target inputs", issues)
+            from cute_target import check_target
+            result = check_target(root, args.hwconfig, args.dts, args.memmap, args.requires, args.dtc)
+            data = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
+            if args.report:
+                args.report.write_text(data)
+            print(data)
+            return 0 if result["verdict"] == "MATCH" else 1
+        if any((args.memmap, args.requires, args.report)):
+            raise CheckError("--memmap, --requires and --report require --dts")
         modes = {
             "chipyard_config": ("--chipyard-config", args.chipyard_config),
             "cute_config": ("--cute-config", args.cute_config),
@@ -941,7 +987,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.project:
             return checker.check_project_cli(args.project)
         raise CheckError("unreachable mode")
-    except CheckError as exc:
+    except (CheckError, ConfigError, OSError) as exc:
         print("ERROR: %s" % exc, file=sys.stderr)
         return 2
 

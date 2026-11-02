@@ -1,5 +1,7 @@
 version: 1
 id: cute4tops_scp64
+isa_profile: rv64_base
+memory_map: no_tcm
 
 cute:
   config: CUTE_4Tops_64SCP

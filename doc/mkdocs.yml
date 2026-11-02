@@ -1,0 +1,62 @@
+site_name: OpenCUTE · 从愿望到 SoC
+site_description: 以自然语言表达愿望，以接口和唯一事实来源组织增量开发，以实践验证 SoC
+docs_dir: docs
+extra_css:
+  - assets/stylesheets/module-tree.css
+theme:
+  name: material
+  language: zh
+  features: [navigation.tabs, navigation.tabs.sticky, navigation.sections, navigation.indexes, content.code.copy]
+plugins:
+  - search
+  - mermaid2:
+      javascript: assets/vendor/mermaid-10.4.0/mermaid.min.js
+      arguments:
+        theme: default
+        flowchart:
+          curve: linear
+markdown_extensions:
+  - attr_list
+  - tables
+  - fenced_code
+  - toc:
+      permalink: true
+nav:
+  - OpenCUTE：从愿望到可以验证的 SoC:
+      - OpenCUTE：从愿望到可以验证的 SoC: index.md
+      - 愿望与目的:
+          - 为什么要这样开发: vision.md
+          - 把愿望逐层拆开: decomposition.md
+      - 实现方式:
+          - 核心子模块简介: modules.md
+          - Config-first 对象与依赖: config-architecture.md
+  - 上手 demo:
+      - 上手 demo: demo/index.md
+      - 01 环境准备与预检: demo/environment.md
+      - 02 编译 RTL 与运行程序: demo/build.md
+      - 03 QEMU 获得 golden: demo/golden.md
+      - 04 RTL 产生 trace: demo/trace.md
+      - 05 验证静态 trace: demo/offline.md
+      - 06 在线联合检查: demo/online.md
+      - 07 BERT 阶段实践: practice.md
+  - 工程组件:
+      - 工程组件: engineering/index.md
+      - 仓库与文档位置: repository.md
+      - 配置、构建与运行:
+          - 把系统愿望变成配置: practice-config.md
+          - 配置与代码生成: configuration.md
+          - Config 与 SDK 需求匹配: config-contracts.md
+          - MemoryMap 地址空间: memory-map.md
+          - 构建系统: build-system.md
+          - 运行与结果: running.md
+      - 验证与模型:
+          - 系统级验证: system-verification.md
+          - QEMU ISA 模拟器: qemu.md
+      - Trace:
+          - 总览: trace/index.md
+          - 事务与任务协议: trace/protocol.md
+          - 开发与诊断: trace/development.md
+      - SDK: /sdk/
+      - 硬件设计: /design/
+      - 当前进展与验收边界: status.md
+      - 维护这套文档: documentation.md

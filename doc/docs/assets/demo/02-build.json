@@ -1,0 +1,27 @@
+{
+  "step": "build",
+  "status": "BUILD_READY",
+  "checked_at_utc": "2026-10-30T04:05:45.494641+00:00",
+  "summary": [
+    "SystemVerilog files: 672",
+    "simulator: executable + hash matched",
+    "target / ELF / QEMU / verifier: hash matched",
+    "current sources: matched"
+  ],
+  "details": {
+    "systemverilog_count": 672,
+    "simulator_sha256": "b8ddd85a0bfc6c8b99690a480c541cbcd71d50c83a585304aa2c99924747c9e0"
+  },
+  "sources": [
+    {
+      "path": "/home/admin-yjp/opencute-out/system/build-manifest.json",
+      "sha256": "a0aad2460b97b55ca4cf762008a57ac3312997dc662e3d4f53fdd7f0914ae977"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/system/target/bundle.json",
+      "sha256": "edfbc1ae2d9c7b772f9938b4d923d80771dc89d91d4953ee8652e73fc8777d3c"
+    }
+  ],
+  "checker_sha256": "d5da4ee773831c80e6119bd53421b3232e5ddf7b4b9ee1863cb440f6abbc5096",
+  "limits": "Build readiness; workload correctness is checked in later steps."
+}

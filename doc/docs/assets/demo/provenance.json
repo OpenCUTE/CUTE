@@ -1,0 +1,55 @@
+{
+  "kind": "rendered evidence cards, not terminal screenshots",
+  "date": "2026-10-30",
+  "cards": [
+    {
+      "name": "01-environment",
+      "source": "/home/admin-yjp/opencute-out/demo-20261030/final-cards/01-environment",
+      "status": "ENV_READY",
+      "svg_sha256": "a91442b8989aa8ef933a81796ae3b1dda3f4b01a037a7673ed069a0331175060",
+      "evidence_sha256": "146961f6ede644c58b68db323b2055fad866ece9ef2a69f49bee00578252c7d2"
+    },
+    {
+      "name": "02-build",
+      "source": "/home/admin-yjp/opencute-out/demo-20261030/final-cards/02-build",
+      "status": "BUILD_READY",
+      "svg_sha256": "d39596ab4c5dd6e10d99b4c39b5d249713ac0a40f5c27b432aa3aa5c83c65d51",
+      "evidence_sha256": "dd16c805d145b594361be85b6fc1cec103cdf7e7c2b709bda84887137c7467e3"
+    },
+    {
+      "name": "03-golden",
+      "source": "/home/admin-yjp/opencute-out/demo-20261030/final-cards/03-golden",
+      "status": "GOLDEN_READY",
+      "svg_sha256": "f47ad4ebac6ffc994694aa2bec0f6fa98a7f850efad923f4160f4c84c832f14c",
+      "evidence_sha256": "eb928b09dc8550dea6bde28b39cab2fd83b61a7dc62d58f7bc78ee8c2de8a065"
+    },
+    {
+      "name": "04-trace",
+      "source": "/home/admin-yjp/opencute-out/demo-20261030/final-cards/04-trace",
+      "status": "TRACE_READY",
+      "svg_sha256": "de107bee6bf63b0356bd6e8d72529e77256a9362bc634fff2200de015bd2a5bf",
+      "evidence_sha256": "a5f60af26ec8394a238d141b169cbd487d55426b322de8993b9d1615c9ae8d6e"
+    },
+    {
+      "name": "05-offline",
+      "source": "/home/admin-yjp/opencute-out/demo-20261030/final-cards/05-offline",
+      "status": "PASS",
+      "svg_sha256": "626e92edec5dd96695d72b7ab2a8b8752b45a9e25b7ee11294fe04b30bc77b4b",
+      "evidence_sha256": "c6a72c8d84b7e0f6c7654e7c7b2279f9e939c66dd20f9fb0a2d492e1aa6aca47"
+    },
+    {
+      "name": "06-online",
+      "source": "/home/admin-yjp/opencute-out/demo-20261030/final-cards/06-online",
+      "status": "PASS",
+      "svg_sha256": "f02dadb0351054beaa5bba9821085fc59db81f6861f2f1aae7786ada788dc2a5",
+      "evidence_sha256": "7cd682f4d783eeafd63fe7050023d8c8935c82666c74233aab58abb76e722a00"
+    },
+    {
+      "name": "07-bert",
+      "source": "/home/admin-yjp/opencute-out/demo-20261030/07-check",
+      "status": "PASS",
+      "svg_sha256": "29487ed69da16ccea152cad1136be2075cc2f45f6c314aaaf1d3e54193a4cb5a",
+      "evidence_sha256": "5c7bf67c307bf40470f6d2fbcb88ce923f6f5303ac120baf4263dd6633d2ab07"
+    }
+  ]
+}

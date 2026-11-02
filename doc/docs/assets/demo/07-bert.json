@@ -1,0 +1,50 @@
+{
+  "step": "bert",
+  "status": "PASS",
+  "checked_at_utc": "2026-10-30T04:04:45.187637+00:00",
+  "summary": [
+    "verdict: PASS",
+    "requests / responses: 13312 / 13312",
+    "checkpoints: 7",
+    "compared bytes: 131072",
+    "online = offline: yes"
+  ],
+  "details": {
+    "verdict": "PASS",
+    "detail": "",
+    "lines": 62418,
+    "requests": 13312,
+    "responses": 13312,
+    "checkpoints": 7,
+    "compared_bytes": 131072,
+    "reads": 11264,
+    "writes": 2048,
+    "max_outstanding": 64,
+    "early_stop": false,
+    "online_offline_equal": true
+  },
+  "sources": [
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/07-bert/bert_1/report.json",
+      "sha256": "7218aa87866a57f63c2955fd4c778a087273cc07f5d55eb7f74e8c48416369bd"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/07-bert/bert_1/offline-report.json",
+      "sha256": "e50cc78b8f4972981838dbc0131ab298447c1bc8e119ee7887581a46208720fd"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/07-bert/bert_1/online-report.json",
+      "sha256": "e50cc78b8f4972981838dbc0131ab298447c1bc8e119ee7887581a46208720fd"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/07-bert/bert_1/rtl-result.json",
+      "sha256": "c90515203bb047cb9d9c944eb04c22072950ca63ab204fc3be2a5b5917fdfab1"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/07-bert/bert_1/run-manifest.json",
+      "sha256": "ec63448fba08c4d1ed6691c4629cedc81f533380484f6bb3caa6f24d7ba47921"
+    }
+  ],
+  "checker_sha256": "d5da4ee773831c80e6119bd53421b3232e5ddf7b4b9ee1863cb440f6abbc5096",
+  "limits": "This run only; use your own reports to accept your reproduction."
+}

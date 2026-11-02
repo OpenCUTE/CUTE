@@ -82,7 +82,9 @@
         "cute_task",
         "cute_loadstore",
         "cute_compute",
-        "vector_loadstore"
+        "vector_loadstore",
+        "system_memory",
+        "system_control"
       ],
       "description": "trace 类别名称。功能验证等级会消费一个或多个 trace 类别。"
     },

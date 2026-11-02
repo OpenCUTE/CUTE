@@ -7,6 +7,10 @@ import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile._ //for rocc
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
+import freechips.rocketchip.util.PlusArg
+import cute.trace.{CUTETraceContext, CUTETraceParams}
+import cute.trace.generated.CUTETrace
+import freechips.rocketchip.resources.{DeviceSnippet, Description, ResourceInt, ResourceString}
 // import boom.common._
 import org.chipsalliance.cde.config._
 // import boom.exu.ygjk.{YGJKParameters}
@@ -33,6 +37,21 @@ class RoCC2CUTE(opcodes: OpcodeSet)(implicit p: Parameters) extends LazyRoCC(opc
   override lazy val module = new CUTETile(this)
  lazy val LLCMemPort = LazyModule(new Cute2TL)
  atlNode := TLWidthWidget(outsideDataWidthByte) := LLCMemPort.node
+ // Implementation-owned export: only contracts implemented by this RoCC are
+ // listed. The complete datatype enum is not a list of accepted contracts.
+ private val softwareContract = new DeviceSnippet {
+   def describe(): Description = Description(s"cute-contract-${p(TileKey).tileId}", Map(
+     "compatible" -> Seq(ResourceString("opencute,cute-contract-v1")),
+     "opencute,hart-id" -> Seq(ResourceInt(p(TileKey).tileId)),
+     "opencute,encoding" -> Seq(ResourceString("cute_isa_v1")),
+     "opencute,client" -> Seq(ResourceString("cute")),
+     "opencute,access-ranges" -> freechips.rocketchip.resources.ClientMemoryResources.ranges(LLCMemPort.node.edges.out.head.manager.managers),
+     "opencute,contracts" -> Seq(ResourceString("int8_matmul_wrap32_v1"), ResourceString("checkpoint_v1")),
+     "opencute,trace-ports" -> Seq(ResourceInt(0), ResourceInt(0)),
+     "opencute,beat-bytes" -> Seq(ResourceInt(LLCMemPort.node.edges.out.head.bundle.dataBits / 8)),
+     "opencute,progress-period" -> Seq(ResourceInt(256))
+   ))
+ }
 }
 
 
@@ -50,13 +69,49 @@ class CUTE2TLImp(outer: Cute2TL) extends LazyModuleImp(outer) with CUTEImplParam
   val edge = outer.node.edges.out(0)
   val (tl_out, _) = outer.node.out(0)
 
+  private val traceCycle = RegInit(0.U(64.W))
+  traceCycle := traceCycle + 1.U
+  private val systemTrace = PlusArg("cute_sys_trace", default = 0).orR
+  private val traceEventSeq = RegInit(0.U(64.W))
+  private val traceNextSeq = traceEventSeq + tl_out.a.fire.asUInt + tl_out.d.fire.asUInt
+  traceEventSeq := traceNextSeq
+  private implicit val systemTraceContext: CUTETraceContext =
+    CUTETraceContext(traceCycle, CUTETraceParams(enable = true))
+  CUTETrace.SystemMemory.request(
+    cond = systemTrace && tl_out.a.fire,
+    hart = p(TileKey).tileId.U, engine = 0.U, port = 0.U,
+    event_seq = traceEventSeq,
+    source = tl_out.a.bits.source, opcode = tl_out.a.bits.opcode,
+    address = tl_out.a.bits.address, lg_size = tl_out.a.bits.size,
+    width_bytes = edge.bundle.dataBits.U / 8.U,
+    mask = tl_out.a.bits.mask, data = tl_out.a.bits.data)
+  CUTETrace.SystemMemory.response(
+    cond = systemTrace && tl_out.d.fire,
+    hart = p(TileKey).tileId.U, engine = 0.U, port = 0.U,
+    event_seq = traceEventSeq + tl_out.a.fire.asUInt,
+    source = tl_out.d.bits.source, opcode = tl_out.d.bits.opcode,
+    lg_size = tl_out.d.bits.size, width_bytes = edge.bundle.dataBits.U / 8.U,
+    denied = tl_out.d.bits.denied.asUInt, corrupt = tl_out.d.bits.corrupt.asUInt,
+    data = tl_out.d.bits.data)
+
   val io = IO(new Bundle{
     val mmu = (new MMU2TLIO)
     val idle = Output(Bool())
   })
 
   val data = io.mmu.Request.bits.RequestData
+  // Runtime-only backpressure for synchronization validation; zero is normal.
+  private val ackDelay = PlusArg("cute_store_ack_delay", default = 0)
+  private val ackAge = RegInit(0.U(32.W))
+  private val ackAllowed = tl_out.d.bits.opcode =/= TLMessages.AccessAck || ackAge >= ackDelay
+  when(!tl_out.d.valid || tl_out.d.fire) { ackAge := 0.U }
+    .elsewhen(!ackAllowed) { ackAge := ackAge + 1.U }
   val busy = RegInit(VecInit(Seq.fill(LLCSourceMaxNum)(false.B)))
+  CUTETrace.SystemMemory.progress(
+    cond = systemTrace && traceCycle(7, 0) === 0.U,
+    hart = p(TileKey).tileId.U, engine = 0.U, port = 0.U,
+    next_seq = traceNextSeq,
+    outstanding = PopCount(busy) + tl_out.a.fire.asUInt - tl_out.d.fire.asUInt)
   val id = WireInit(0.U(LLCSourceMaxNumBitSize.W))
   
   val is_idle = !(busy.reduce(_|_))
@@ -106,10 +161,10 @@ class CUTE2TLImp(outer: Cute2TL) extends LazyModuleImp(outer) with CUTEImplParam
     //统计busy，一共有多少个在飞行中的请求,及有多少个ture.B
     // printf("[CUTE2YGJK.node]busy: %d\n", busy.count(_ === true.B))
   }
-  tl_out.d.ready := io.mmu.Response.ready
+  tl_out.d.ready := io.mmu.Response.ready && ackAllowed
   when(tl_out.d.bits.opcode === TLMessages.AccessAck && tl_out.d.valid && busy(tl_out.d.bits.source) === true.B)//写回的ack，直接确认，不需要等待,怎么可能会不被响应？？
   {
-    tl_out.d.ready := true.B
+    tl_out.d.ready := ackAllowed
   }
   when(tl_out.d.fire){
     busy(tl_out.d.bits.source) := false.B
@@ -140,7 +195,7 @@ class CUTE2TLImp(outer: Cute2TL) extends LazyModuleImp(outer) with CUTEImplParam
     (io.mmu.Request.bits.RequestType_isWrite === 1.U) -> edge.Put(id, io.mmu.Request.bits.RequestPhysicalAddr, log2Ceil(outsideDataWidthByte).U, data,io.mmu.Request.bits.RequestMask)._2
   ))
 
-  io.mmu.Response.valid := tl_out.d.valid && (tl_out.d.bits.opcode === TLMessages.AccessAckData || tl_out.d.bits.opcode === TLMessages.AccessAck)
+  io.mmu.Response.valid := tl_out.d.valid && ackAllowed && (tl_out.d.bits.opcode === TLMessages.AccessAckData || tl_out.d.bits.opcode === TLMessages.AccessAck)
   io.mmu.Request.ready := tl_out.a.ready && !(busy.reduce(_&_))
   io.mmu.Response.bits.ReseponseData := tl_out.d.bits.data
   io.mmu.Response.bits.ReseponseSourceID := tl_out.d.bits.source
@@ -174,6 +229,25 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     val rd = RegInit(0.U(5.W))
     val func = RegInit(0.U(7.W))
     val canResp = RegInit(false.B)
+    private val markerDelay = PlusArg("cute_marker_response_delay", default = 0)
+    private val markerWait = RegInit(0.U(32.W))
+    // The command/response slot stays busy until the CPU consumes its result.
+    io.busy := canResp
+    private val markerCycle = RegInit(0.U(64.W))
+    markerCycle := markerCycle + 1.U
+    private implicit val markerTraceContext: CUTETraceContext =
+      CUTETraceContext(markerCycle, CUTETraceParams(enable = true))
+    private val markerFire = io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U &&
+      io.cmd.bits.inst.funct === YGJKInstConfigs.TraceMark.funct.U
+    when(markerFire) { markerWait := markerDelay }
+      .elsewhen(markerWait =/= 0.U) { markerWait := markerWait - 1.U }
+    CUTETrace.SystemCheckpoint.mark(
+      cond = markerFire && PlusArg("cute_sys_trace", default = 0).orR,
+      hart = p(TileKey).tileId.U, seq = io.cmd.bits.rs1, key = io.cmd.bits.rs2)
+    CUTETrace.SystemCheckpoint.returned(
+      cond = io.resp.fire && func === YGJKInstConfigs.TraceMark.funct.U &&
+        PlusArg("cute_sys_trace", default = 0).orR,
+      hart = p(TileKey).tileId.U, seq = rd_data, key = rs2)
     val ac_busy = RegInit(false.B)
     val configV = RegInit(false.B)
 
@@ -215,12 +289,18 @@ class CUTETile(outer: RoCC2CUTE) extends LazyRoCCModuleImp(outer) with CUTEImplP
     //     printf("[CUTE2YGJK.top]io.cmd.valid: %x, io.cmd.ready: %x, io.resp.valid: %x, io.resp.ready: %x\n", io.cmd.valid, io.cmd.ready, io.resp.valid, io.resp.ready)
     // }
 
-    rd := io.cmd.bits.inst.rd    //下一拍一定会返回
+    when(io.cmd.fire) {
+      rd := io.cmd.bits.inst.rd
+      func := io.cmd.bits.inst.funct
+      rs2 := io.cmd.bits.rs2
+    }
     io.resp.bits.rd := rd
     io.resp.bits.data := rd_data
-    io.resp.valid := canResp
+    io.resp.valid := canResp && markerWait === 0.U
 
-    when(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryAcceleratorBusy.funct.U){ //查询加速器是否在运行
+    when(markerFire) {
+      rd_data := io.cmd.bits.rs1
+    }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryAcceleratorBusy.funct.U){ //查询加速器是否在运行
       rd_data := ac_busy
     }.elsewhen(io.cmd.fire && io.cmd.bits.inst.opcode === "h0B".U && io.cmd.bits.inst.funct === YGJKInstConfigs.QueryRuntime.funct.U){ //查询加速器运行时间
       rd_data := count

@@ -1,0 +1,32 @@
+{
+  "step": "golden",
+  "status": "GOLDEN_READY",
+  "checked_at_utc": "2026-10-30T04:05:45.536422+00:00",
+  "summary": [
+    "tasks: 3",
+    "golden outputs: 4",
+    "independent reference: all matched",
+    "RTL started: no"
+  ],
+  "details": {
+    "tasks": 3,
+    "outputs": 4,
+    "golden_bytes": 163840
+  },
+  "sources": [
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/03-golden/stage-report.json",
+      "sha256": "d969a9f5ed96f9cb2b316dd05ab817a3711556457ff39c4d94861f29af7c67cf"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/03-golden/task-manifest.json",
+      "sha256": "42f479fc7ff84785c7cb6c6edb66c4ab5c4e3d2c660751be6f5bec0406ccbc4e"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/03-golden/run-manifest.json",
+      "sha256": "9252e6061a4acdc87402ccee57f8a59ee6df1ff7aaa38af1da86354fe32398c6"
+    }
+  ],
+  "checker_sha256": "d5da4ee773831c80e6119bd53421b3232e5ddf7b4b9ee1863cb440f6abbc5096",
+  "limits": "Golden is calibrated; RTL correctness has not been checked."
+}

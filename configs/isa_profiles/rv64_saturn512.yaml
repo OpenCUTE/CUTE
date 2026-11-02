@@ -1,0 +1,22 @@
+version: 1
+id: rv64_saturn512
+description: Standard ISA requirements for the existing Shuttle/Saturn 512-bit target;
+  checked against elaborated DTS.
+xlen: 64
+extensions:
+- i
+- m
+- a
+- f
+- d
+- c
+- v
+- zicsr
+- zifencei
+- zvfh
+vlen_min_bits: 512
+vlen_bits: 512
+custom_contracts:
+- int8_matmul_wrap32_v1
+- checkpoint_v1
+- saturn_quiescent_checkpoint_v1

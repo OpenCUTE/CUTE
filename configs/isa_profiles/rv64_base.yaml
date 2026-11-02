@@ -1,0 +1,4 @@
+version: 1
+id: rv64_base
+xlen: 64
+extensions: [i, m, a, c, zicsr, zifencei]

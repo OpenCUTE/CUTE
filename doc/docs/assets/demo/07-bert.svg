@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="396" viewBox="0 0 960 396" role="img" aria-labelledby="title desc">
+<title id="title">07 / BERT Q-K-V: PASS</title>
+<desc id="desc">verdict: PASS; requests / responses: 13312 / 13312; checkpoints: 7; compared bytes: 131072; online = offline: yes. This run only; use your own reports to accept your reproduction.</desc>
+<rect width="960" height="396" rx="16" fill="#0f1d30"/>
+<g font-family="monospace" fill="#e5edf7">
+<text x="32" y="44" font-size="20">07 / BERT Q-K-V</text>
+<text x="32" y="92" font-size="30" fill="#88d8bd">PASS</text>
+<text x="32" y="142" font-size="22">verdict: PASS</text>
+<text x="32" y="180" font-size="22">requests / responses: 13312 / 13312</text>
+<text x="32" y="218" font-size="22">checkpoints: 7</text>
+<text x="32" y="256" font-size="22">compared bytes: 131072</text>
+<text x="32" y="294" font-size="22">online = offline: yes</text>
+<text x="32" y="356" font-size="14" fill="#b7c8dd">This run only; use your own reports to accept your reproduction.</text>
+<text x="32" y="378" font-size="13" fill="#b7c8dd">Observed 2026-10-30 | Generated from checked evidence.json</text>
+</g></svg>

@@ -1,0 +1,238 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Expected SoC address space, implementation bindings and private TCM",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "id",
+    "tcm"
+  ],
+  "properties": {
+    "version": {
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "tcm": {
+      "description": "null explicitly disables TCM, independently of the vector implementation.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scope",
+            "internal_base",
+            "size_bytes",
+            "banks"
+          ],
+          "properties": {
+            "scope": {
+              "const": "tile-private"
+            },
+            "internal_base": {
+              "type": "string",
+              "pattern": "^0x[0-9a-fA-F]+$"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 64
+            },
+            "banks": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "owner_tiles": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "regions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "node",
+          "base",
+          "size_bytes",
+          "permissions",
+          "status",
+          "implementation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "maxLength": 24
+          },
+          "kind": {
+            "enum": [
+              "ram",
+              "rom",
+              "mmio"
+            ]
+          },
+          "node": {
+            "type": "string",
+            "pattern": "^/([a-zA-Z0-9,._+@-]+/)*[a-zA-Z0-9,._+@-]+$"
+          },
+          "base": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]+$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 18446744073709551615
+          },
+          "permissions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "read",
+                "write",
+                "execute",
+                "cacheable",
+                "atomic"
+              ]
+            }
+          },
+          "status": {
+            "enum": [
+              "okay",
+              "disabled"
+            ]
+          },
+          "implementation": {
+            "enum": [
+              "fixed",
+              "external_ram",
+              "boot_rom",
+              "uart",
+              "clint",
+              "plic",
+              "prci_clock",
+              "prci_reset"
+            ]
+          },
+          "compatible": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "reserved": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "base",
+          "size_bytes",
+          "no_map"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "maxLength": 24
+          },
+          "base": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]+$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "no_map": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "coverage": {
+      "enum": [
+        "complete",
+        "subset"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "version": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "regions",
+          "reserved",
+          "coverage"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "regions"
+              ]
+            },
+            {
+              "required": [
+                "reserved"
+              ]
+            },
+            {
+              "required": [
+                "coverage"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

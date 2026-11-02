@@ -1,5 +1,7 @@
 version: 1
 id: cute8tops_scp256
+isa_profile: rv64_base
+memory_map: no_tcm
 
 cute:
   config: CUTE_8Tops_256SCP

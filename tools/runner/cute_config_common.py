@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,11 +21,34 @@ MANIFEST_DIRS = {
     "cute_isa_version": "configs/cute_isa_versions",
     "vector_version": "configs/vector_versions",
     "hwconfig": "configs/hwconfigs",
+    "isa_profile": "configs/isa_profiles",
+    "memory_map": "configs/memory_maps",
 }
 
 
 class ConfigError(RuntimeError):
     pass
+
+
+class _ConfigLoader(yaml.SafeLoader):
+    """Reject duplicate YAML definitions instead of silently replacing them."""
+    pass
+
+
+def _unique_mapping(loader, node, deep=False):
+    loader.flatten_mapping(node)
+    result = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if not isinstance(key, (str, int, float, bool, type(None))):
+            raise ConfigError("config mapping keys must be scalar")
+        if key in result:
+            raise ConfigError("duplicate config key %r at line %d" % (key, key_node.start_mark.line + 1))
+        result[key] = loader.construct_object(value_node, deep=deep)
+    return result
+
+
+_ConfigLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _unique_mapping)
 
 
 @dataclass(frozen=True)
@@ -55,7 +79,7 @@ def load_yaml(path: Path) -> Dict[str, Any]:
         raise ConfigError("%s does not exist" % path)
     try:
         with path.open("r", encoding="utf-8") as fh:
-            data = yaml.safe_load(fh)
+            data = yaml.load(fh, Loader=_ConfigLoader)
     except yaml.YAMLError as exc:
         raise ConfigError("%s is not valid YAML: %s" % (path, exc)) from exc
     if data is None:
@@ -110,6 +134,79 @@ def compute_fingerprint(paths: List[Path]) -> str:
     for p in sorted(paths):
         h.update(p.read_bytes())
     return h.hexdigest()
+
+
+def chipyard_contracts(root: Path, chipyard: Dict[str, Any]):
+    """Load owned config objects, validating references before any codegen.
+
+    CUTE encoding stays in cute.isa.version; the ISA profile contains only
+    standard ISA constraints. No observed DTS address is copied into inputs.
+    """
+    import jsonschema
+    objects, paths = {}, []
+    for kind in ("isa_profile", "memory_map"):
+        if kind not in chipyard:
+            continue
+        ref = chipyard[kind]
+        if not isinstance(ref, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", ref):
+            raise ConfigError("invalid %s reference" % kind)
+        path = manifest_path(root, kind, ref)
+        doc = load_yaml(path)
+        schema_path = root / "configs/schemas" / (kind + ".schema.json")
+        try:
+            jsonschema.Draft7Validator(json.loads(schema_path.read_text())).validate(doc)
+        except jsonschema.ValidationError as exc:
+            raise ConfigError("%s: %s" % (path, exc.message)) from exc
+        if doc["id"] != ref:
+            raise ConfigError("%s: id must match its filename" % path)
+        if kind == "memory_map":
+            from cute_memory_map import validate_layout
+            validate_layout(doc)
+        objects[kind] = doc
+        paths.extend([path, schema_path])
+    vector = chipyard.get("soc", {}).get("vector", {})
+    if "memory_map" in objects and "tcm" in vector:
+        raise ConfigError("memory_map and soc.vector.tcm cannot both define TCM")
+    return objects, paths
+
+
+def configured_tcm(root: Path, chipyard: Dict[str, Any], catalog=None):
+    """Return one authoritative TCM specification; preserve legacy defaults."""
+    objects, _ = chipyard_contracts(root, chipyard)
+    soc = chipyard.get("soc", {})
+    if "memory_map" in objects:
+        tcm = objects["memory_map"]["tcm"]
+        if tcm is None:
+            return None
+        if soc.get("core", {}).get("kind") != "shuttle":
+            raise ConfigError("tile-private TCM currently requires a Shuttle core")
+        result = {"address": tcm["internal_base"], "size": tcm["size_bytes"], "banks": tcm["banks"]}
+        if "owner_tiles" in tcm:
+            owners = tcm["owner_tiles"]
+            if any(i >= soc["core"]["count"] for i in owners):
+                raise ConfigError("TCM owner must select an existing tile")
+            result["owner_tiles"] = owners
+    else:
+        # Compatibility for old configurations; new configurations should use
+        # memory_map. Keep the old parameter catalog as the default source.
+        vector = soc.get("vector", {})
+        version = vector.get("version", "none")
+        if soc.get("core", {}).get("kind") != "shuttle" or version == "none":
+            return None
+        if catalog is None:
+            catalog = json.loads((root / "configs/schemas/chipyard_config_params.json").read_text())
+        if not catalog["vector"][version].get("enable_tcm", True):
+            return None
+        defaults = catalog["vector"]["tcm"]["params"]
+        legacy = vector.get("tcm") or {}
+        result = {k: legacy.get(k, defaults[k]["default"]) for k in ("address", "size", "banks")}
+    size, banks = result["size"], result["banks"]
+    base = int(result["address"], 0)
+    if size <= 0 or size & (size-1) or banks <= 0 or banks & (banks-1):
+        raise ConfigError("TCM size and banks must be powers of two")
+    if base < 0 or base + size > 1 << 64 or base % size or size < banks * 64:
+        raise ConfigError("invalid TCM base alignment, extent, or bank capacity")
+    return result
 
 
 def resolve_hwconfig(root: Path, cwd: Path, value: str) -> ResolvedHWConfig:

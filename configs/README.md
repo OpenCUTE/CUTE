@@ -7,6 +7,21 @@
 Scala 侧配置由 `HardwareConfig.scala` 和 `InstConfig.scala` 承载，
 并可由 YAML 直接检查或更新。
 
+新增的 `isa_profiles/` 定义标准 ISA 约束，`memory_maps/` 定义 tile 私有 TCM 布局，
+由 ChipyardConfig 引用。`memconfigs/` 仍是内存性能模型。当前单核 Shuttle/Saturn
+目标已迁移：TCM 参数只有 MemoryMap 一处定义，实际客户端地址由 DTS 导出。
+`cute-check-config.py --hwconfig ... --dts ... --memmap ... --requires ...` 可核对配置
+和显式 SDK 需求。完整说明见 [Config 与 SDK 需求匹配](../doc/docs/config-contracts.md)。
+
+配置一致性通过不等于 QEMU/RTL 已执行通过；检查器会对缺少导出依据的条件返回
+INCOMPLETE。旧配置的隐式 TCM 默认值暂时兼容，新配置应显式使用 MemoryMap。
+
+所有内置目标现在显式引用 ISAProfile、MemoryMap 和 execution_profile。
+`cute-system-build.py --hwconfig ...` 会在同次 elaboration 后生成带身份的 `target/`
+包，SDK 编译/链接、fixture、QEMU 与 system runner 消费该包。execution_profile
+定义 ABI、HTIF、堆栈预算及 QEMU 覆盖模式，具体硬件支持仍要经过需求与后端检查。
+普通 TCM 可用 `owner_tiles` 选择所属 Shuttle tile；省略时应用到全部 Shuttle tile。
+
 ## 目录结构
 
 ```text

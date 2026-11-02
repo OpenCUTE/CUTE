@@ -501,4 +501,222 @@ object CUTETrace {
       )
     }
   }
+  object SystemMemory {
+    def request(
+      cond: Bool,
+      hart: UInt,
+      engine: UInt,
+      port: UInt,
+      event_seq: UInt,
+      source: UInt,
+      opcode: UInt,
+      address: UInt,
+      lg_size: UInt,
+      width_bytes: UInt,
+      mask: UInt,
+      data: UInt
+    )(implicit ctx: CUTETraceContext): Unit = {
+      CUTETracePrintf.emit(
+        cond = cond,
+        categoryId = CUTETraceIds.Category.system_memory
+      )(
+        compact = {
+          printf(
+            "CT,1,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x\n",
+            ctx.cycle,
+            CUTETraceIds.Task.SystemMemory.U,
+            CUTETraceIds.Event.SystemMemory_request.U,
+            hart,
+            engine,
+            port,
+            event_seq,
+            source,
+            opcode,
+            address,
+            lg_size,
+            width_bytes,
+            mask,
+            data
+          )
+        },
+        human = {
+          printf(
+            "CTH c=%d task=SystemMemory event=request hart=0x%x engine=0x%x port=0x%x event_seq=0x%x source=0x%x opcode=0x%x address=0x%x lg_size=0x%x width_bytes=0x%x mask=0x%x data=0x%x\n",
+            ctx.cycle,
+            hart,
+            engine,
+            port,
+            event_seq,
+            source,
+            opcode,
+            address,
+            lg_size,
+            width_bytes,
+            mask,
+            data
+          )
+        }
+      )
+    }
+    def response(
+      cond: Bool,
+      hart: UInt,
+      engine: UInt,
+      port: UInt,
+      event_seq: UInt,
+      source: UInt,
+      opcode: UInt,
+      lg_size: UInt,
+      width_bytes: UInt,
+      denied: UInt,
+      corrupt: UInt,
+      data: UInt
+    )(implicit ctx: CUTETraceContext): Unit = {
+      CUTETracePrintf.emit(
+        cond = cond,
+        categoryId = CUTETraceIds.Category.system_memory
+      )(
+        compact = {
+          printf(
+            "CT,1,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x\n",
+            ctx.cycle,
+            CUTETraceIds.Task.SystemMemory.U,
+            CUTETraceIds.Event.SystemMemory_response.U,
+            hart,
+            engine,
+            port,
+            event_seq,
+            source,
+            opcode,
+            lg_size,
+            width_bytes,
+            denied,
+            corrupt,
+            data
+          )
+        },
+        human = {
+          printf(
+            "CTH c=%d task=SystemMemory event=response hart=0x%x engine=0x%x port=0x%x event_seq=0x%x source=0x%x opcode=0x%x lg_size=0x%x width_bytes=0x%x denied=0x%x corrupt=0x%x data=0x%x\n",
+            ctx.cycle,
+            hart,
+            engine,
+            port,
+            event_seq,
+            source,
+            opcode,
+            lg_size,
+            width_bytes,
+            denied,
+            corrupt,
+            data
+          )
+        }
+      )
+    }
+    def progress(
+      cond: Bool,
+      hart: UInt,
+      engine: UInt,
+      port: UInt,
+      next_seq: UInt,
+      outstanding: UInt
+    )(implicit ctx: CUTETraceContext): Unit = {
+      CUTETracePrintf.emit(
+        cond = cond,
+        categoryId = CUTETraceIds.Category.system_memory
+      )(
+        compact = {
+          printf(
+            "CT,1,%x,%x,%x,%x,%x,%x,%x,%x\n",
+            ctx.cycle,
+            CUTETraceIds.Task.SystemMemory.U,
+            CUTETraceIds.Event.SystemMemory_progress.U,
+            hart,
+            engine,
+            port,
+            next_seq,
+            outstanding
+          )
+        },
+        human = {
+          printf(
+            "CTH c=%d task=SystemMemory event=progress hart=0x%x engine=0x%x port=0x%x next_seq=0x%x outstanding=0x%x\n",
+            ctx.cycle,
+            hart,
+            engine,
+            port,
+            next_seq,
+            outstanding
+          )
+        }
+      )
+    }
+  }
+  object SystemCheckpoint {
+    def mark(
+      cond: Bool,
+      hart: UInt,
+      seq: UInt,
+      key: UInt
+    )(implicit ctx: CUTETraceContext): Unit = {
+      CUTETracePrintf.emit(
+        cond = cond,
+        categoryId = CUTETraceIds.Category.system_control
+      )(
+        compact = {
+          printf(
+            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            ctx.cycle,
+            CUTETraceIds.Task.SystemCheckpoint.U,
+            CUTETraceIds.Event.SystemCheckpoint_mark.U,
+            hart,
+            seq,
+            key
+          )
+        },
+        human = {
+          printf(
+            "CTH c=%d task=SystemCheckpoint event=mark hart=0x%x seq=0x%x key=0x%x\n",
+            ctx.cycle,
+            hart,
+            seq,
+            key
+          )
+        }
+      )
+    }
+    def returned(
+      cond: Bool,
+      hart: UInt,
+      seq: UInt,
+      key: UInt
+    )(implicit ctx: CUTETraceContext): Unit = {
+      CUTETracePrintf.emit(
+        cond = cond,
+        categoryId = CUTETraceIds.Category.system_control
+      )(
+        compact = {
+          printf(
+            "CT,1,%x,%x,%x,%x,%x,%x\n",
+            ctx.cycle,
+            CUTETraceIds.Task.SystemCheckpoint.U,
+            CUTETraceIds.Event.SystemCheckpoint_returned.U,
+            hart,
+            seq,
+            key
+          )
+        },
+        human = {
+          printf(
+            "CTH c=%d task=SystemCheckpoint event=returned hart=0x%x seq=0x%x key=0x%x\n",
+            ctx.cycle,
+            hart,
+            seq,
+            key
+          )
+        }
+      )
+    }
+  }
 }

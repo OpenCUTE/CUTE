@@ -20,6 +20,8 @@ from cute_config_common import (
     load_yaml,
     manifest_path,
     resolve_arg_path,
+    chipyard_contracts,
+    configured_tcm,
 )
 
 
@@ -33,6 +35,7 @@ class ResolvedConfig:
     isa_path: Path
     vector: Dict[str, Any]
     vector_path: Path
+    contract_paths: List[Path]
 
 
 def _mask_hex(width: int) -> str:
@@ -78,6 +81,7 @@ class ConfigGenerator:
         cy_path = resolve_arg_path(self.root, self.cwd, chipyard_id_or_path, "chipyard_config")
         self.log("load chipyard_config: %s" % cy_path)
         chipyard = load_yaml(cy_path)
+        _, contract_paths = chipyard_contracts(self.root, chipyard)
 
         cute_id = chipyard.get("cute", {}).get("config", "")
         cc_path = manifest_path(self.root, "cute_config", cute_id)
@@ -99,10 +103,12 @@ class ConfigGenerator:
             cute_config=cute_config, cute_config_path=cc_path,
             isa=isa, isa_path=isa_path,
             vector=vector, vector_path=vec_path,
+            contract_paths=contract_paths,
         )
 
     def _all_paths(self, r: ResolvedConfig) -> List[Path]:
-        return [r.chipyard_path, r.cute_config_path, r.isa_path, r.vector_path]
+        return [r.chipyard_path, r.cute_config_path, r.isa_path, r.vector_path, *r.contract_paths,
+                self.root / "configs/schemas/chipyard_config_params.json"]
 
     def should_skip(self, r: ResolvedConfig, output_dir: Path, force: bool) -> bool:
         if force:
@@ -214,31 +220,23 @@ class ConfigGenerator:
         lines.append("    (rs2    <<(7+5+1+1+1+5))    | \\")
         lines.append("    (funct7 <<(7+5+1+1+1+5+5))")
         lines.append("")
-        lines.append("#define YGJK_INS_RRR(rd, rs1, rs2, funct) \\")
-        lines.append("{                                           \\")
-        lines.append("    __asm__ __volatile__ (                   \\")
-        lines.append("        \"sd t0, -24(sp)\\n\\t\"              \\")
-        lines.append("        \"sd t1, -16(sp)\\n\\t\"              \\")
-        lines.append("        \"sd t2,  -8(sp)\\n\\t\"              \\")
-        lines.append("        \"add t1, zero, %1\\n\\t\"            \\")
-        lines.append("        \"add t2, zero, %2\\n\\t\"            \\")
-        lines.append("        \".word \" _CUTE_GET_VALUE(_CUTE_ENC(_CUTE_CUSTOM0,5,1,1,1,6,7,funct)) \"\\n\\t\" \\")
-        lines.append("        \"add %0, zero, t0\\n\\t\"            \\")
-        lines.append("        \"ld t0, -24(sp)\\n\\t\"              \\")
-        lines.append("        \"ld t1, -16(sp)\\n\\t\"              \\")
-        lines.append("        \"ld t2,  -8(sp)\\n\\t\"              \\")
-        lines.append("        :\"=r\"(rd)                           \\")
-        lines.append("        :\"r\" (rs1) , \"r\" (rs2)            \\")
-        lines.append("        :\"t0\",\"t1\",\"t2\",\"memory\"           \\")
-        lines.append("        );                                   \\")
-        lines.append("}")
-        lines.append("")
+        # A dependent add waits for the RoCC response. No stores below sp.
+        lines.append('#define YGJK_INS_RRR(rd, rs1, rs2, funct) \\')
+        lines.append('{ \\')
+        lines.append('    __asm__ __volatile__ ( \\')
+        lines.append('        ".insn r 0x0b, 7, " _CUTE_GET_VALUE(funct) ", %0, %1, %2\\n\\t" \\')
+        lines.append('        "add %0, %0, zero\\n\\t" \\')
+        lines.append('        : "=&r" (rd) \\')
+        lines.append('        : "r" ((uint64_t)(rs1)), "r" ((uint64_t)(rs2)) \\')
+        lines.append('        : "memory"); \\')
+        lines.append('}')
+        lines.append('')
 
         # (b) funct codes
         lines.append("// ========================================")
         lines.append("// Instruction Function Codes")
         lines.append("// ========================================")
-        lines.append("// YGK/RoCC Interface Instructions (funct 1-8): direct values")
+        lines.append("// YGJK/RoCC interface instructions: direct funct values")
         lines.append("// CUTE Internal Instructions (funct + 64): need to add 64")
         lines.append("")
         for gname, offset, inst in self._iter_instructions(isa):
@@ -624,10 +622,9 @@ class ConfigGenerator:
                     lines.append("#define CUTE_SOC_CACHE_BANKS     %s" % cache["banks"])
 
         # TCM (conditional)
-        vec_id = chipyard_vector_version(cy) or "none"
-        if core.get("kind") == "shuttle" and vec_id != "none":
+        if configured_tcm(self.root, cy) is not None:
             lines.append("")
-            lines.append("// === TCM (shuttle + vector) ===")
+            lines.append("// === Tile-private TCM (configured layout; client addresses require DTS) ===")
             lines.append("#define CUTE_TCM_SUPPORTED 1")
 
         lines.append("#endif // CUTE_CONFIG_H")

@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.15)
+project(cute_system_verify LANGUAGES CXX)
+add_executable(cute-system-verify system_verify.cpp)
+target_compile_features(cute-system-verify PRIVATE cxx_std_17)
+target_compile_options(cute-system-verify PRIVATE -Wall -Wextra -Wpedantic)
+target_include_directories(cute-system-verify PRIVATE ../../trace/generated)

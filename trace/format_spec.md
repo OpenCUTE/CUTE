@@ -1,3 +1,5 @@
+> 逐任务 system-level 验证以 [当前协议](docs/protocol.md) 为准；本文保留格式设计背景。
+
 # CUTE Trace 格式说明
 
 ## 范围

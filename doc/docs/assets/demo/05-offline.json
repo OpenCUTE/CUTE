@@ -1,0 +1,43 @@
+{
+  "step": "offline",
+  "status": "PASS",
+  "checked_at_utc": "2026-10-30T04:05:45.598812+00:00",
+  "summary": [
+    "verdict: PASS",
+    "requests / responses: 5120 / 5120",
+    "checkpoints: 3",
+    "compared bytes: 163840",
+    "input: saved trace + initial state + golden"
+  ],
+  "details": {
+    "verdict": "PASS",
+    "detail": "",
+    "lines": 27214,
+    "requests": 5120,
+    "responses": 5120,
+    "checkpoints": 3,
+    "compared_bytes": 163840,
+    "reads": 2560,
+    "writes": 2560,
+    "max_outstanding": 64,
+    "early_stop": false,
+    "online_offline_equal": false,
+    "replayed_from": "/home/admin-yjp/opencute-out/demo-20261030/04-trace"
+  },
+  "sources": [
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/05-offline/report.json",
+      "sha256": "5fc9b11fffea6bfc32df47cef0d6976c8b2ee2131701f41b696b2a0ccf076b45"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/05-offline/offline-report.json",
+      "sha256": "03d2408873766e96cb9353f8ecfac0e9875ce234849dd8a9d513ee4e55683970"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/05-offline/provenance.json",
+      "sha256": "61c67964d0320b6cdb1bfab21138024cd859a483788f97432a2ea58e6037c465"
+    }
+  ],
+  "checker_sha256": "d5da4ee773831c80e6119bd53421b3232e5ddf7b4b9ee1863cb440f6abbc5096",
+  "limits": "This run only; use your own reports to accept your reproduction."
+}

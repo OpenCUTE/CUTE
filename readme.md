@@ -7,6 +7,13 @@ CUTE is an CPU-centric and Ultra-utilized Tensor Engine project.
 
 ## Documentation
 
+OpenCUTE aims to support AI-native RTL SoC development: turn natural-language goals
+into bounded tasks, explicit component contracts, structured build inputs, and verifiable results.
+Start with the [main guide (中文)](doc/docs/index.md),
+[project rationale](doc/docs/vision.md), and [documentation preview](doc/README.md).
+The build examples below retain the historical cutetest workflow; current development entrypoints
+are described in the [build guide](doc/docs/build-system.md).
+
 ## Publications
 
 [CUTE: A scalable CPU-centric and Ultra-utilized Tensor Engine for convolutions](https://www.sciencedirect.com/science/article/pii/S1383762124000432)

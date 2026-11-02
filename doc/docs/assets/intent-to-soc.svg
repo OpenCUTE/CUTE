@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="410" viewBox="0 0 1000 410" role="img" aria-labelledby="title desc">
+  <title id="title">从愿望到 SoC 的开发路径</title>
+  <desc id="desc">愿望与目标逐层形成小任务与接口、结构化工程输入，经构建与执行、观测与检查得到结果。结果返回父目标，指导下一次增量。各事实的定义位置明确，下游引用、生成或检查，证据绑定实际版本。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="#476779"/></marker>
+    <style>
+      text { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; }
+      .heading { font-size: 23px; font-weight: 700; fill: #14394b; }
+      .body { font-size: 18px; fill: #35566b; }
+      .line { fill: none; stroke: #476779; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1000" height="410" rx="16" fill="#f5f8fa"/>
+  <g stroke="#c6d7df" stroke-width="1.5">
+    <rect x="55" y="40" width="260" height="90" rx="10" fill="#e4f1f3"/>
+    <rect x="370" y="40" width="260" height="90" rx="10" fill="#fff"/>
+    <rect x="685" y="40" width="260" height="90" rx="10" fill="#fff"/>
+    <rect x="685" y="210" width="260" height="90" rx="10" fill="#fff"/>
+    <rect x="370" y="210" width="260" height="90" rx="10" fill="#fff"/>
+    <rect x="55" y="210" width="260" height="90" rx="10" fill="#e4f1f3"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="185" y="76" class="heading">愿望与目标</text>
+    <text x="185" y="107" class="body">目的 · 约束 · 成功标准</text>
+    <text x="500" y="76" class="heading">小任务与接口</text>
+    <text x="500" y="107" class="body">分解 · 选择 · 对外承诺</text>
+    <text x="815" y="76" class="heading">结构化工程输入</text>
+    <text x="815" y="107" class="body">配置 · 程序 · RTL · 用例</text>
+    <text x="815" y="246" class="heading">构建与执行</text>
+    <text x="815" y="277" class="body">绑定版本、工具与输入</text>
+    <text x="500" y="246" class="heading">观测与检查</text>
+    <text x="500" y="277" class="body">实际行为与约定比较</text>
+    <text x="185" y="246" class="heading">结果与下一步</text>
+    <text x="185" y="277" class="body">回答父目标 · 形成新任务</text>
+  </g>
+  <path d="M315 85 H363" class="line"/>
+  <path d="M630 85 H678" class="line"/>
+  <path d="M815 130 V203" class="line"/>
+  <path d="M685 255 H637" class="line"/>
+  <path d="M370 255 H322" class="line"/>
+  <path d="M185 210 V137" class="line" stroke-dasharray="6 5"/>
+  <text x="205" y="176" class="body">反馈</text>
+  <line x1="55" y1="328" x2="945" y2="328" stroke="#c6d7df"/>
+  <text x="500" y="362" text-anchor="middle" class="body">Only One Truth：定义有归属，下游引用、生成或检查，证据对应实际版本</text>
+  <text x="500" y="390" text-anchor="middle" font-size="16" fill="#526f80">当前实践到 RTL 仿真；物理实现需要继续接入相应约束与验证。</text>
+</svg>

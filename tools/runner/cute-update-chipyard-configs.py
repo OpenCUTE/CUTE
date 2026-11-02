@@ -16,6 +16,7 @@ from cute_config_common import (
     derive_chipyard_config_class,
     find_cute_root,
     load_yaml,
+    configured_tcm,
 )
 
 
@@ -281,23 +282,19 @@ class ChipyardConfigGenerator:
             )
         ]
 
-        tcm_entry = self._catalog_entry(params, "vector", "tcm")
-        if not bool(entry.get("enable_tcm", True)):
-            return lines
-        tcm = vector.get("tcm", {})
-        if tcm is None:
-            tcm = {}
-        if not isinstance(tcm, dict):
-            raise ConfigError("%s: soc.vector.tcm must be a mapping" % cfg.get("id", "<unknown>"))
-        tcm_params = tcm_entry.get("params", {}) or {}
-        address = tcm.get("address", (tcm_params.get("address", {}) or {}).get("default", "0x70000000"))
-        size = tcm.get("size", (tcm_params.get("size", {}) or {}).get("default", 2 << 20))
-        banks = tcm.get("banks", (tcm_params.get("banks", {}) or {}).get("default", 2))
-        lines.append(
-            "new shuttle.common.WithTCM(address = %s, size = %s, banks = %d)"
-            % (hex_long(address), int_expr(size), int(banks))
-        )
         return lines
+
+    def emit_tcm_mixins(self, cfg: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+        tcm = configured_tcm(self.root, cfg, params)
+        if tcm is None:
+            return []
+        if "owner_tiles" in tcm:
+            return ["new shuttle.common.WithTCMForTiles(%s, address = %s, size = %s, banks = %d)"
+                    % (scala_seq(tcm["owner_tiles"]), hex_long(tcm["address"]), int_expr(tcm["size"]), int(tcm["banks"]))]
+        return [
+            "new shuttle.common.WithTCM(address = %s, size = %s, banks = %d)"
+            % (hex_long(tcm["address"]), int_expr(tcm["size"]), int(tcm["banks"]))
+        ]
 
     def emit_core_mixins(self, cfg: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
         core = (((cfg.get("soc", {}) or {}).get("core", {}) or {}))
@@ -332,11 +329,23 @@ class ChipyardConfigGenerator:
         config_id = str(cfg.get("id") or source.path.stem)
         class_name = derive_chipyard_config_class(config_id)
         mixins: List[str] = []
+        from cute_config_common import chipyard_contracts
+        contracts, _ = chipyard_contracts(self.root, cfg)
+        memory_map = contracts.get("memory_map", {})
+        if memory_map.get("version") == 2:
+            regions = [r for r in memory_map["regions"] if r["implementation"] != "fixed"]
+            entries = ", ".join('chipyard.config.MemoryMapRegion("%s", BigInt("%s", 16), BigInt("%s", 16))'
+                                % (r["implementation"], r["base"][2:], format(r["size_bytes"], "x")) for r in regions)
+            reservations = ", ".join('freechips.rocketchip.resources.ReservedMemoryRegion("%s", BigInt("%s", 16), BigInt("%s", 16), %s)'
+                                    % (r["id"], r["base"][2:], format(r["size_bytes"], "x"), str(r["no_map"]).lower())
+                                    for r in memory_map["reserved"])
+            mixins.append("new chipyard.config.WithOpenCUTEMemoryMap(Seq(%s), Seq(%s))" % (entries, reservations))
         mixins.extend(self.emit_cute_mixins(cfg))
         mixins.extend(self.emit_memory_bus_mixins(cfg, params))
         mixins.extend(self.emit_cache_mixins(cfg, params))
         mixins.extend(self.emit_system_bus_mixins(cfg, params))
         mixins.extend(self.emit_vector_mixins(cfg, params))
+        mixins.extend(self.emit_tcm_mixins(cfg, params))
         mixins.extend(self.emit_core_mixins(cfg, params))
         mixins.extend(self.emit_tl_monitor_mixins(cfg, params))
         mixins.append("new chipyard.config.AbstractConfig")

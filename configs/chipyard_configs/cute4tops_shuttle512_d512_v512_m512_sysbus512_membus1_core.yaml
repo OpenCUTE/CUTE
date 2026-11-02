@@ -1,5 +1,7 @@
 version: 1
 id: cute4tops_shuttle512_d512_v512_m512_sysbus512_membus1_core
+isa_profile: rv64_saturn512
+memory_map: shuttle_private_tcm_2m
 
 cute:
   config: CUTE_4Tops_64SCP
@@ -26,10 +28,6 @@ soc:
     vLen: 512
     dLen: 512
     mLen: 512
-    tcm:
-      address: "0x70000000"
-      size: 2097152
-      banks: 2
 
 capability:
   tensor_ops: [matmul, conv]
@@ -37,7 +35,7 @@ capability:
   fused_ops: []
 
 trace_capability:
-  structured_trace: false
-  d_store_data: false
-  mem_req_rsp: false
+  structured_trace: true
+  d_store_data: true
+  mem_req_rsp: true
   perf_counter_snapshot: true

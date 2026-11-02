@@ -176,6 +176,22 @@ groups:
         rocc_funct: 8
         description: 查询 CUTE 宏指令队列目前有多少指令
         return_description: 返回FIFO中当前指令状态 (0010 = id为1的位置已有指令)
+      - name: TRACE_MARK
+        funct: 9
+        rocc_funct: 9
+        description: Emit a task checkpoint at command acceptance and return its sequence.
+        return_description: Echo seq after the marker has been accepted.
+        fields:
+          cfgData1:
+            - name: seq
+              hi: 63
+              lo: 0
+              description: Per-hart task checkpoint sequence.
+          cfgData2:
+            - name: key
+              hi: 63
+              lo: 0
+              description: Software task descriptor key.
   cute:
     scala_object: cute.CuteInstConfigs
     description: 通过 RoCC funct 偏移量 64 转发到 CUTE 核心的内部控制指令组。

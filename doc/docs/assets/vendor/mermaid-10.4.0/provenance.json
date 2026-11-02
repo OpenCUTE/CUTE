@@ -1,0 +1,11 @@
+{
+  "package": "mermaid",
+  "version": "10.4.0",
+  "source": "https://registry.npmjs.org/mermaid/-/mermaid-10.4.0.tgz",
+  "license_source": "https://raw.githubusercontent.com/mermaid-js/mermaid/v10.4.0/LICENSE",
+  "archive_sha256": "91cb14dc936d0234aa37122c7f28d62d132eb5e09392082ef876d5eaf492ce08",
+  "files": {
+    "mermaid.min.js": "2cf7bb6cdc4a6ea96da3d324a4447d8300d1da703ce5f31311608642c0f86269",
+    "LICENSE": "ec9fb67dcb25eccc416ed56e1aab819222c805a2a4bfe4cb19e7556bf2ffde80"
+  }
+}

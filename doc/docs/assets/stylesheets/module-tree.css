@@ -1,0 +1,91 @@
+/* Native HTML disclosure tree, scoped to the module guide. No JS dependency. */
+.md-typeset .repo-tree {
+  margin: 1.2em 0;
+  padding: .85rem 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: .5rem;
+  background: var(--md-code-bg-color);
+  font-size: .72rem;
+  line-height: 1.65;
+}
+.md-typeset .repo-tree-heading {
+  display: flex;
+  align-items: baseline;
+  gap: .65rem;
+  padding: 0 0 .5rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+.md-typeset .repo-tree-heading strong { font-family: var(--md-code-font-family); }
+.md-typeset .repo-tree-heading span,
+.md-typeset .repo-tree-desc { color: var(--md-default-fg-color--light); }
+.md-typeset .repo-tree ul {
+  margin: 0 0 0 .4rem;
+  padding-left: 1rem;
+  border-left: 1px solid var(--md-default-fg-color--lightest);
+  list-style: none;
+}
+.md-typeset .repo-tree ul.repo-tree-list {
+  margin: .5rem 0 0;
+  padding: 0;
+  border: 0;
+}
+.md-typeset .repo-tree li { margin: 0; padding: 0; }
+.md-typeset .repo-tree details {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  overflow: visible;
+  font-size: inherit;
+}
+.md-typeset .repo-tree summary {
+  display: list-item;
+  margin: 0;
+  padding: .3rem .25rem;
+  border: 0;
+  border-radius: .2rem;
+  background: transparent;
+  list-style: disclosure-closed inside;
+  cursor: pointer;
+  font-weight: normal;
+}
+.md-typeset .repo-tree details[open] > summary { list-style-type: disclosure-open; }
+.md-typeset .repo-tree summary::before,
+.md-typeset .repo-tree summary::after { display: none; }
+.md-typeset .repo-tree summary::marker { color: var(--md-accent-fg-color); }
+.md-typeset .repo-tree summary:hover { background: var(--md-default-fg-color--lightest); }
+.md-typeset .repo-tree summary:focus-visible,
+.md-typeset .repo-tree a:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 2px;
+}
+.md-typeset .repo-tree-row { padding: .22rem .25rem; }
+.md-typeset .repo-tree-leaf { padding-left: 1rem; }
+.md-typeset .repo-tree code {
+  padding: 0;
+  background: transparent;
+  font-size: .95em;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.md-typeset .repo-tree-desc { margin-left: .55rem; }
+.md-typeset .repo-tree-badge {
+  display: inline-block;
+  margin-left: .45rem;
+  padding: 0 .28rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: .2rem;
+  color: var(--md-default-fg-color--light);
+  font-size: .72em;
+  vertical-align: .08em;
+  white-space: nowrap;
+}
+.md-typeset .repo-tree-jump { margin-left: .5rem; white-space: nowrap; }
+@media (max-width: 600px) {
+  .md-typeset .repo-tree { padding: .65rem .6rem; }
+  .md-typeset .repo-tree ul { padding-left: .65rem; }
+  .md-typeset .repo-tree-desc { display: block; margin-left: 1rem; }
+  .md-typeset .repo-tree-row .repo-tree-desc { margin-left: 0; }
+}

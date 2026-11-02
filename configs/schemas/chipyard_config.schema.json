@@ -3,9 +3,25 @@
   "title": "CUTE ChipyardConfig",
   "description": "ChipyardConfig 是一个完整的 SoC 配置描述。从它生成 CuteConfig.scala 和 cute_config.h。",
   "type": "object",
-  "required": ["version", "id", "cute", "soc", "capability"],
+  "required": [
+    "version",
+    "id",
+    "cute",
+    "soc",
+    "capability"
+  ],
   "additionalProperties": false,
   "properties": {
+    "isa_profile": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Standard ISA constraints in configs/isa_profiles; checked against elaborated DTS."
+    },
+    "memory_map": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "SoC RAM/ROM/MMIO/reservations and private TCM layout; cannot coexist with soc.vector.tcm."
+    },
     "version": {
       "type": "integer",
       "const": 1,
@@ -18,7 +34,11 @@
     },
     "cute": {
       "type": "object",
-      "required": ["config", "instances", "isa"],
+      "required": [
+        "config",
+        "instances",
+        "isa"
+      ],
       "additionalProperties": false,
       "properties": {
         "config": {
@@ -28,13 +48,18 @@
         },
         "instances": {
           "type": "array",
-          "items": { "type": "integer", "minimum": 0 },
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
           "minItems": 1,
           "description": "WithCUTE(Seq(...)) 中挂载 CUTE 的 core id 列表"
         },
         "isa": {
           "type": "object",
-          "required": ["version"],
+          "required": [
+            "version"
+          ],
           "additionalProperties": false,
           "properties": {
             "version": {
@@ -48,17 +73,29 @@
     },
     "soc": {
       "type": "object",
-      "required": ["core", "bus", "vector"],
+      "required": [
+        "core",
+        "bus",
+        "vector"
+      ],
       "additionalProperties": false,
       "properties": {
         "core": {
           "type": "object",
-          "required": ["kind", "count"],
+          "required": [
+            "kind",
+            "count"
+          ],
           "additionalProperties": false,
           "properties": {
             "kind": {
               "type": "string",
-              "enum": ["rocket", "boom", "shuttle", "mixed"],
+              "enum": [
+                "rocket",
+                "boom",
+                "shuttle",
+                "mixed"
+              ],
               "description": "处理器核心类型"
             },
             "count": {
@@ -75,12 +112,27 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["kind", "count"],
+                "required": [
+                  "kind",
+                  "count"
+                ],
                 "additionalProperties": false,
                 "properties": {
-                  "kind": { "type": "string", "enum": ["rocket", "boom", "shuttle"] },
-                  "count": { "type": "integer", "minimum": 1 },
-                  "variant": { "type": "string" }
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "rocket",
+                      "boom",
+                      "shuttle"
+                    ]
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "variant": {
+                    "type": "string"
+                  }
                 }
               },
               "description": "mixed core config 的核心组成，占位字段"
@@ -89,7 +141,10 @@
         },
         "bus": {
           "type": "object",
-          "required": ["system_bits", "memory_bits"],
+          "required": [
+            "system_bits",
+            "memory_bits"
+          ],
           "additionalProperties": false,
           "properties": {
             "system_bits": {
@@ -108,16 +163,31 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "inclusive_kb": { "type": "integer", "minimum": 1 },
-            "outer_latency_cycles": { "type": "integer", "minimum": 0 },
-            "banks": { "type": "integer", "minimum": 1 },
-            "cache_hash": { "type": "boolean" },
-            "tl_monitors": { "type": "boolean" }
+            "inclusive_kb": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "outer_latency_cycles": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "banks": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "cache_hash": {
+              "type": "boolean"
+            },
+            "tl_monitors": {
+              "type": "boolean"
+            }
           }
         },
         "vector": {
           "type": "object",
-          "required": ["version"],
+          "required": [
+            "version"
+          ],
           "additionalProperties": false,
           "description": "Chipyard SoC 中的软件可见向量实现版本。无向量实现时显式写 none。",
           "properties": {
@@ -169,17 +239,23 @@
       "properties": {
         "tensor_ops": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "支持的 tensor 操作列表"
         },
         "layer_ops": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "fused_ops": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -188,10 +264,18 @@
       "additionalProperties": false,
       "description": "RTL trace 能力声明（占位，Phase 3 细化），默认全部 false",
       "properties": {
-        "structured_trace": { "type": "boolean" },
-        "d_store_data": { "type": "boolean" },
-        "mem_req_rsp": { "type": "boolean" },
-        "perf_counter_snapshot": { "type": "boolean" }
+        "structured_trace": {
+          "type": "boolean"
+        },
+        "d_store_data": {
+          "type": "boolean"
+        },
+        "mem_req_rsp": {
+          "type": "boolean"
+        },
+        "perf_counter_snapshot": {
+          "type": "boolean"
+        }
       }
     }
   },

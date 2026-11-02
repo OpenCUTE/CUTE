@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Software-visible standard ISA constraints",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "id",
+    "xlen",
+    "extensions"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "xlen": {
+      "enum": [
+        32,
+        64
+      ]
+    },
+    "extensions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      }
+    },
+    "vlen_min_bits": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "vlen_bits": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "custom_contracts": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

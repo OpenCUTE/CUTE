@@ -9,6 +9,8 @@ object CUTETraceIds {
     val cute_loadstore: Int = 2
     val cute_compute: Int = 3
     val vector_loadstore: Int = 4
+    val system_memory: Int = 5
+    val system_control: Int = 6
   }
   object Module {
     val TaskController: Int = 1
@@ -18,6 +20,7 @@ object CUTETraceIds {
     val MTE: Int = 5
     val LocalMMU: Int = 6
     val Vector: Int = 7
+    val SystemTrace: Int = 8
   }
   object Task {
     val TaskControllerTrace: Int = 1
@@ -27,6 +30,8 @@ object CUTETraceIds {
     val CMLStore: Int = 5
     val MTECompute: Int = 6
     val VectorStore: Int = 7
+    val SystemMemory: Int = 8
+    val SystemCheckpoint: Int = 9
   }
   object Event {
     val TaskControllerTrace_macroInstInsert: Int = 1
@@ -46,5 +51,10 @@ object CUTETraceIds {
     val MTECompute_taskEnd: Int = 15
     val CMLStore_storeData: Int = 16
     val VectorStore_storeData: Int = 17
+    val SystemMemory_request: Int = 18
+    val SystemMemory_response: Int = 19
+    val SystemCheckpoint_mark: Int = 20
+    val SystemCheckpoint_returned: Int = 21
+    val SystemMemory_progress: Int = 22
   }
 }

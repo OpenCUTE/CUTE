@@ -1,5 +1,7 @@
 version: 1
 id: cute32tops_scp512
+isa_profile: rv64_base
+memory_map: no_tcm
 
 cute:
   config: CUTE_32Tops_512SCP

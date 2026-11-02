@@ -1,0 +1,8 @@
+version: 1
+id: baremetal_htif
+abi: lp64d
+boot_io: htif
+stack_bytes: 65536
+heap_bytes: 131072
+qemu_backend: spike_cute_v1
+coverage: workload

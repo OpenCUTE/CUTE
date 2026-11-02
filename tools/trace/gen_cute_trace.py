@@ -126,7 +126,23 @@ def generate_outputs(
         scala_out / "CUTETrace.scala": generate_scala_trace(catalog, catalog_path),
         python_out / "cute_trace_catalog.py": generate_python_catalog(catalog, catalog_path),
         build_out / "cute_trace_catalog.normalized.json": normalized_json(catalog),
+        build_out / "cute_trace_events.hpp": generate_cpp_events(catalog),
     }
+
+
+def generate_cpp_events(catalog: Mapping[str, Any]) -> str:
+    """Share event identity and arity with the strict C++ stream verifier."""
+    tasks = {t["name"]: t["id"] for t in catalog["tasks"]}
+    lines = ["// AUTO-GENERATED FROM trace catalog. DO NOT EDIT.",
+             "#pragma once", "#include <cstddef>", "namespace cutetrace {",
+             "struct Event { unsigned id, task, fields; };",]
+    for event in catalog["events"]:
+        lines.append(f'inline constexpr unsigned {event["name"].replace(".", "_")} = {event["id"]};')
+    lines.append("inline constexpr Event events[] = {")
+    for event in catalog["events"]:
+        lines.append(f'  {{{event["id"]}, {tasks[event["task"]]}, {len(event["fields"])}}},')
+    lines.extend(["};", "} // namespace cutetrace", ""])
+    return "\n".join(lines)
 
 
 def check_outputs(outputs: Mapping[Path, str]) -> list[Path]:

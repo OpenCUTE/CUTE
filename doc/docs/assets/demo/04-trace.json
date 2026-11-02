@@ -1,0 +1,31 @@
+{
+  "step": "trace",
+  "status": "TRACE_READY",
+  "checked_at_utc": "2026-10-30T04:05:45.569105+00:00",
+  "summary": [
+    "RTL return code: 0",
+    "trace bytes: 3096468",
+    "footer: SV_RUN_END,0",
+    "online / offline verdicts: not produced"
+  ],
+  "details": {
+    "trace_bytes": 3096468,
+    "trace_sha256": "b6d596ee2228f238bdf5d6f12aa1b44e13a5d07a31189d26a1f738522f83ad77"
+  },
+  "sources": [
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/04-trace/stage-report.json",
+      "sha256": "9a6bcfc2b9b66eadf3b7b6b92390d87c4839a476e0b98b79918d2e96716ce0e7"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/04-trace/rtl-result.json",
+      "sha256": "0a49fecf1223632e0fbc134f12b58d06b1434d9025c0609351ab9924ce0cd388"
+    },
+    {
+      "path": "/home/admin-yjp/opencute-out/demo-20261030/04-trace/run-manifest.json",
+      "sha256": "49b71446dea8d97709960ecb1b56c2737d5251bff5b951f6959947b82221f1ba"
+    }
+  ],
+  "checker_sha256": "d5da4ee773831c80e6119bd53421b3232e5ddf7b4b9ee1863cb440f6abbc5096",
+  "limits": "Collection completed; a complete-looking log is not a correctness verdict."
+}

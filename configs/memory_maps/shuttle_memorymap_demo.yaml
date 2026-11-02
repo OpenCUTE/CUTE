@@ -1,0 +1,177 @@
+version: 2
+id: shuttle_memorymap_demo
+description: Relocated 256 MiB RAM, ROM, MMIO and three reserved regions; retains
+  private TCM.
+tcm:
+  scope: tile-private
+  internal_base: '0x70000000'
+  size_bytes: 2097152
+  banks: 2
+coverage: complete
+regions:
+- id: debug
+  kind: mmio
+  node: /soc/debug-controller
+  base: '0x0'
+  size_bytes: 4096
+  status: okay
+  permissions:
+  - read
+  - write
+  - execute
+  - atomic
+  implementation: fixed
+  compatible:
+  - sifive,debug-013
+  - riscv,debug-013
+- id: boot_address
+  kind: mmio
+  node: /soc/boot-address-reg
+  base: '0x1000'
+  size_bytes: 4096
+  status: okay
+  permissions:
+  - read
+  - write
+  - atomic
+  implementation: fixed
+- id: error
+  kind: mmio
+  node: /soc/error-device
+  base: '0x3000'
+  size_bytes: 4096
+  status: okay
+  permissions:
+  - read
+  - write
+  - execute
+  - atomic
+  implementation: fixed
+  compatible:
+  - sifive,error0
+- id: boot_rom
+  kind: rom
+  node: /soc/rom
+  base: '0x20000'
+  size_bytes: 65536
+  status: okay
+  permissions:
+  - read
+  - execute
+  implementation: boot_rom
+  compatible:
+  - sifive,rom0
+- id: clock_control
+  kind: mmio
+  node: /soc/clock-gater
+  base: '0x120000'
+  size_bytes: 4096
+  status: okay
+  permissions:
+  - read
+  - write
+  - atomic
+  implementation: prci_clock
+- id: reset_control
+  kind: mmio
+  node: /soc/tile-reset-setter
+  base: '0x130000'
+  size_bytes: 4096
+  status: okay
+  permissions:
+  - read
+  - write
+  - atomic
+  implementation: prci_reset
+- id: clint
+  kind: mmio
+  node: /soc/clint
+  base: '0x3000000'
+  size_bytes: 65536
+  status: okay
+  permissions:
+  - read
+  - write
+  - atomic
+  implementation: clint
+  compatible:
+  - riscv,clint0
+- id: l2_control
+  kind: mmio
+  node: /soc/cache-controller
+  base: '0x2010000'
+  size_bytes: 4096
+  status: okay
+  permissions:
+  - read
+  - write
+  - atomic
+  implementation: fixed
+  compatible:
+  - sifive,inclusivecache0
+  - cache
+- id: scratchpad
+  kind: ram
+  node: /memory
+  base: '0x8000000'
+  size_bytes: 65536
+  status: disabled
+  permissions:
+  - read
+  - write
+  - execute
+  - cacheable
+  - atomic
+  implementation: fixed
+- id: plic
+  kind: mmio
+  node: /soc/interrupt-controller
+  base: '0x18000000'
+  size_bytes: 67108864
+  status: okay
+  permissions:
+  - read
+  - write
+  - atomic
+  implementation: plic
+  compatible:
+  - riscv,plic0
+- id: uart
+  kind: mmio
+  node: /soc/serial
+  base: '0x10030000'
+  size_bytes: 4096
+  status: okay
+  permissions:
+  - read
+  - write
+  - atomic
+  implementation: uart
+  compatible:
+  - sifive,uart0
+- id: dram
+  kind: ram
+  node: /memory
+  base: '0x90000000'
+  size_bytes: 268435456
+  status: okay
+  permissions:
+  - read
+  - write
+  - execute
+  - cacheable
+  - atomic
+  implementation: external_ram
+reserved:
+- id: firmware
+  base: '0x90000000'
+  size_bytes: 65536
+  no_map: true
+- id: shared_buffer
+  base: '0x98000000'
+  size_bytes: 65536
+  no_map: true
+- id: top_guard
+  base: '0x9fff0000'
+  size_bytes: 65536
+  no_map: true

@@ -81,12 +81,12 @@ python3 tools/trace/decode_cute_trace.py --log <log_file> --mode jsonl
 ## 详细文档
 
 | 文档 | 内容 |
-|------|------|
-| `trace/format_spec.md` | Trace 格式设计文档 |
-| `doc/sdk-doc/cute-trace-catalog.md` | Catalog 说明 |
-| `doc/sdk-doc/cute-trace-usage.md` | 日常使用指南 |
-| `doc/sdk-doc/cute-trace-parser.md` | Parser API |
-| `doc/sdk-doc/cute-trace-decoder.md` | Decoder API |
-| `doc/sdk-doc/cute-trace-render.md` | Render API |
-| `doc/sdk-doc/cute-trace-decode-cli.md` | 解码 CLI 用法 |
-| `tools/trace/README.md` | 工具链快速参考 |
+|---|---|
+| [模块入口](docs/index.md) | 观测点、目录及验证流程 |
+| [System 协议](docs/protocol.md) | 请求、ack、marker、watermark 与内存更新 |
+| [开发与诊断](docs/development.md) | catalog 生成、接入、正负例检查 |
+| [历史格式](format_spec.md) | compact 编码及设计背景 |
+| [工具参考](../tools/trace/README.md) | Python 解码和过滤 |
+| [C++ verifier](../tools/verify/README.md) | 在线/离线共用的逐任务验证器 |
+
+`trace/generated/cute_trace_events.hpp` 也是 catalog 的生成产物。旧的 `storeData` memory rebuilder 用于历史 memverify；新的 system-level 内存映像只在写请求成功 ack 时更新。

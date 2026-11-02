@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="358" viewBox="0 0 960 358" role="img" aria-labelledby="title desc">
+<title id="title">02 / RTL BUILD: BUILD_READY</title>
+<desc id="desc">SystemVerilog files: 672; simulator: executable + hash matched; target / ELF / QEMU / verifier: hash matched; current sources: matched. Build readiness; workload correctness is checked in later steps.</desc>
+<rect width="960" height="358" rx="16" fill="#0f1d30"/>
+<g font-family="monospace" fill="#e5edf7">
+<text x="32" y="44" font-size="20">02 / RTL BUILD</text>
+<text x="32" y="92" font-size="30" fill="#88d8bd">BUILD_READY</text>
+<text x="32" y="142" font-size="22">SystemVerilog files: 672</text>
+<text x="32" y="180" font-size="22">simulator: executable + hash matched</text>
+<text x="32" y="218" font-size="22">target / ELF / QEMU / verifier: hash matched</text>
+<text x="32" y="256" font-size="22">current sources: matched</text>
+<text x="32" y="318" font-size="14" fill="#b7c8dd">Build readiness; workload correctness is checked in later steps.</text>
+<text x="32" y="340" font-size="13" fill="#b7c8dd">Observed 2026-10-30 | Generated from checked evidence.json</text>
+</g></svg>

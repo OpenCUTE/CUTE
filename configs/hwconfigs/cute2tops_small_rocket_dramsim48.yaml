@@ -12,3 +12,5 @@ simulator:
   backend: verilator
   binary: auto
   max_cycles: 800000000
+
+execution_profile: baremetal_htif
